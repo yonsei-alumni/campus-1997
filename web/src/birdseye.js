@@ -18,7 +18,7 @@ export class BirdsEye {
   constructor({ camera, dom, landmarks, heightAt, surfaceAt, pickGround, onWalkHere, onMemory, onAction }) {
     Object.assign(this, { camera, dom, heightAt, surfaceAt, pickGround, onWalkHere, onMemory, onAction });
     this.active = false;
-    this.cur = { x: 0, y: -60, dist: 600, yaw: 0, pitch: 0.9 };
+    this.cur = { x: 0, y: -60, dist: 600, yaw: 0, pitch: 0.9, lift: 0 };    // lift: aim above the ground (statues)
     this.goal = { ...this.cur };
     this.auto = true;
     this.keys = new Set();
@@ -180,12 +180,12 @@ export class BirdsEye {
     this.auto = true;
     if (player) {
       // start just above the walker and climb out
-      Object.assign(this.cur, { x, y, dist: 20, yaw, pitch: 0.5 });
-      Object.assign(this.goal, { x: x * 0.6 - 20 * 0.4, y: y * 0.6 - 60 * 0.4, dist: 520, yaw, pitch: 0.92 });
+      Object.assign(this.cur, { x, y, dist: 20, yaw, pitch: 0.5, lift: 0 });
+      Object.assign(this.goal, { x: x * 0.6 - 20 * 0.4, y: y * 0.6 - 60 * 0.4, dist: 520, yaw, pitch: 0.92, lift: 0 });
     } else {
       // from the title card: over the gate, looking up 백양로 like the 1997 aerial photo, then out
-      Object.assign(this.cur, { x: -90, y: -330, dist: 140, yaw: 0.24, pitch: 0.32 });
-      Object.assign(this.goal, { x: -45, y: -150, dist: 560, yaw: 0.24, pitch: 0.75 });
+      Object.assign(this.cur, { x: -90, y: -330, dist: 140, yaw: 0.24, pitch: 0.32, lift: 0 });
+      Object.assign(this.goal, { x: -45, y: -150, dist: 560, yaw: 0.24, pitch: 0.75, lift: 0 });
     }
     this.layer.hidden = false;
     this.tourbar.hidden = false;
@@ -217,6 +217,7 @@ export class BirdsEye {
     this.goal.y = l.pos[1];
     this.goal.dist = clamp(this.goal.dist, 90, 210);
     this.goal.pitch = clamp(this.goal.pitch, 0.45, 1.0);
+    this.goal.lift = 0;
     this.stopAuto();
   }
 
@@ -248,6 +249,7 @@ export class BirdsEye {
     c.dist += (g.dist - c.dist) * f;
     c.pitch += (g.pitch - c.pitch) * fa;
     c.yaw += wrapAngle(g.yaw - c.yaw) * fa;
+    c.lift += ((g.lift || 0) - (c.lift || 0)) * f;
 
     const gh = this.heightAt(c.x, c.y);
     const hor = Math.cos(c.pitch) * c.dist;
@@ -258,7 +260,7 @@ export class BirdsEye {
     // look a little above the ground near street level so the view runs along the street, not into it
     const lookUp = clamp(14 - c.dist, 0, 8) * 0.18;
     this.camera.position.set(cx, ch, -cy);
-    this.camera.lookAt(c.x, gh + 1.2 + lookUp, -c.y);
+    this.camera.lookAt(c.x, gh + 1.2 + lookUp + (c.lift || 0), -c.y);
     const near = c.dist < 60 ? 0.15 : 1.0;
     if (this.camera.near !== near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
     this.camera.updateMatrixWorld();
