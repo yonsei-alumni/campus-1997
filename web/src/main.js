@@ -489,10 +489,11 @@ async function main() {
     return best < eWalk + R.walk + 1;
   };
   let viewW = 0, viewH = 0;        // 0: size once on the first frame too
-  renderer.setAnimationLoop(() => {
+  let fixedDt = 0, recording = false;  // trailer recording: the loop is stepped by hand at a fixed frame time
+  const frame = () => {
     // a window resized while the tab was in the background may never send 'resize': check every frame
-    if (innerWidth !== viewW || innerHeight !== viewH) { viewW = innerWidth; viewH = innerHeight; dispatchEvent(new Event('resize')); }
-    const dt = Math.min(0.05, clock.getDelta());
+    if (!recording && (innerWidth !== viewW || innerHeight !== viewH)) { viewW = innerWidth; viewH = innerHeight; dispatchEvent(new Event('resize')); }
+    const dt = fixedDt || Math.min(0.05, clock.getDelta());
     tAcc += dt;
     if (started) {
       crowd.movers(player.x, player.y, player.movers);
@@ -540,9 +541,33 @@ async function main() {
       }
     }
     post.draw(tAcc);
-  });
+  };
+  renderer.setAnimationLoop(frame);
   post.setSize(innerWidth, innerHeight);          // CSS pixels: EffectComposer applies the pixel ratio itself
-  window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird };
+  // offline trailer recording (used from the browser console / automation): fixed-size frames, stepped by hand
+  const record = {
+    start(w = 1920, h = 1080) {
+      recording = true;
+      renderer.setAnimationLoop(null);
+      renderer.setPixelRatio(1);
+      post.composer.setPixelRatio(1);
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      post.setSize(w, h);
+    },
+    step(dt = 1 / 30) { fixedDt = dt; frame(); fixedDt = 0; },
+    stop() {
+      recording = false;
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+      post.composer.setPixelRatio(renderer.getPixelRatio());
+      viewW = viewH = 0;
+      clock.getDelta();
+      renderer.setAnimationLoop(frame);
+    },
+  };
+  window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird,
+    startWalk, enterBird, leaveBird, record };
 }
 
 // 게시판 with the 1997 photos pinned up (the "그때 우리는" memory spot)

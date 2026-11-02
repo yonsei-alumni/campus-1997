@@ -109,6 +109,17 @@ blender -b --factory-startup --python blender/characters.py       # 사람 14명
 `blender/build.py` 에 `buildings landmarks road veg props polyhaven` 를 인자로 주면 해당 부분만 다시 빌드합니다.
 GLB에는 형상, UV, 재질 *이름* 만 들어 있고, 실제 PBR 재질은 `blender/materials.json` 하나를 Blender와 웹이 같이 씁니다.
 
+## 소개 영상
+
+`tools/trailer/`: 게임 화면을 한 프레임씩 렌더링해 46초 소개 영상(1920×1080, 30fps)을 만듭니다.
+버드 아이뷰로 캠퍼스 위를 날다가 1997년 항공사진처럼 백양로로 내려가고, 걷는 사람 뒤로 내려앉아 백양로를 걷습니다.
+
+```bash
+python3 tools/trailer/frame_server.py /tmp/frames-dir/frames &   # 프레임 받는 로컬 서버 (127.0.0.1:8765)
+# npm run dev 로 띄운 게임의 브라우저 콘솔에 tools/trailer/record.js 를 붙여 넣고 끝날 때까지 기다림
+python3 tools/trailer/make_video.py /tmp/frames-dir trailer/campus1997_trailer.mp4   # 자막을 넣어 MP4로
+```
+
 ## 출처 · 라이선스
 
 - 지도 데이터: © OpenStreetMap contributors, ODbL

@@ -6,3 +6,4 @@ data/raw/pdf_images/
 previews/
 reference.pdf
 __pycache__/
+trailer/*.mp4
