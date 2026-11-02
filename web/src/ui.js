@@ -1,7 +1,21 @@
 // HUD, minimap, campus map with teleport, memory cards and the stamp collection.
 import { pointInPoly } from './player.js';
+import { $, safeGet, safeSet } from './util.js';
 
-const $ = (s) => document.querySelector(s);
+const FOOT = new Set(['footway', 'path', 'steps', 'pedestrian']);
+
+// trace a campus-frame polyline through the map projection P
+function trace(x, pts, P) {
+  x.beginPath();
+  pts.forEach(([a, b], i) => { const [u, v] = P(a, b); i ? x.lineTo(u, v) : x.moveTo(u, v); });
+}
+
+// round marker: filled, and outlined when a stroke colour is given
+function dot(x, u, v, r, fill, stroke = null, lineWidth = 0) {
+  x.fillStyle = fill;
+  x.beginPath(); x.arc(u, v, r, 0, 7); x.fill();
+  if (stroke) { x.strokeStyle = stroke; x.lineWidth = lineWidth; x.stroke(); }
+}
 
 export class UI {
   constructor(campus, opts) {
@@ -10,6 +24,15 @@ export class UI {
     this.collected = new Set(JSON.parse(safeGet('y97-stamps') || '[]'));
     this.cards = campus.landmarks;
     this.current = null;
+    this.spots = campus.landmarks.filter((l) => l.r);          // landmarks with a memory spot on the ground
+    // building centres for the place names (named buildings only)
+    this.named = campus.buildings.filter((b) => b.name).map((b) => {
+      const n = b.footprint.length;
+      const [cx, cy] = b.footprint.reduce((a, p) => [a[0] + p[0] / n, a[1] + p[1] / n], [0, 0]);
+      return { name: b.name, cx, cy };
+    });
+    this.minimap = $('#minimap');
+    this.minimapCtx = this.minimap.getContext('2d');
     this.mapCanvas = this._renderMap();
     this._bindMap();
     $('#memory .close').onclick = () => this.closeMemory();
@@ -32,15 +55,14 @@ export class UI {
     // paths & roads
     x.lineCap = 'round'; x.lineJoin = 'round';
     for (const p of this.c.paths) {
-      x.strokeStyle = p.kind === 'footway' || p.kind === 'path' || p.kind === 'steps' || p.kind === 'pedestrian' ? '#efe6d4' : '#8d9096';
+      x.strokeStyle = FOOT.has(p.kind) ? '#efe6d4' : '#8d9096';
       x.lineWidth = Math.max(1.2, p.w * k);
-      x.beginPath();
-      p.pts.forEach(([a, b], i) => { const [u, v] = P(a, b); i ? x.lineTo(u, v) : x.moveTo(u, v); });
+      trace(x, p.pts, P);
       x.stroke();
     }
     const R = this.c.baekyangro;
     const eCurb = R.median + R.lane + R.curb, eVerge = eCurb + (R.verge || 0);
-    x.beginPath(); R.pts.forEach(([a, b], i) => { const [u, v] = P(a, b); i ? x.lineTo(u, v) : x.moveTo(u, v); });
+    trace(x, R.pts, P);
     x.strokeStyle = '#8fb576'; x.lineWidth = 2 * (eVerge + R.walk + (R.strip || 0)) * k; x.stroke();   // ginkgo strip
     x.strokeStyle = '#e8dccb'; x.lineWidth = 2 * (eVerge + R.walk) * k; x.stroke();                     // sidewalks
     x.strokeStyle = '#7fa868'; x.lineWidth = 2 * eVerge * k; x.stroke();                                // boxwood verges
@@ -51,8 +73,7 @@ export class UI {
       x.fillStyle = lm ? '#f4a259' : b.style === 'city' ? '#b9b2a6' : '#e9e4da';
       x.strokeStyle = lm ? '#9c4f17' : '#857d70';
       x.lineWidth = 1;
-      x.beginPath();
-      b.footprint.forEach(([a, c], i) => { const [u, v] = P(a, c); i ? x.lineTo(u, v) : x.moveTo(u, v); });
+      trace(x, b.footprint, P);
       x.closePath(); x.fill(); x.stroke();
     }
     // amphitheater
@@ -63,46 +84,40 @@ export class UI {
     x.fillStyle = '#d9c39b';
     x.beginPath(); x.ellipse(ax, ay, A.arena_rx * k, A.arena_ry * k, -A.rot, 0, Math.PI * 2); x.fill();
     // trees
-    x.fillStyle = 'rgba(60,110,50,.45)';
-    for (const t of this.c.trees) {
-      const [u, v] = P(t[1], t[2]);
-      x.beginPath(); x.arc(u, v, 2.2 * k * t[3], 0, 7); x.fill();
-    }
+    for (const t of this.c.trees) dot(x, ...P(t[1], t[2]), 2.2 * k * t[3], 'rgba(60,110,50,.45)');
     // labels (minimap only; the big map draws its own)
     x.font = `bold ${Math.round(13 * k / 1.6)}px "Noto Sans KR", sans-serif`;
     x.textAlign = 'center';
-    for (const l of this.cards) {
-      if (!l.r) continue;
+    for (const l of this.spots) {
       const [u, v] = P(l.pos[0], l.pos[1]);
       x.fillStyle = 'rgba(255,255,255,.85)';
       const w = x.measureText(l.name).width + 10;
       x.fillRect(u - w / 2, v - 26, w, 20);
       x.fillStyle = '#143c8c';
       x.fillText(l.name, u, v - 11);
-      x.beginPath(); x.arc(u, v, 5, 0, 7); x.fill();
+      dot(x, u, v, 5, '#143c8c');
     }
     return cv;
   }
 
   drawMinimap(px, py, yaw) {
-    const cv = $('#minimap'), x = cv.getContext('2d');
+    const cv = this.minimap, x = this.minimapCtx, map = this.mapCanvas;
     const W = cv.width, H = cv.height;
     x.save();
     x.clearRect(0, 0, W, H);
     x.beginPath(); x.arc(W / 2, H / 2, W / 2, 0, 7); x.clip();
     const [u, v] = this.toMap(px, py);
-    const zoom = 1.0;
     x.translate(W / 2, H / 2);
     x.rotate(yaw);                         // heading-up
-    x.scale(zoom, zoom);
-    x.drawImage(this.mapCanvas, -u, -v);
+    // only the part of the ~2000 px base map that falls inside the round window (any rotation)
+    const R = W / 2 + 2;
+    const sx = Math.max(0, Math.floor(u - R)), sy = Math.max(0, Math.floor(v - R));
+    const sw = Math.min(map.width, Math.ceil(u + R)) - sx, sh = Math.min(map.height, Math.ceil(v + R)) - sy;
+    if (sw > 0 && sh > 0) x.drawImage(map, sx, sy, sw, sh, sx - u, sy - v, sw, sh);
     // landmark markers
-    for (const l of this.cards) {
-      if (!l.r) continue;
+    for (const l of this.spots) {
       const [a, b] = this.toMap(l.pos[0], l.pos[1]);
-      x.fillStyle = this.collected.has(l.id) ? '#f2c230' : '#ffffff';
-      x.strokeStyle = '#143c8c'; x.lineWidth = 2;
-      x.beginPath(); x.arc(a - u, b - v, 6, 0, 7); x.fill(); x.stroke();
+      dot(x, a - u, b - v, 6, this.collected.has(l.id) ? '#f2c230' : '#ffffff', '#143c8c', 2);
     }
     x.restore();
     // player arrow (always up)
@@ -110,7 +125,6 @@ export class UI {
     x.beginPath(); x.moveTo(W / 2, H / 2 - 10); x.lineTo(W / 2 + 7, H / 2 + 8); x.lineTo(W / 2, H / 2 + 4); x.lineTo(W / 2 - 7, H / 2 + 8); x.closePath();
     x.fill(); x.stroke();
     // north marker
-    const nx = W / 2 + Math.sin(-yaw) * (W / 2 - 12) * -1, ny = H / 2 - Math.cos(yaw) * (H / 2 - 12);
     x.fillStyle = '#fff'; x.font = 'bold 13px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText('N', W / 2 + Math.sin(yaw) * (W / 2 - 12), H / 2 - Math.cos(yaw) * (H / 2 - 12));
   }
@@ -126,7 +140,7 @@ export class UI {
       const S = this.c.splat, k = this.mapScale;
       let px = u / k + S.x0, py = S.y1 - v / k;
       // snap to a landmark if close
-      for (const l of this.cards) if (l.r && Math.hypot(l.pos[0] - px, l.pos[1] - py) < 18) [px, py] = l.pos;
+      for (const l of this.spots) if (Math.hypot(l.pos[0] - px, l.pos[1] - py) < 18) [px, py] = l.pos;
       for (const b of this.c.buildings) if (pointInPoly(px, py, b.footprint)) return;
       this.toggleMap(false);
       this.opts.onTeleport(px, py);
@@ -153,29 +167,24 @@ export class UI {
     x.drawImage(this.mapCanvas, ox, oy, this.mapCanvas.width * s, this.mapCanvas.height * s);
     x.font = 'bold 15px "Noto Sans KR", sans-serif';
     x.textAlign = 'center';
-    for (const l of this.cards) {
-      if (!l.r) continue;
+    for (const l of this.spots) {
       const [a, b] = this.toMap(l.pos[0], l.pos[1]);
       const X = ox + a * s, Y = oy + b * s;
-      x.fillStyle = this.collected.has(l.id) ? '#f2c230' : '#fff';
-      x.strokeStyle = '#143c8c'; x.lineWidth = 3;
-      x.beginPath(); x.arc(X, Y, 9, 0, 7); x.fill(); x.stroke();
+      dot(x, X, Y, 9, this.collected.has(l.id) ? '#f2c230' : '#fff', '#143c8c', 3);
       const w = x.measureText(l.name).width + 12;
       x.fillStyle = 'rgba(255,253,246,.92)'; x.fillRect(X - w / 2, Y - 34, w, 22);
       x.fillStyle = '#143c8c'; x.fillText(l.name, X, Y - 18);
     }
     if (px !== undefined) {
       const [a, b] = this.toMap(px, py);
-      x.fillStyle = '#e63946'; x.strokeStyle = '#fff'; x.lineWidth = 3;
-      x.beginPath(); x.arc(ox + a * s, oy + b * s, 8, 0, 7); x.fill(); x.stroke();
+      dot(x, ox + a * s, oy + b * s, 8, '#e63946', '#fff', 3);
     }
   }
 
   // ---------------------------------------------------------------- place / prompts
   nearestLandmark(px, py) {
     let best = null, bd = 1e9;
-    for (const l of this.cards) {
-      if (!l.r) continue;
+    for (const l of this.spots) {
       const d = Math.hypot(l.pos[0] - px, l.pos[1] - py);
       if (d < l.r && d < bd) { bd = d; best = l; }
     }
@@ -186,10 +195,8 @@ export class UI {
     if (l) return l.name;
     if (onRoad) return '백양로';
     let best = null, bd = 45;
-    for (const b of this.c.buildings) {
-      if (!b.name) continue;
-      const [cx, cy] = b.footprint.reduce((a, p) => [a[0] + p[0] / b.footprint.length, a[1] + p[1] / b.footprint.length], [0, 0]);
-      const d = Math.hypot(cx - px, cy - py);
+    for (const b of this.named) {
+      const d = Math.hypot(b.cx - px, b.cy - py);
       if (d < bd) { bd = d; best = b; }
     }
     return best ? `${best.name} 앞` : '신촌 캠퍼스';
@@ -251,6 +258,3 @@ export class UI {
     if (this.collected.size === total && total) this.toast('1997년의 추억을 모두 모았습니다! 🎓', 5000);
   }
 }
-
-function safeGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
-function safeSet(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }

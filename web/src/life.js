@@ -1,9 +1,11 @@
 // Campus life: 1997 banners (현수막) across 백양로, students walking, cars on the road.
 import * as THREE from 'three';
-import { mulberry } from './terrain.js';
+import { mulberry, wrapAngle } from './util.js';
 import { play, locomotion } from './characters.js';
 
 // ---------------------------------------------------------------- polyline helpers (campus frame)
+const _a = new THREE.Vector2(), _b = new THREE.Vector2();
+
 export class Path {
   constructor(pts, heightFn) {
     this.pts = pts.map(([x, y]) => new THREE.Vector2(x, y));
@@ -20,14 +22,20 @@ export class Path {
   }
   at(s, out = new THREE.Vector2()) {
     s = Math.max(0, Math.min(this.length, s));
-    let i = 1;
-    while (i < this.cum.length - 1 && this.cum[i] < s) i++;
+    // binary search for the first vertex at or past s (called several times per walker and car every frame)
+    const cum = this.cum;
+    let lo = 1, hi = cum.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid] < s) lo = mid + 1; else hi = mid;
+    }
+    const i = lo;
     const t = (s - this.cum[i - 1]) / (this.cum[i] - this.cum[i - 1] || 1);
     return out.copy(this.pts[i - 1]).lerp(this.pts[i], t);
   }
   dir(s, out = new THREE.Vector2()) {
-    const a = this.at(Math.max(0, s - 1)), b = this.at(Math.min(this.length, s + 1));
-    return out.copy(b).sub(a).normalize();
+    this.at(Math.max(0, s - 1), _a);
+    return out.copy(this.at(Math.min(this.length, s + 1), _b)).sub(_a).normalize();
   }
   h(s) {
     const f = Math.max(0, s) / 2, i = Math.min(this.hs.length - 2, f | 0);
@@ -35,9 +43,9 @@ export class Path {
   }
   offset(off) {
     const out = [];
-    const step = 3;
+    const step = 3, p = new THREE.Vector2(), d = new THREE.Vector2();
     for (let s = 0; s <= this.length; s += step) {
-      const p = this.at(s), d = this.dir(s);
+      this.at(s, p); this.dir(s, d);
       out.push([p.x - d.y * off, p.y + d.x * off]);
     }
     return out;
@@ -115,11 +123,12 @@ export function makeBanners(banners, lib, groundAt) {
   const group = new THREE.Group();
   group.name = 'banners';
   const poleMat = lib.get('metal_dark');
+  const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 6.6, 8);
   for (const b of banners) {
     const A = new THREE.Vector3(b.a[0], 0, -b.a[1]), B = new THREE.Vector3(b.b[0], 0, -b.b[1]);
     A.y = groundAt(b.a[0], b.a[1]); B.y = groundAt(b.b[0], b.b[1]);
     for (const P of [A, B]) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 6.6, 8), poleMat);
+      const pole = new THREE.Mesh(poleGeo, poleMat);
       pole.position.set(P.x, P.y + 3.3, P.z);
       pole.castShadow = true;
       group.add(pole);
@@ -180,12 +189,16 @@ export class Crowd {
     this.d = new THREE.Vector2();
     this.frame = 0;
   }
-  // circles the player collides with
+  // circles the player collides with (one reused circle per person: this runs every frame)
   movers(px, py, out = []) {
     out.length = 0;
     for (const p of this.people) {
       const x = p.a.holder.position.x, y = -p.a.holder.position.z;
-      if (Math.abs(x - px) < 6 && Math.abs(y - py) < 6) out.push({ x, y, r: 0.3 });
+      if (Math.abs(x - px) < 6 && Math.abs(y - py) < 6) {
+        const c = (p.circle ||= { x: 0, y: 0, r: 0.3 });
+        c.x = x; c.y = y;
+        out.push(c);
+      }
     }
     return out;
   }
@@ -217,9 +230,7 @@ export class Crowd {
         want = Math.hypot(tx, ty) < 2.6 ? Math.atan2(tx, -ty) : p.home;      // turn to greet you
       }
       if (want !== null) {
-        let dh = want - p.heading;
-        dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-        p.heading += dh * (1 - Math.exp(-dt * 7));
+        p.heading += wrapAngle(want - p.heading) * (1 - Math.exp(-dt * 7));
         a.holder.rotation.y = p.heading;
       }
       if (far > 190 * 190) { a.holder.visible = false; continue; }
@@ -244,7 +255,8 @@ function playGesture(a, name) {
 // ---------------------------------------------------------------- traffic
 // Cars from blender/cars.py: wheels spin with the distance travelled, brake lights come on when slowing,
 // a seated driver (Quaternius 'sit' clip) behind the wheel; they keep their distance and stop for you.
-const CAR_COLORS = ['#eeeeea', '#f2f1ec', '#b9bdc3', '#a9aeb5', '#1b2333', '#2a2d33', '#6e1b1f', '#244a3a', '#b59a6a', '#2c4a78'];
+// 1997 paint: lots of white, silver and dark navy, a few burgundy / green / gold
+export const CAR_COLORS = ['#eeeeea', '#f2f1ec', '#b9bdc3', '#a9aeb5', '#1b2333', '#2a2d33', '#6e1b1f', '#244a3a', '#b59a6a', '#2c4a78'];
 const WEIGHTS = { sedan: 4, sedan2: 3, hatch: 3, taxi: 3, van: 2, bus: 1 };
 const DRIVER = { sedan: [-0.06, 0.40], sedan2: [-0.03, 0.38], hatch: [-0.25, 0.36], taxi: [-0.06, 0.40], van: [0.92, 0.38], bus: [4.35, 0.75] };
 
@@ -287,7 +299,7 @@ export class Traffic {
     }
   }
   update(dt, player) {
-    const p = new THREE.Vector2(), d = new THREE.Vector2();
+    const p = this.p ||= new THREE.Vector2(), d = this.d ||= new THREE.Vector2();
     for (const c of this.cars) {
       c.lane.at(c.s, p);
       c.lane.dir(c.s, d);

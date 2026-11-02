@@ -1,5 +1,6 @@
 // Shared PBR material library, built from data/materials.json (same file Blender uses).
 import * as THREE from 'three';
+import { MOBILE } from './util.js';
 
 const texLoader = new THREE.TextureLoader();
 const cache = new Map();
@@ -7,7 +8,6 @@ const pending = new Set();
 export const texturesReady = () => Promise.all([...pending]);
 
 // Phones: the whole 2K texture set is ~1 GB of GPU memory with mipmaps -> upload smaller copies.
-export const MOBILE = matchMedia('(pointer: coarse)').matches;
 const MOBILE_MAX_TEX = 1024;
 
 // downscale an image so its longest side is at most `max` (returns the image itself if it already fits)
@@ -57,10 +57,11 @@ function tiled(url, tile, srgb) {
 }
 
 export const SEASONS = {
-  spring: { label: '1997년 4월 · 벚꽃', grass: [0.17, 0.25, 0.075], date: "'97 4 15" },
-  summer: { label: '1997년 5월 · 신록', grass: [0.13, 0.22, 0.06], date: "'97 5 21" },
-  autumn: { label: '1997년 10월 · 은행잎', grass: [0.21, 0.2, 0.08], date: "'97 10 28" },
+  spring: { short: '4월 · 벚꽃', grass: [0.17, 0.25, 0.075], date: "'97 4 15" },
+  summer: { short: '5월 · 신록', grass: [0.13, 0.22, 0.06], date: "'97 5 21" },
+  autumn: { short: '10월 · 은행잎', grass: [0.21, 0.2, 0.08], date: "'97 10 28" },
 };
+for (const s of Object.values(SEASONS)) s.label = `1997년 ${s.short}`;
 
 // species -> available seasonal atlas suffixes
 const LEAF_VARIANTS = {
@@ -79,7 +80,7 @@ export function leafUrl(species, season) {
 }
 
 export class MaterialLibrary {
-  constructor(defs, envIntensity = 1) {
+  constructor(defs) {
     this.defs = defs;
     this.mats = new Map();
     this.leafMats = [];

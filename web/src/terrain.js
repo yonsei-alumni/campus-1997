@@ -1,7 +1,8 @@
 // Terrain (near: 5 m heightfield with PBR splat shader; far: 100 m ring with Seoul mountains)
 // and the sky dome.  World frame: X = east, Y = up, Z = -north.
 import * as THREE from 'three';
-import { loadTex, MOBILE, shrinkImage } from './materials.js';
+import { loadTex, shrinkImage } from './materials.js';
+import { MOBILE, mulberry, placeMatrix } from './util.js';
 
 export class Heightfield {
   constructor(data, half, step, n) {
@@ -181,13 +182,11 @@ export function makeFarForest(hf, nearHalf, maxR = 3800) {
   const geo = new THREE.IcosahedronGeometry(1, 1);
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true });
   const im = new THREE.InstancedMesh(geo, mat, pts.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
+  const m4 = new THREE.Matrix4(), sc = new THREE.Vector3(), c = new THREE.Color();
   pts.forEach(([x, y], i) => {
     const rr = 9 + rnd() * 8;
-    p.set(x, hf.height(x, y) + rr * 0.25, -y);
     sc.set(rr, rr * (0.55 + rnd() * 0.25), rr * (0.9 + rnd() * 0.2));
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6.28);
-    im.setMatrixAt(i, m4.compose(p, q, sc));
+    im.setMatrixAt(i, placeMatrix(m4, x, hf.height(x, y) + rr * 0.25, y, rnd() * 6.28, sc));
     c.setRGB(0.16 + rnd() * 0.08, 0.26 + rnd() * 0.08, 0.11 + rnd() * 0.05, THREE.SRGBColorSpace);
     im.setColorAt(i, c);
   });
@@ -245,7 +244,7 @@ export function makeCity(hf, nearHalf, count = 1600) {
   geo.translate(0, 0.5, 0);
   const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
   const im = new THREE.InstancedMesh(geo, mat, count);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
+  const m4 = new THREE.Matrix4(), s = new THREE.Vector3();
   let k = 0, tries = 0;
   const rnd = mulberry(7);
   while (k < count && tries < count * 20) {
@@ -256,23 +255,11 @@ export function makeCity(hf, nearHalf, count = 1600) {
     if (h > 60 || h < 8) continue;
     const apt = rnd() < 0.45;
     s.set(apt ? 14 : 10 + rnd() * 20, apt ? 25 + rnd() * 20 : 6 + rnd() * 12, apt ? 60 + rnd() * 40 : 10 + rnd() * 20);
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() < 0.7 ? 0.25 : rnd() * 3);
-    p.set(X, h - 1, -Y);
-    m4.compose(p, q, s);
-    im.setMatrixAt(k++, m4);
+    im.setMatrixAt(k++, placeMatrix(m4, X, h - 1, Y, rnd() < 0.7 ? 0.25 : rnd() * 3, s));
   }
   im.count = k;
   im.name = 'far_city';
   return im;
-}
-
-export function mulberry(a) {
-  return function () {
-    a |= 0; a = a + 0x6D2B79F5 | 0;
-    let t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
 }
 
 export function makeSky(skyMeta, fogColor) {

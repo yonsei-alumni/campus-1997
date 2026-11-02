@@ -127,5 +127,6 @@ export function portraits(cast, ids, w = 150, h = 190) {
     out[id] = r.domElement.toDataURL('image/png');
   }
   r.dispose();
+  r.forceContextLoss();          // free the extra WebGL context now, not when it is garbage collected
   return out;
 }

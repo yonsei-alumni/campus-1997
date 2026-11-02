@@ -8,11 +8,10 @@
 // Landmark pins float over the buildings; picking one flies there and offers "여기서 걷기" / "추억 보기".
 // Campus frame: x = east, y = north; three.js: (x, h, -y).
 import * as THREE from 'three';
+import { clamp, wrapAngle } from './util.js';
 
 const BOUNDS = { x0: -480, x1: 580, y0: -520, y1: 600 };
 const DIST = [6, 1400], PITCH = [0.04, 1.5];
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class BirdsEye {
   constructor({ camera, dom, landmarks, heightAt, surfaceAt, pickGround, onWalkHere, onMemory, onAction }) {
@@ -207,6 +206,7 @@ export class BirdsEye {
 
   select(l) {
     this.selected = l;
+    this._order = null;
     this.bar.hidden = !l;
     for (const p of this.pins) p.el.classList.toggle('on', p.l === l);
     if (!l) return;
@@ -284,8 +284,9 @@ export class BirdsEye {
     this.layer.style.setProperty('--pin-scale', String(scale));
     const cam = this.camera.position;
     // place pins in priority order (selected first, then the list order) and hide any that would overlap
-    const order = [...this.pins].sort((a, b) => (b.l === this.selected) - (a.l === this.selected) || a.prio - b.prio);
-    const boxes = [];
+    const order = (this._order ||= [...this.pins].sort((a, b) => (b.l === this.selected) - (a.l === this.selected) || a.prio - b.prio));
+    const boxes = this._boxes ||= [];
+    boxes.length = 0;
     for (const p of order) {
       if (p.h === null) p.h = this.heightAt(p.l.pos[0], p.l.pos[1]) + 24;
       // at street level only nearby places get a pin

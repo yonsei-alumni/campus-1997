@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { computeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 import { locomotion } from './characters.js';
+import { clamp, closestOnSegment } from './util.js';
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
@@ -13,22 +14,24 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
 const RADIUS = 0.32, STEP = 0.55;
 export const WALK = 2.4, RUN = 6.2, TURN = 2.3;
 
+// numeric grid-cell key (no string building in the per-frame lookups); unique for |i|, |j| < 32768
+const cellKey = (i, j) => (i + 32768) * 65536 + (j + 32768);
+
 export class Colliders {
   constructor(cell = 24) {
     this.cell = cell;
     this.grid = new Map();
-  }
-  _keys(minx, miny, maxx, maxy) {
-    const c = this.cell, out = [];
-    for (let i = Math.floor(minx / c); i <= Math.floor(maxx / c); i++)
-      for (let j = Math.floor(miny / c); j <= Math.floor(maxy / c); j++) out.push(i + ',' + j);
-    return out;
+    this._near = [];
+    this._stamp = 0;
   }
   _put(o, minx, miny, maxx, maxy) {
-    for (const k of this._keys(minx, miny, maxx, maxy)) {
-      if (!this.grid.has(k)) this.grid.set(k, []);
-      this.grid.get(k).push(o);
-    }
+    const c = this.cell;
+    for (let i = Math.floor(minx / c); i <= Math.floor(maxx / c); i++)
+      for (let j = Math.floor(miny / c); j <= Math.floor(maxy / c); j++) {
+        const k = cellKey(i, j);
+        if (!this.grid.has(k)) this.grid.set(k, []);
+        this.grid.get(k).push(o);
+      }
   }
   addPolygon(pts) {   // campus frame [[x,y],...]
     let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
@@ -38,24 +41,29 @@ export class Colliders {
   addCircle(x, y, r) {
     this._put({ type: 'circle', x, y, r }, x - r, y - r, x + r, y + r);
   }
+  // colliders in the 3x3 cells round (x, y), each once (reused array: valid until the next call)
   near(x, y) {
-    const c = this.cell;
-    const res = new Set();
+    const c = this.cell, ci = Math.floor(x / c), cj = Math.floor(y / c);
+    const res = this._near, stamp = ++this._stamp;
+    res.length = 0;
     for (let i = -1; i <= 1; i++)
       for (let j = -1; j <= 1; j++) {
-        const a = this.grid.get((Math.floor(x / c) + i) + ',' + (Math.floor(y / c) + j));
-        if (a) a.forEach((o) => res.add(o));
+        const a = this.grid.get(cellKey(ci + i, cj + j));
+        if (!a) continue;
+        for (const o of a) if (o.seen !== stamp) { o.seen = stamp; res.push(o); }
       }
     return res;
   }
   insideBuilding(x, y) {
-    const a = this.grid.get(Math.floor(x / this.cell) + ',' + Math.floor(y / this.cell));
+    const a = this.grid.get(cellKey(Math.floor(x / this.cell), Math.floor(y / this.cell)));
     return !!a && a.some((o) => o.type === 'poly' && pointInPoly(x, y, o.pts));
   }
   // push a circle (x,y,r) out of every collider (and the moving circles); returns corrected [x,y]
   resolve(x, y, r, movers = []) {
+    // the push-outs move the circle by centimetres: one neighbourhood (±1 cell = 24 m) serves all three passes
+    const near = this.near(x, y);
     for (let it = 0; it < 3; it++) {
-      for (const o of this.near(x, y)) {
+      for (const o of near) {
         if (o.type === 'circle') {
           const dx = x - o.x, dy = y - o.y, d = Math.hypot(dx, dy), m = o.r + r;
           if (d < m && d > 1e-6) { x = o.x + dx / d * m; y = o.y + dy / d * m; }
@@ -65,10 +73,7 @@ export class Colliders {
           let best = 1e9, bx = 0, by = 0;
           for (let i = 0; i < p.length; i++) {
             const [ax, ay] = p[i], [cx, cy] = p[(i + 1) % p.length];
-            const ex = cx - ax, ey = cy - ay;
-            const t = Math.max(0, Math.min(1, ((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey || 1)));
-            const qx = ax + ex * t, qy = ay + ey * t;
-            const d = Math.hypot(x - qx, y - qy);
+            const [qx, qy, d] = closestOnSegment(x, y, ax, ay, cx, cy);
             if (d < best) { best = d; bx = qx; by = qy; }
           }
           if (inside) {
@@ -116,6 +121,8 @@ export class Player {
     this.ray = new THREE.Raycaster();
     this.ray.firstHitOnly = true;
     this.down = new THREE.Vector3(0, -1, 0);
+    this._from = new THREE.Vector3();
+    this._want = new THREE.Vector3(); this._head = new THREE.Vector3(); this._q = new THREE.Vector3(); this._look = new THREE.Vector3();
     // camera rig
     this.cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), ready: false, orbit: 0, lift: 0, dist: 5.4, drag: null };
     addEventListener('keydown', (e) => { if (!/INPUT|TEXTAREA/.test(e.target.tagName)) this.keys.add(e.code); if (/Arrow|Space/.test(e.code) && this.enabled) e.preventDefault(); });
@@ -130,7 +137,7 @@ export class Player {
       const d = this.cam.drag;
       if (!d || d.id !== e.pointerId) return;
       this.cam.orbit -= (e.clientX - d.x) * 0.006;
-      this.cam.lift = Math.max(-0.35, Math.min(1.1, this.cam.lift + (e.clientY - d.y) * 0.004));
+      this.cam.lift = clamp(this.cam.lift + (e.clientY - d.y) * 0.004, -0.35, 1.1);
       d.x = e.clientX; d.y = e.clientY;
     });
     const up = () => { this.cam.drag = null; };
@@ -139,7 +146,7 @@ export class Player {
     dom.addEventListener('wheel', (e) => {
       if (!this.enabled) return;
       e.preventDefault();
-      this.cam.dist = Math.max(2.4, Math.min(16, this.cam.dist * (e.deltaY > 0 ? 1.1 : 0.9)));
+      this.cam.dist = clamp(this.cam.dist * (e.deltaY > 0 ? 1.1 : 0.9), 2.4, 16);
     }, { passive: false });
   }
 
@@ -166,7 +173,7 @@ export class Player {
 
   groundAt(x, z, from = null) {
     const top = from ?? this.pos.y + STEP;
-    this.ray.set(new THREE.Vector3(x, top, z), this.down);
+    this.ray.set(this._from.set(x, top, z), this.down);
     this.ray.far = from ? 1000 : STEP + 60;
     const hits = this.ray.intersectObjects(this.walk, false);
     return hits.length ? hits[0].point.y : null;
@@ -181,7 +188,7 @@ export class Player {
     if (k.has('ArrowRight') || k.has('KeyD')) turn -= 1;
     if (this.stick.lengthSq() > 0.01) { fwd += -this.stick.y; turn += -this.stick.x * 0.9; }
     const run = k.has('ShiftLeft') || k.has('ShiftRight') || this.stick.length() > 0.95;
-    return { fwd: Math.max(-1, Math.min(1, fwd)), turn: Math.max(-1, Math.min(1, turn)), run };
+    return { fwd: clamp(fwd, -1, 1), turn: clamp(turn, -1, 1), run };
   }
 
   update(dt) {
@@ -214,17 +221,17 @@ export class Player {
     if (!c.drag && (inp.fwd || inp.turn)) c.orbit *= Math.exp(-dt * 1.6);
     const a = this.heading + c.orbit;
     const back = c.dist * Math.cos(0.36 + c.lift * 0.5), high = 1.25 + c.dist * Math.sin(0.36 + c.lift * 0.5);
-    const want = new THREE.Vector3(p.x - Math.sin(a) * back, p.y + high, p.z - Math.cos(a) * back);
+    const want = this._want.set(p.x - Math.sin(a) * back, p.y + high, p.z - Math.cos(a) * back);
     // keep the camera out of buildings: walk the line from the head and stop before a wall
-    const head = new THREE.Vector3(p.x, p.y + 1.5, p.z);
+    const head = this._head.set(p.x, p.y + 1.5, p.z), q = this._q;
     const steps = 12;
     for (let i = 1; i <= steps; i++) {
-      const q = head.clone().lerp(want, i / steps);
-      if (this.col.insideBuilding(q.x, -q.z)) { want.copy(head.clone().lerp(want, Math.max(0, (i - 1.5) / steps))); want.y += 0.6; break; }
+      q.lerpVectors(head, want, i / steps);
+      if (this.col.insideBuilding(q.x, -q.z)) { want.lerpVectors(head, want, Math.max(0, (i - 1.5) / steps)); want.y += 0.6; break; }
     }
     const gy = this.hf.height(want.x, -want.z);
     if (want.y < gy + 0.6) want.y = gy + 0.6;
-    const look = new THREE.Vector3(p.x + Math.sin(this.heading) * 1.2, p.y + 1.45, p.z + Math.cos(this.heading) * 1.2);
+    const look = this._look.set(p.x + Math.sin(this.heading) * 1.2, p.y + 1.45, p.z + Math.cos(this.heading) * 1.2);
     const k = c.ready ? 1 - Math.exp(-dt * 4.5) : 1;
     c.ready = true;
     c.pos.lerp(want, k);

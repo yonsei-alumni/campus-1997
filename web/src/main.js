@@ -5,21 +5,20 @@ import '@fontsource/do-hyeon/400.css';
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { MaterialLibrary, SEASONS, texturesReady } from './materials.js';
-import { Heightfield, makeNearTerrain, makeFarTerrain, makeFarForest, makeSummitTower, makeCity, makeSky, mulberry } from './terrain.js';
+import { Heightfield, makeNearTerrain, makeFarTerrain, makeFarForest, makeSummitTower, makeCity, makeSky } from './terrain.js';
 import { loadGLB, bindMaterials, mergeStatic, InstancedKit, Forest } from './world.js';
 import { Player, Colliders } from './player.js';
 import { UI } from './ui.js';
 import { Post } from './post.js';
-import { Path, makeBanners, Crowd, Traffic } from './life.js';
+import { Path, makeBanners, Crowd, Traffic, CAR_COLORS } from './life.js';
 import { Cast, PEOPLE, STUDENTS, HEROES, portraits } from './characters.js';
 import { BirdsEye } from './birdseye.js';
+import { $, MOBILE, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
-const $ = (s) => document.querySelector(s);
 const canvas = $('#view');
-const isTouch = matchMedia('(pointer: coarse)').matches;
-let season = 'summer';
-try { season = localStorage.getItem('y97-season') || 'summer'; } catch { /* ignore */ }
+let season = safeGet('y97-season');
 if (!SEASONS[season]) season = 'summer';
+const NOBODY = { x: 1e9, y: 1e9 };       // the player before the walk starts: nobody in the way
 
 // ------------------------------------------------------------------ progress
 let loaded = 0, total = 1;
@@ -52,7 +51,7 @@ async function main() {
   renderer.toneMappingExposure = 1.05;
   // Phones: no shadow maps. On a Pixel 10 (PowerVR DXT) the shadow pass crashes Chrome's GPU process
   // (SIGSEGV in the driver's LoadTextureState -> WebGL context lost -> white screen) at any map size.
-  renderer.shadowMap.enabled = !isTouch;
+  renderer.shadowMap.enabled = !MOBILE;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
@@ -124,7 +123,6 @@ async function main() {
   for (const m of walkables) m.geometry.computeBoundsTree();
 
   const amphGroup = new THREE.Group();
-  for (const m of amph) { m.updateMatrixWorld(true); }
   lms.scene.updateMatrixWorld(true);
   for (const m of amph) {
     const w = m.matrixWorld.clone();
@@ -140,9 +138,9 @@ async function main() {
 
   const ray = new THREE.Raycaster();
   ray.firstHitOnly = true;
-  const DOWN = new THREE.Vector3(0, -1, 0);
+  const DOWN = new THREE.Vector3(0, -1, 0), from = new THREE.Vector3();
   const groundAt = (x, y) => {
-    ray.set(new THREE.Vector3(x, 600, -y), DOWN);
+    ray.set(from.set(x, 600, -y), DOWN);
     const h = ray.intersectObjects(walkables, false);
     return h.length ? h[0].point.y : hfNear.height(x, y);
   };
@@ -158,23 +156,15 @@ async function main() {
   await texturesReady();
   const forest = new Forest(scene, renderer, lib, kits, campus.trees, groundAt);
   const shrubKits = {};
-  const shrubCounts = {};
-  for (const s of campus.shrubs) shrubCounts[s[0]] = (shrubCounts[s[0]] || 0) + 1;
+  const shrubCounts = countBy(campus.shrubs, (s) => s[0]);
   await Promise.all(Object.keys(shrubCounts).map(async (k) => {
     const g = await load(`veg/${k}.glb`, '회양목을 다듬는 중…');
     bindMaterials(g.scene, lib);
     shrubKits[k] = new InstancedKit(g.scene, lib, shrubCounts[k]);
   }));
-  {
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-    for (const [k, x, y, sc, rot] of campus.shrubs) {
-      p.set(x, groundAt(x, y) - 0.05, -y);
-      q.setFromAxisAngle(up, rot);
-      s.setScalar(sc);
-      shrubKits[k].add(m4.compose(p, q, s));
-    }
-    for (const k in shrubKits) { shrubKits[k].commit(); shrubKits[k].addTo(scene); }
-  }
+  const m4 = new THREE.Matrix4();
+  for (const [k, x, y, sc, rot] of campus.shrubs) shrubKits[k].add(placeMatrix(m4, x, groundAt(x, y) - 0.05, y, rot, sc));
+  for (const k in shrubKits) { shrubKits[k].commit(); shrubKits[k].addTo(scene); }
 
   // ---------------------------------------------------------------- props
   const propNames = ['lamp_double', 'lamp_arm', 'flag_white', 'planter', 'stone_marker', 'sign_board', 'motorbike', 'car_sedan', 'car_sedan2', 'car_hatch', 'car_taxi', 'car_van', 'car_bus', 'payphone', 'bench', 'trashcan'];
@@ -189,21 +179,16 @@ async function main() {
   {
     const byKind = {};
     for (const pr of campus.props) (byKind[pr[0]] ||= []).push(pr);
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
     const rnd = mulberry(5);
-    const MAP = { lamp_double: 'lamp_double', lamp_arm: 'lamp_arm', flag_white: 'flag_white', planter: 'planter', stone_marker: 'stone_marker',
-      sign_board: 'sign_board', payphone: 'payphone', bench: 'bench', trashcan: 'trashcan', motorbike: 'motorbike' };
     const COLLIDE = { lamp_double: 0.25, lamp_arm: 0.25, flag_white: 0.12, planter: 0.5, stone_marker: 1.0, sign_board: 0.9 };
     for (const [kind, list] of Object.entries(byKind)) {
-      const src = P[MAP[kind]];
+      const src = P[kind];
       if (!src) continue;
       const kit = new InstancedKit(src.scene, lib, list.length, { colors: true });
       for (const [, x, y, rot] of list) {
-        p.set(x, groundAt(x, y), -y);
         // Blender models face -Y; campus rotation is the heading in the campus frame
-        q.setFromAxisAngle(up, rot + (kind === 'motorbike' ? 0 : Math.PI / 2));
         const col = kind === 'motorbike' ? new THREE.Color().setHSL(rnd(), 0.5, 0.45) : null;
-        kit.add(m4.compose(p, q, s), col);
+        kit.add(placeMatrix(m4, x, groundAt(x, y), y, rot + (kind === 'motorbike' ? 0 : Math.PI / 2)), col);
         if (kind !== 'motorbike') colliders.addCircle(x, y, COLLIDE[kind] ?? 0.55);
       }
       kit.commit();
@@ -211,17 +196,13 @@ async function main() {
     }
     // parked cars
     const carKits = {};
-    const carCount = {};
-    // 1997 paint: lots of white, silver and dark navy, a few burgundy / green / gold
-    const CAR_COLORS = ['#eeeeea', '#f2f1ec', '#b9bdc3', '#a9aeb5', '#1b2333', '#2a2d33', '#6e1b1f', '#244a3a', '#b59a6a', '#2c4a78', '#8c8f94'];
+    const PARKED_COLORS = [...CAR_COLORS, '#8c8f94'];
     const MODEL = (k, i) => (k === 'sedan' ? ['sedan', 'sedan2', 'sedan', 'van'][i % 4] : k);
-    campus.cars.forEach((c, i) => { const m = MODEL(c[0], i); carCount[m] = (carCount[m] || 0) + 1; });
+    const carCount = countBy(campus.cars, (c, i) => MODEL(c[0], i));
     for (const [k, n] of Object.entries(carCount)) { carKits[k] = new InstancedKit(P['car_' + k].scene, lib, n, { colors: true }); }
     campus.cars.forEach(([k0, x, y, ang, ci], i) => {
       const k = MODEL(k0, i);
-      p.set(x, groundAt(x, y), -y);
-      q.setFromAxisAngle(up, ang);
-      carKits[k].add(m4.compose(p, q, s), new THREE.Color(k === 'taxi' ? '#ecebe4' : CAR_COLORS[(ci * 7 + i) % CAR_COLORS.length]));
+      carKits[k].add(placeMatrix(m4, x, groundAt(x, y), y, ang), new THREE.Color(k === 'taxi' ? '#ecebe4' : PARKED_COLORS[(ci * 7 + i) % PARKED_COLORS.length]));
       colliders.addCircle(x + Math.cos(ang) * 1.2, y + Math.sin(ang) * 1.2, 1.0);
       colliders.addCircle(x - Math.cos(ang) * 1.2, y - Math.sin(ang) * 1.2, 1.0);
     });
@@ -246,12 +227,11 @@ async function main() {
   for (const off of [eWalk + R.walk * 0.4, eWalk + R.walk * 0.68, -(eWalk + R.walk * 0.4), -(eWalk + R.walk * 0.68)]) paths.push(new Path(center.offset(off), heightFn));
   for (const p of campus.paths) {
     if (p.kind !== 'footway' || p.pts.length < 2) continue;
-    const L = p.pts.reduce((a, q, i) => (i ? a + Math.hypot(q[0] - p.pts[i - 1][0], q[1] - p.pts[i - 1][1]) : 0), 0);
-    if (L > 45 && Math.abs(p.pts[0][0]) < 260 && p.pts[0][1] > -380 && p.pts[0][1] < 420 && paths.length < 26) paths.push(new Path(p.pts, heightFn));
+    if (polylineLength(p.pts) > 45 && Math.abs(p.pts[0][0]) < 260 && p.pts[0][1] > -380 && p.pts[0][1] < 420 && paths.length < 26) paths.push(new Path(p.pts, heightFn));
   }
   const groups = [[-40, -45], [-36, -70], [3, -58], [-2, -92], [-96, -400], [58, 200], [-46, -26], [12, -30], [-20, 30], [110, 150], [-88, -186]]
     .map(([x, y]) => [x, y, groundAt(x, y)]);
-  const crowd = new Crowd(scene, cast, [...STUDENTS, ...STUDENTS, 'man-professor', 'man-staff', 'woman-staff'], paths, groups, isTouch ? 40 : 110);
+  const crowd = new Crowd(scene, cast, [...STUDENTS, ...STUDENTS, 'man-professor', 'man-staff', 'woman-staff'], paths, groups, MOBILE ? 40 : 110);
   const lanes = [];
   // one lane each way on the 1997 two-lane road (right-hand traffic)
   for (const off of [R.median + R.lane * 0.5]) {
@@ -261,8 +241,8 @@ async function main() {
   const traffic = new Traffic(scene, { sedan: P.car_sedan, sedan2: P.car_sedan2, hatch: P.car_hatch, taxi: P.car_taxi, van: P.car_van, bus: P.car_bus }, lanes, 14, cast, STUDENTS.concat(['man-professor', 'man-staff', 'woman-staff']));
 
   // ---------------------------------------------------------------- player / UI / post
-  let heroId = HEROES[0];
-  try { if (HEROES.includes(localStorage.getItem('y97-hero'))) heroId = localStorage.getItem('y97-hero'); } catch { /* ignore */ }
+  let heroId = safeGet('y97-hero');
+  if (!HEROES.includes(heroId)) heroId = HEROES[0];
   const hero = cast.make(heroId);
   scene.add(hero.holder);
   const player = new Player(camera, canvas, colliders, walkables, hfNear, hero);
@@ -277,7 +257,7 @@ async function main() {
   const pickEl = $('#hero-pick');
   const pickHero = (id) => {
     heroId = id;
-    try { localStorage.setItem('y97-hero', id); } catch { /* ignore */ }
+    safeSet('y97-hero', id);
     pickEl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
     if (player.actor.id !== id) { const a = cast.make(id); scene.add(a.holder); player.setActor(a); }
   };
@@ -297,12 +277,13 @@ async function main() {
 
   const setSeason = (v) => {
     season = v;
-    try { localStorage.setItem('y97-season', v); } catch { /* ignore */ }
+    safeSet('y97-season', v);
     lib.setSeason(v);
     seasonButtons(v);
     $('#datestamp').textContent = SEASONS[v].date;
+    bird.labels({ seasonLabel: SEASONS[v].short });
     // impostor textures are rendered from the real trees -> refresh after textures load
-    texturesReady().then(() => forest.rebuildImpostors(renderer));
+    texturesReady().then(() => forest.renderImpostors(renderer));
     ui.toast(SEASONS[v].label);
   };
   $('#datestamp').textContent = SEASONS[season].date;
@@ -328,13 +309,14 @@ async function main() {
     started = true;
     $('#intro').hidden = true;
     $('#hud').hidden = false;
-    if (isTouch) $('#touch').hidden = false;
+    if (MOBILE) $('#touch').hidden = false;
     resume();
     ui.toast(where ? `W·S로 걷고 A·D로 방향을 바꿔요 · ${where}에서 출발해요` : 'W·S로 걷고 A·D로 방향을 바꿔요 · 정문에서 백양로를 따라 걸어 보세요', 4200);
   };
   $('#start').addEventListener('click', () => startWalk());
   $('#resume').addEventListener('click', resume);
   const setFilm = (v) => { $('#opt-film').checked = v; post.setFilm(v); document.body.classList.toggle('film', v); bird.labels({ filmOn: v }); };
+  const toggleFilm = () => setFilm(!$('#opt-film').checked);
   $('#opt-film').addEventListener('change', (e) => setFilm(e.target.checked));
   $('#opt-hq').addEventListener('change', (e) => { post.setHQ(e.target.checked); sun.shadow.mapSize.set(e.target.checked ? 4096 : 2048, e.target.checked ? 4096 : 2048); sun.shadow.map?.dispose(); sun.shadow.map = null; });
   const openNearby = () => {
@@ -362,12 +344,12 @@ async function main() {
         scene.getObjectByName(name)?.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundsTree(); roofs.push(o); } });
       }
     }
-    downRay.set(new THREE.Vector3(x, 900, -y), new THREE.Vector3(0, -1, 0));
+    downRay.set(from.set(x, 900, -y), DOWN);
     const h = downRay.intersectObjects(roofs, false)[0];
     return h ? h.point.y : -1e9;
   };
   const SEASON_ORDER = ['spring', 'summer', 'autumn'];
-  const SEASON_SHORT = { spring: '4월 · 벚꽃', summer: '5월 · 신록', autumn: '10월 · 은행잎' };
+  const SEASON_KEYS = { Digit1: 'spring', Digit2: 'summer', Digit3: 'autumn' };
   const bird = new BirdsEye({
     camera, dom: canvas, landmarks: campus.landmarks,
     heightAt: (x, y) => hfNear.height(x, y),
@@ -388,8 +370,8 @@ async function main() {
     onMemory: (l) => { player.enabled = false; ui.openMemory(l); },
     onAction: (what) => {
       if (what === 'back') leaveBird();
-      else if (what === 'film') setFilm(!$('#opt-film').checked);
-      else if (what === 'season') changeSeason(SEASON_ORDER[(SEASON_ORDER.indexOf(season) + 1) % 3]);
+      else if (what === 'film') toggleFilm();
+      else if (what === 'season') setSeason(SEASON_ORDER[(SEASON_ORDER.indexOf(season) + 1) % 3]);
     },
   });
   const setShadowSpan = (span) => {
@@ -405,7 +387,7 @@ async function main() {
     paused = false;
     $('#pause').hidden = true;
     player.enabled = false;
-    bird.labels({ seasonLabel: SEASON_SHORT[season], filmOn: $('#opt-film').checked });
+    bird.labels({ seasonLabel: SEASONS[season].short, filmOn: $('#opt-film').checked });
     if (started) {
       const d = camera.getWorldDirection(new THREE.Vector3());
       bird.enter({ x: player.x, y: player.y, yaw: Math.atan2(d.x, -d.z), player: { x: player.x, y: player.y } });
@@ -437,7 +419,6 @@ async function main() {
     forest.update(camera.position, true);
   };
   const toggleBird = () => (bird.active ? leaveBird() : enterBird());
-  const changeSeason = (v) => { setSeason(v); bird.labels({ seasonLabel: SEASON_SHORT[v] }); };
   $('#birdbtn').addEventListener('click', (e) => { e.stopPropagation(); toggleBird(); e.currentTarget.blur(); });
   $('#tour-start').addEventListener('click', enterBird);
 
@@ -446,19 +427,15 @@ async function main() {
       // the tour's own keys live in birdseye.js; here only leaving it and the game-wide season keys
       if (ui.memoryOpen) { if (e.code === 'Escape' || e.code === 'Enter') ui.closeMemory(); return; }
       if (e.code === 'KeyB' || e.code === 'Escape') leaveBird();
-      else if (e.code === 'Digit1') changeSeason('spring');
-      else if (e.code === 'Digit2') changeSeason('summer');
-      else if (e.code === 'Digit3') changeSeason('autumn');
+      else if (SEASON_KEYS[e.code]) setSeason(SEASON_KEYS[e.code]);
       return;
     }
     if (!started) return;
     if (e.code === 'KeyB' && !ui.memoryOpen) { enterBird(); return; }
     if (e.code === 'KeyE' || e.code === 'Enter') openNearby();
     else if (e.code === 'KeyM') toggleMap();
-    else if (e.code === 'KeyF') setFilm(!$('#opt-film').checked);
-    else if (e.code === 'Digit1') setSeason('spring');
-    else if (e.code === 'Digit2') setSeason('summer');
-    else if (e.code === 'Digit3') setSeason('autumn');
+    else if (e.code === 'KeyF') toggleFilm();
+    else if (SEASON_KEYS[e.code]) setSeason(SEASON_KEYS[e.code]);
     else if (e.code === 'Escape') {
       if (ui.memoryOpen) ui.closeMemory();
       else if (ui.mapOpen) ui.toggleMap(false);
@@ -484,9 +461,7 @@ async function main() {
     let best = 1e9;
     for (let i = 1; i < R.pts.length; i++) {
       const [ax, ay] = R.pts[i - 1], [bx, by] = R.pts[i];
-      const ex = bx - ax, ey = by - ay;
-      const t = Math.max(0, Math.min(1, ((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey)));
-      best = Math.min(best, Math.hypot(x - ax - ex * t, y - ay - ey * t));
+      best = Math.min(best, closestOnSegment(x, y, ax, ay, bx, by)[2]);
     }
     return best < eWalk + R.walk + 1;
   };
@@ -525,8 +500,8 @@ async function main() {
     sun.position.copy(sun.target.position).addScaledVector(sunDir, 420);
     sky.position.copy(camera.position);
     forest.update(focus);
-    crowd.update(dt, tAcc, started ? player : { x: 1e9, y: 1e9 }, focus);
-    traffic.update(dt, started ? player : { x: 1e9, y: 1e9 });
+    crowd.update(dt, tAcc, started ? player : NOBODY, focus);
+    traffic.update(dt, started ? player : NOBODY);
     if (bird.active) {
       ui.drawMinimap(bird.cur.x, bird.cur.y, bird.mapYaw);
       if (tAcc - lastPlace > 0.25) {
@@ -620,10 +595,10 @@ function makeBoard(l, groundAt) {
   board.rotation.y = -Math.PI / 2 + 0.25;
   board.castShadow = true;
   g.add(board);
+  const legGeo = new THREE.BoxGeometry(0.12, 3.0, 0.12), legMat = new THREE.MeshStandardMaterial({ color: '#4a3a2a' });
   for (const s of [-1.7, 1.7]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.0, 0.12), new THREE.MeshStandardMaterial({ color: '#4a3a2a' }));
-    leg.position.set(0, -0.35, 0);
-    leg.position.x = s;
+    const leg = new THREE.Mesh(legGeo, legMat);
+    leg.position.set(s, -0.35, 0);
     board.add(leg);
   }
   const roof = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.12, 0.6), new THREE.MeshStandardMaterial({ color: '#2f4f3f' }));
@@ -633,7 +608,7 @@ function makeBoard(l, groundAt) {
 }
 
 function setupTouch(player, onE, onM) {
-  if (!matchMedia('(pointer: coarse)').matches) return;
+  if (!MOBILE) return;
   const stick = $('#stick'), knob = stick.querySelector('div');
   let sid = null, cx = 0, cy = 0;
   stick.addEventListener('pointerdown', (e) => { sid = e.pointerId; const r = stick.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; stick.setPointerCapture(sid); });
