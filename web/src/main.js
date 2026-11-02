@@ -50,7 +50,9 @@ async function main() {
   renderer.setSize(innerWidth, innerHeight);
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.enabled = true;
+  // Phones: no shadow maps. On a Pixel 10 (PowerVR DXT) the shadow pass crashes Chrome's GPU process
+  // (SIGSEGV in the driver's LoadTextureState -> WebGL context lost -> white screen) at any map size.
+  renderer.shadowMap.enabled = !isTouch;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();

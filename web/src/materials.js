@@ -6,14 +6,33 @@ const cache = new Map();
 const pending = new Set();
 export const texturesReady = () => Promise.all([...pending]);
 
+// Phones: the whole 2K texture set is ~1 GB of GPU memory with mipmaps -> upload smaller copies.
+export const MOBILE = matchMedia('(pointer: coarse)').matches;
+const MOBILE_MAX_TEX = 1024;
+
+// downscale an image so its longest side is at most `max` (returns the image itself if it already fits)
+export function shrinkImage(img, max) {
+  const w = img && img.width, h = img && img.height;
+  if (!w || !h || Math.max(w, h) <= max) return img;
+  const s = max / Math.max(w, h);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w * s));
+  c.height = Math.max(1, Math.round(h * s));
+  const x = c.getContext('2d');
+  x.imageSmoothingQuality = 'high';
+  x.drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
 // NOTE: flipY=false everywhere -> matches glTF UV convention (v=0 at the top of the image)
-export function loadTex(url, { srgb = true, repeat = true, flipY = false } = {}) {
+export function loadTex(url, { srgb = true, repeat = true, flipY = false, mobileMax = MOBILE_MAX_TEX } = {}) {
   const key = url + srgb + flipY;
   if (!cache.has(key)) {
     let done;
     const pr = new Promise((r) => (done = r));
     pending.add(pr);
     const t = texLoader.load(url, (tx) => {
+      if (MOBILE) { tx.image = shrinkImage(tx.image, mobileMax); tx.needsUpdate = true; }
       // clones share the image Source but keep their own version -> bump them once data exists
       for (const c of tx.userData.clones || []) c.needsUpdate = true;
       pending.delete(pr); done();

@@ -1,7 +1,7 @@
 // Terrain (near: 5 m heightfield with PBR splat shader; far: 100 m ring with Seoul mountains)
 // and the sky dome.  World frame: X = east, Y = up, Z = -north.
 import * as THREE from 'three';
-import { loadTex } from './materials.js';
+import { loadTex, MOBILE, shrinkImage } from './materials.js';
 
 export class Heightfield {
   constructor(data, half, step, n) {
@@ -72,7 +72,7 @@ export function makeNearTerrain(hf, campus, lib) {
   const P = 'assets/textures/pbr/';
   const T = (n, srgb = true) => loadTex(P + n, { srgb });
   const uniforms = {
-    uSplat: { value: loadTex('assets/textures/ground_splat.png', { srgb: false, repeat: false }) },
+    uSplat: { value: loadTex('assets/textures/ground_splat.png', { srgb: false, repeat: false, mobileMax: 2048 }) },
     uRect: { value: new THREE.Vector4(S.x0, S.y0, S.x1, S.y1) },
     gD: { value: T('leafy_grass/diff.jpg') }, gN: { value: T('leafy_grass/nor.jpg', false) },
     aD: { value: T('asphalt_02/diff.jpg') }, aN: { value: T('asphalt_02/nor.jpg', false) },
@@ -276,7 +276,9 @@ export function mulberry(a) {
 }
 
 export function makeSky(skyMeta, fogColor) {
-  const tex = new THREE.TextureLoader().load('assets/hdri/sky_8k.jpg');
+  const tex = new THREE.TextureLoader().load('assets/hdri/sky_8k.jpg', (t) => {
+    if (MOBILE) { t.image = shrinkImage(t.image, 4096); t.needsUpdate = true; }   // 8K sky: 90 MB on the GPU
+  });
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.anisotropy = 4;
