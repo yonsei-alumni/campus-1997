@@ -1,0 +1,784 @@
+{
+ "_doc": "Shared material library. Blender builds preview materials from it; the web app rebuilds MeshStandardMaterials by name. tile = metres per texture repeat (UVs are in metres).",
+ "stone_rubble": {
+  "tex": "old_stone_wall",
+  "tile": 3.2,
+  "tint": [
+   0.98,
+   0.95,
+   0.9
+  ],
+  "rough": 0.9
+ },
+ "stone_trim": {
+  "tex": "concrete_wall_008",
+  "tile": 1.6,
+  "tint": [
+   1.05,
+   1.0,
+   0.92
+  ],
+  "rough": 0.8
+ },
+ "stone_granite": {
+  "tex": "granite_tile",
+  "tile": 2.0,
+  "tint": [
+   1.35,
+   1.32,
+   1.28
+  ],
+  "rough": 0.6
+ },
+ "concrete": {
+  "tex": "concrete_wall_008",
+  "tile": 4.0,
+  "tint": [
+   1.05,
+   1.03,
+   1.0
+  ],
+  "rough": 0.85
+ },
+ "concrete_warm": {
+  "tex": "concrete_wall_008",
+  "tile": 4.0,
+  "tint": [
+   1.1,
+   1.02,
+   0.95
+  ],
+  "rough": 0.85
+ },
+ "concrete_dark": {
+  "tex": "brushed_concrete",
+  "tile": 3.0,
+  "tint": [
+   0.85,
+   0.85,
+   0.85
+  ],
+  "rough": 0.9
+ },
+ "plaster_white": {
+  "tex": "white_plaster_02",
+  "tile": 3.0,
+  "tint": [
+   1.0,
+   1.0,
+   0.98
+  ],
+  "rough": 0.85
+ },
+ "plaster_cream": {
+  "tex": "white_plaster_02",
+  "tile": 3.0,
+  "tint": [
+   1.0,
+   0.93,
+   0.8
+  ],
+  "rough": 0.85
+ },
+ "plaster_grey": {
+  "tex": "grey_plaster",
+  "tile": 3.0,
+  "tint": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "rough": 0.9
+ },
+ "brick_red": {
+  "tex": "red_bricks_02",
+  "tile": 1.6,
+  "tint": [
+   1.0,
+   0.95,
+   0.92
+  ],
+  "rough": 0.85
+ },
+ "tile_facade": {
+  "tex": "rectangular_facade_tiles",
+  "tile": 1.5,
+  "tint": [
+   1.45,
+   1.4,
+   1.35
+  ],
+  "rough": 0.5
+ },
+ "roof_flat": {
+  "tex": "concrete_floor_worn_001",
+  "tile": 5.0,
+  "tint": [
+   1.1,
+   1.1,
+   1.1
+  ],
+  "rough": 0.95
+ },
+ "roof_green": {
+  "tex": "painted_concrete",
+  "tile": 6.0,
+  "tint": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "rough": 0.7
+ },
+ "roof_slate": {
+  "tex": "grey_roof_tiles_02",
+  "tile": 2.5,
+  "tint": [
+   0.75,
+   0.75,
+   0.8
+  ],
+  "rough": 0.7
+ },
+ "roof_giwa": {
+  "tex": "grey_roof_tiles_02",
+  "tile": 1.2,
+  "tint": [
+   0.45,
+   0.46,
+   0.48
+  ],
+  "rough": 0.6
+ },
+ "wood_dark": {
+  "tex": "wood_planks_dirt",
+  "tile": 1.5,
+  "tint": [
+   0.55,
+   0.4,
+   0.3
+  ],
+  "rough": 0.8
+ },
+ "wood_red": {
+  "tex": "wood_planks_dirt",
+  "tile": 1.5,
+  "tint": [
+   0.7,
+   0.25,
+   0.18
+  ],
+  "rough": 0.7
+ },
+ "asphalt": {
+  "tex": "asphalt_02",
+  "tile": 7.0,
+  "tint": [
+   0.85,
+   0.85,
+   0.87
+  ],
+  "rough": 0.95
+ },
+ "curb": {
+  "tex": "concrete_wall_008",
+  "tile": 1.5,
+  "tint": [
+   0.95,
+   0.95,
+   0.93
+  ],
+  "rough": 0.9
+ },
+ "pavers": {
+  "tex": "patterned_concrete_pavers",
+  "tile": 2.4,
+  "tint": [
+   1.08,
+   0.94,
+   0.92
+  ],
+  "rough": 0.9
+ },
+ "grass": {
+  "tex": "leafy_grass",
+  "tile": 4.0,
+  "tint": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "rough": 1.0,
+  "recolor": [
+   0.3,
+   0.42,
+   0.16
+  ]
+ },
+ "dirt": {
+  "tex": "raked_dirt",
+  "tile": 4.0,
+  "tint": [
+   1.05,
+   1.0,
+   0.92
+  ],
+  "rough": 1.0
+ },
+ "bark": {
+  "tex": "bark_brown_02",
+  "tile": 1.6,
+  "tint": [
+   0.9,
+   0.88,
+   0.85
+  ],
+  "rough": 0.95
+ },
+ "bark_pine": {
+  "tex": "pine_bark",
+  "tile": 1.2,
+  "tint": [
+   1.0,
+   0.9,
+   0.85
+  ],
+  "rough": 0.95
+ },
+ "glass": {
+  "color": [
+   0.06,
+   0.08,
+   0.09
+  ],
+  "rough": 0.06,
+  "metal": 0.0,
+  "env": 1.6
+ },
+ "glass_green": {
+  "color": [
+   0.05,
+   0.09,
+   0.08
+  ],
+  "rough": 0.08,
+  "metal": 0.0,
+  "env": 1.4
+ },
+ "glass_car": {
+  "color": [
+   0.07,
+   0.09,
+   0.1
+  ],
+  "rough": 0.04,
+  "metal": 0.0,
+  "env": 1.8,
+  "opacity": 0.78
+ },
+ "frame_dark": {
+  "color": [
+   0.1,
+   0.1,
+   0.1
+  ],
+  "rough": 0.45,
+  "metal": 0.6
+ },
+ "frame_silver": {
+  "color": [
+   0.55,
+   0.56,
+   0.57
+  ],
+  "rough": 0.35,
+  "metal": 0.9
+ },
+ "frame_white": {
+  "color": [
+   0.82,
+   0.82,
+   0.8
+  ],
+  "rough": 0.55,
+  "metal": 0.0
+ },
+ "metal": {
+  "color": [
+   0.55,
+   0.55,
+   0.57
+  ],
+  "rough": 0.4,
+  "metal": 1.0
+ },
+ "metal_dark": {
+  "color": [
+   0.08,
+   0.09,
+   0.09
+  ],
+  "rough": 0.5,
+  "metal": 0.8
+ },
+ "metal_green": {
+  "color": [
+   0.1,
+   0.22,
+   0.16
+  ],
+  "rough": 0.5,
+  "metal": 0.5
+ },
+ "bronze": {
+  "color": [
+   0.22,
+   0.17,
+   0.11
+  ],
+  "rough": 0.38,
+  "metal": 1.0
+ },
+ "paint_white": {
+  "color": [
+   0.86,
+   0.86,
+   0.84
+  ],
+  "rough": 0.7
+ },
+ "paint_yellow": {
+  "color": [
+   0.86,
+   0.62,
+   0.08
+  ],
+  "rough": 0.7
+ },
+ "paint_blue": {
+  "color": [
+   0.05,
+   0.16,
+   0.45
+  ],
+  "rough": 0.5
+ },
+ "rubber": {
+  "color": [
+   0.035,
+   0.035,
+   0.035
+  ],
+  "rough": 0.92
+ },
+ "chrome": {
+  "color": [
+   0.85,
+   0.86,
+   0.88
+  ],
+  "rough": 0.08,
+  "metal": 1.0
+ },
+ "car_paint": {
+  "color": [
+   1,
+   1,
+   1
+  ],
+  "rough": 0.32,
+  "metal": 0.35,
+  "instanceColor": true,
+  "clearcoat": 1.0,
+  "clearcoatRough": 0.06
+ },
+ "light_white": {
+  "color": [
+   0.92,
+   0.93,
+   0.95
+  ],
+  "rough": 0.08,
+  "metal": 0.2,
+  "emissive": [
+   1.0,
+   0.97,
+   0.9
+  ],
+  "emissiveIntensity": 0.25
+ },
+ "light_red": {
+  "color": [
+   0.55,
+   0.03,
+   0.03
+  ],
+  "rough": 0.15,
+  "emissive": [
+   0.7,
+   0.02,
+   0.02
+  ],
+  "emissiveIntensity": 0.35
+ },
+ "light_amber": {
+  "color": [
+   0.95,
+   0.5,
+   0.06
+  ],
+  "rough": 0.15,
+  "emissive": [
+   0.8,
+   0.4,
+   0.0
+  ],
+  "emissiveIntensity": 0.3
+ },
+ "globe": {
+  "color": [
+   0.95,
+   0.95,
+   0.92
+  ],
+  "rough": 0.25,
+  "emissive": [
+   1.0,
+   0.95,
+   0.8
+  ],
+  "emissiveIntensity": 0.15,
+  "transmission": 0.0
+ },
+ "banner_yellow": {
+  "color": [
+   0.95,
+   0.8,
+   0.1
+  ],
+  "rough": 0.9,
+  "side": "double"
+ },
+ "banner_red": {
+  "color": [
+   0.75,
+   0.1,
+   0.08
+  ],
+  "rough": 0.9,
+  "side": "double"
+ },
+ "banner_orange": {
+  "color": [
+   0.95,
+   0.45,
+   0.1
+  ],
+  "rough": 0.9,
+  "side": "double"
+ },
+ "cloth": {
+  "color": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "rough": 0.9,
+  "instanceColor": true
+ },
+ "cloth2": {
+  "color": [
+   0.15,
+   0.2,
+   0.35
+  ],
+  "rough": 0.9
+ },
+ "cloth3": {
+  "color": [
+   0.2,
+   0.2,
+   0.2
+  ],
+  "rough": 0.8
+ },
+ "shoe": {
+  "color": [
+   0.9,
+   0.9,
+   0.88
+  ],
+  "rough": 0.6
+ },
+ "skin": {
+  "color": [
+   0.8,
+   0.6,
+   0.48
+  ],
+  "rough": 0.7
+ },
+ "hair": {
+  "color": [
+   0.03,
+   0.025,
+   0.02
+  ],
+  "rough": 0.6
+ },
+ "sign_gate": {
+  "image": "sign_gate.png",
+  "rough": 0.6
+ },
+ "sign_shops": {
+  "image": "sign_shops.png",
+  "rough": 0.5,
+  "emissiveMap": true
+ },
+ "leaf_ginkgo": {
+  "leaf": "ginkgo"
+ },
+ "leaf_zelkova": {
+  "leaf": "zelkova"
+ },
+ "leaf_cherry": {
+  "leaf": "cherry"
+ },
+ "leaf_maple": {
+  "leaf": "maple"
+ },
+ "leaf_oak": {
+  "leaf": "oak"
+ },
+ "leaf_pine": {
+  "leaf": "pine"
+ },
+ "leaf_ivy": {
+  "leaf": "ivy"
+ },
+ "leaf_boxwood": {
+  "leaf": "boxwood"
+ },
+ "leaf_azalea": {
+  "leaf": "azalea"
+ },
+ "hedge_boxwood": {
+  "leaf": "boxwood",
+  "opaque": true
+ },
+ "hedge_azalea": {
+  "leaf": "azalea",
+  "opaque": true
+ },
+ "trim_black": {
+  "color": [
+   0.025,
+   0.025,
+   0.028
+  ],
+  "rough": 0.55,
+  "metal": 0.0
+ },
+ "plastic_grey": {
+  "color": [
+   0.2,
+   0.205,
+   0.21
+  ],
+  "rough": 0.65,
+  "metal": 0.0
+ },
+ "car_interior": {
+  "color": [
+   0.07,
+   0.068,
+   0.065
+  ],
+  "rough": 0.9,
+  "metal": 0.0
+ },
+ "lens_clear": {
+  "color": [
+   0.85,
+   0.85,
+   0.85
+  ],
+  "rough": 0.1,
+  "metal": 0.0
+ },
+ "plate": {
+  "image": "plates.png",
+  "rough": 0.5
+ },
+ "bus_sign": {
+  "image": "bus_sign.png",
+  "rough": 0.4,
+  "emissiveMap": true
+ },
+ "bus_white": {
+  "color": [
+   0.88,
+   0.88,
+   0.86
+  ],
+  "rough": 0.35,
+  "metal": 0.2,
+  "clearcoat": 0.8,
+  "clearcoatRough": 0.1
+ },
+ "bus_blue": {
+  "color": [
+   0.06,
+   0.18,
+   0.48
+  ],
+  "rough": 0.35,
+  "metal": 0.2,
+  "clearcoat": 0.8,
+  "clearcoatRough": 0.1
+ },
+ "bus_red": {
+  "color": [
+   0.62,
+   0.07,
+   0.06
+  ],
+  "rough": 0.4,
+  "metal": 0.1
+ },
+ "glass_bus": {
+  "color": [
+   0.05,
+   0.07,
+   0.08
+  ],
+  "rough": 0.05,
+  "metal": 0.0,
+  "env": 1.6,
+  "opacity": 0.86
+ },
+ "stone_rubble_gray": {
+  "tex": "old_stone_wall",
+  "tile": 3.2,
+  "tint": [
+   1.22,
+   1.2,
+   1.22
+  ],
+  "sat": 0.18,
+  "rough": 0.9
+ },
+ "stone_panel": {
+  "tex": "concrete_wall_008",
+  "tile": 3.0,
+  "tint": [
+   1.3,
+   1.29,
+   1.31
+  ],
+  "sat": 0.12,
+  "rough": 0.75
+ },
+ "stone_ashlar": {
+  "tex": "concrete_slab_wall",
+  "tile": 3.4,
+  "tint": [
+   1.08,
+   1.05,
+   1.06
+  ],
+  "sat": 0.35,
+  "rough": 0.8
+ },
+ "hedge_azalea_red": {
+  "leaf": "azalea_red",
+  "opaque": true
+ },
+ "leaf_azalea_red": {
+  "leaf": "azalea_red"
+ },
+ "lamp_housing": {
+  "color": [
+   0.78,
+   0.79,
+   0.8
+  ],
+  "rough": 0.45,
+  "metal": 0.3
+ },
+ "flag_cloth": {
+  "color": [
+   0.92,
+   0.92,
+   0.9
+  ],
+  "rough": 0.9,
+  "side": "double"
+ },
+ "shrub_green": {
+  "color": [
+   0.07,
+   0.15,
+   0.05
+  ],
+  "rough": 0.95
+ },
+ "soil": {
+  "color": [
+   0.18,
+   0.12,
+   0.08
+  ],
+  "rough": 1.0
+ },
+ "stone_marker": {
+  "tex": "concrete_slab_wall",
+  "tile": 1.4,
+  "tint": [
+   1.15,
+   1.13,
+   1.1
+  ],
+  "sat": 0.4,
+  "rough": 0.85
+ },
+ "sign_blue": {
+  "color": [
+   0.06,
+   0.16,
+   0.42
+  ],
+  "rough": 0.5
+ },
+ "bronze_patina": {
+  "color": [
+   0.075,
+   0.085,
+   0.07
+  ],
+  "rough": 0.42,
+  "metal": 0.75
+ },
+ "granite_light": {
+  "tex": "granite_tile",
+  "tile": 1.2,
+  "tint": [
+   2.35,
+   2.3,
+   2.25
+  ],
+  "sat": 0.3,
+  "rough": 0.7
+ },
+ "stone_white": {
+  "tex": "concrete_slab_wall",
+  "tile": 2.2,
+  "tint": [
+   1.28,
+   1.27,
+   1.25
+  ],
+  "sat": 0.25,
+  "rough": 0.75
+ }
+}

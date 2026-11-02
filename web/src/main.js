@@ -1,0 +1,629 @@
+import '@fontsource/noto-sans-kr/400.css';
+import '@fontsource/noto-sans-kr/700.css';
+import '@fontsource/jua/400.css';
+import '@fontsource/do-hyeon/400.css';
+import * as THREE from 'three';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { MaterialLibrary, SEASONS, texturesReady } from './materials.js';
+import { Heightfield, makeNearTerrain, makeFarTerrain, makeFarForest, makeSummitTower, makeCity, makeSky, mulberry } from './terrain.js';
+import { loadGLB, bindMaterials, mergeStatic, InstancedKit, Forest } from './world.js';
+import { Player, Colliders } from './player.js';
+import { UI } from './ui.js';
+import { Post } from './post.js';
+import { Path, makeBanners, Crowd, Traffic } from './life.js';
+import { Cast, PEOPLE, STUDENTS, HEROES, portraits } from './characters.js';
+import { BirdsEye } from './birdseye.js';
+
+const $ = (s) => document.querySelector(s);
+const canvas = $('#view');
+const isTouch = matchMedia('(pointer: coarse)').matches;
+let season = 'summer';
+try { season = localStorage.getItem('y97-season') || 'summer'; } catch { /* ignore */ }
+if (!SEASONS[season]) season = 'summer';
+
+// ------------------------------------------------------------------ progress
+let loaded = 0, total = 1;
+const progress = (label) => {
+  loaded++;
+  $('#loadfill').style.width = `${Math.min(100, (loaded / total) * 100)}%`;
+  if (label) $('#loadtext').textContent = label;
+};
+const json = (u) => fetch(u).then((r) => r.json());
+const bin = (u) => fetch(u).then((r) => r.arrayBuffer()).then((b) => new Float32Array(b));
+
+function seasonButtons(v) {
+  document.querySelectorAll('[data-season]').forEach((b) => b.classList.toggle('on', b.dataset.season === v));
+}
+seasonButtons(season);
+
+async function main() {
+  total = 40;
+  const [campus, matDefs, skyMeta, nearData, farData] = await Promise.all([
+    json('data/campus.json'), json('data/materials.json'), json('data/sky.json'),
+    bin('data/terrain_near.bin'), bin('data/terrain_far.bin'),
+  ]);
+  progress('지형 데이터를 펼치는 중…');
+
+  // ---------------------------------------------------------------- renderer / scene
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.toneMapping = THREE.AgXToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  const fogColor = new THREE.Color(0xc4cfd8);
+  scene.fog = new THREE.FogExp2(fogColor, 0.0003);
+  const camera = new THREE.PerspectiveCamera(66, innerWidth / innerHeight, 0.1, 12000);
+
+  const lib = new MaterialLibrary(matDefs);
+  lib.setSeason(season);
+
+  // environment lighting from the CC0 Poly Haven HDRI (same sky as the backdrop)
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const hdr = await new RGBELoader().loadAsync('assets/hdri/env_1k.hdr');
+  hdr.mapping = THREE.EquirectangularReflectionMapping;
+  scene.environment = pmrem.fromEquirectangular(hdr).texture;
+  scene.environmentIntensity = 0.75;
+  progress('하늘을 칠하는 중…');
+
+  // sun direction from the HDRI's brightest texel (three equirect convention)
+  const phi = (skyMeta.sun_u - 0.5) * Math.PI * 2, el = (skyMeta.sun_v - 0.5) * Math.PI;
+  const sunDir = new THREE.Vector3(Math.cos(el) * Math.cos(phi), Math.sin(el), Math.cos(el) * Math.sin(phi)).normalize();
+  const sun = new THREE.DirectionalLight(0xfff1dc, 3.1);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(4096, 4096);
+  const SH = 125;
+  Object.assign(sun.shadow.camera, { left: -SH, right: SH, top: SH, bottom: -SH, near: 10, far: 900 });
+  sun.shadow.bias = -0.0002;
+  sun.shadow.normalBias = 0.05;
+  scene.add(sun, sun.target);
+  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x5a6a48, 0.35));
+
+  const sky = makeSky(skyMeta, fogColor.clone().convertSRGBToLinear());
+  sky.material.uniforms.uExposure.value = 1.25;
+  scene.add(sky);
+
+  // ---------------------------------------------------------------- terrain
+  const T = campus.terrain;
+  const hfNear = new Heightfield(nearData, T.near.half, T.near.step, T.near.n);
+  const hfFar = new Heightfield(farData, T.far.half, T.far.step, T.far.n);
+  const terrain = makeNearTerrain(hfNear, campus, lib);
+  scene.add(terrain);
+  scene.add(makeFarTerrain(hfFar, T.near.half));
+  scene.add(makeCity(hfFar, T.near.half));
+  scene.add(makeFarForest(hfFar, T.near.half));
+  scene.add(makeSummitTower(hfFar));
+  progress('백양로를 까는 중…');
+
+  // ---------------------------------------------------------------- GLB assets
+  const M = 'assets/models/';
+  const load = async (u, label) => { const g = await loadGLB(M + u); progress(label); return g; };
+  const [bld, lms, road] = await Promise.all([
+    load('campus_buildings.glb', '건물을 세우는 중…'),
+    load('campus_landmarks.glb', '언더우드관에 담쟁이를 심는 중…'),
+    load('baekyangro.glb', '백양로에 차선을 긋는 중…'),
+  ]);
+  bindMaterials(bld.scene, lib);
+  bindMaterials(lms.scene, lib);
+  bindMaterials(road.scene, lib);
+
+  // walkable surfaces: terrain + road + amphitheater terraces
+  const walkables = [terrain];
+  const amph = [];
+  lms.scene.traverse((o) => { if (o.isMesh && /amphitheater/.test((o.parent && o.parent.name) + o.name)) amph.push(o); });
+  const roadMeshes = [];
+  road.scene.traverse((o) => { if (o.isMesh) { o.receiveShadow = true; roadMeshes.push(o); } });
+  scene.add(road.scene);
+  road.scene.updateMatrixWorld(true);
+  for (const m of [...roadMeshes, ...amph]) walkables.push(m);
+  for (const m of walkables) m.geometry.computeBoundsTree();
+
+  const amphGroup = new THREE.Group();
+  for (const m of amph) { m.updateMatrixWorld(true); }
+  lms.scene.updateMatrixWorld(true);
+  for (const m of amph) {
+    const w = m.matrixWorld.clone();
+    m.parent.remove(m);
+    m.matrix.copy(w); m.matrix.decompose(m.position, m.quaternion, m.scale);
+    m.castShadow = m.receiveShadow = true;
+    amphGroup.add(m);
+  }
+  scene.add(amphGroup);
+  scene.add(mergeStatic(bld.scene, { name: 'buildings' }));
+  scene.add(mergeStatic(lms.scene, { name: 'landmarks' }));
+  progress('건물을 정리하는 중…');
+
+  const ray = new THREE.Raycaster();
+  ray.firstHitOnly = true;
+  const DOWN = new THREE.Vector3(0, -1, 0);
+  const groundAt = (x, y) => {
+    ray.set(new THREE.Vector3(x, 600, -y), DOWN);
+    const h = ray.intersectObjects(walkables, false);
+    return h.length ? h[0].point.y : hfNear.height(x, y);
+  };
+
+  // ---------------------------------------------------------------- vegetation
+  const kits = {};
+  const species = ['ginkgo', 'zelkova', 'cherry', 'maple', 'oak', 'pine'];
+  await Promise.all(species.flatMap((sp) => [0, 1].map(async (v) => {
+    const g = await load(`veg/${sp}_${v}.glb`, '나무를 심는 중…');
+    bindMaterials(g.scene, lib);
+    kits[`${sp}_${v}`] = g.scene;
+  })));
+  await texturesReady();
+  const forest = new Forest(scene, renderer, lib, kits, campus.trees, groundAt);
+  const shrubKits = {};
+  const shrubCounts = {};
+  for (const s of campus.shrubs) shrubCounts[s[0]] = (shrubCounts[s[0]] || 0) + 1;
+  await Promise.all(Object.keys(shrubCounts).map(async (k) => {
+    const g = await load(`veg/${k}.glb`, '회양목을 다듬는 중…');
+    bindMaterials(g.scene, lib);
+    shrubKits[k] = new InstancedKit(g.scene, lib, shrubCounts[k]);
+  }));
+  {
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    for (const [k, x, y, sc, rot] of campus.shrubs) {
+      p.set(x, groundAt(x, y) - 0.05, -y);
+      q.setFromAxisAngle(up, rot);
+      s.setScalar(sc);
+      shrubKits[k].add(m4.compose(p, q, s));
+    }
+    for (const k in shrubKits) { shrubKits[k].commit(); shrubKits[k].addTo(scene); }
+  }
+
+  // ---------------------------------------------------------------- props
+  const propNames = ['lamp_double', 'lamp_arm', 'flag_white', 'planter', 'stone_marker', 'sign_board', 'motorbike', 'car_sedan', 'car_sedan2', 'car_hatch', 'car_taxi', 'car_van', 'car_bus', 'payphone', 'bench', 'trashcan'];
+  const P = {};
+  await Promise.all(propNames.map(async (n) => {
+    const g = await load(`props/${n}.glb`, '공중전화를 놓는 중…');
+    bindMaterials(g.scene, lib, true);
+    P[n] = g;
+  }));
+  const colliders = new Colliders();
+  for (const b of campus.buildings) colliders.addPolygon(b.footprint);
+  {
+    const byKind = {};
+    for (const pr of campus.props) (byKind[pr[0]] ||= []).push(pr);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    const rnd = mulberry(5);
+    const MAP = { lamp_double: 'lamp_double', lamp_arm: 'lamp_arm', flag_white: 'flag_white', planter: 'planter', stone_marker: 'stone_marker',
+      sign_board: 'sign_board', payphone: 'payphone', bench: 'bench', trashcan: 'trashcan', motorbike: 'motorbike' };
+    const COLLIDE = { lamp_double: 0.25, lamp_arm: 0.25, flag_white: 0.12, planter: 0.5, stone_marker: 1.0, sign_board: 0.9 };
+    for (const [kind, list] of Object.entries(byKind)) {
+      const src = P[MAP[kind]];
+      if (!src) continue;
+      const kit = new InstancedKit(src.scene, lib, list.length, { colors: true });
+      for (const [, x, y, rot] of list) {
+        p.set(x, groundAt(x, y), -y);
+        // Blender models face -Y; campus rotation is the heading in the campus frame
+        q.setFromAxisAngle(up, rot + (kind === 'motorbike' ? 0 : Math.PI / 2));
+        const col = kind === 'motorbike' ? new THREE.Color().setHSL(rnd(), 0.5, 0.45) : null;
+        kit.add(m4.compose(p, q, s), col);
+        if (kind !== 'motorbike') colliders.addCircle(x, y, COLLIDE[kind] ?? 0.55);
+      }
+      kit.commit();
+      kit.addTo(scene);
+    }
+    // parked cars
+    const carKits = {};
+    const carCount = {};
+    // 1997 paint: lots of white, silver and dark navy, a few burgundy / green / gold
+    const CAR_COLORS = ['#eeeeea', '#f2f1ec', '#b9bdc3', '#a9aeb5', '#1b2333', '#2a2d33', '#6e1b1f', '#244a3a', '#b59a6a', '#2c4a78', '#8c8f94'];
+    const MODEL = (k, i) => (k === 'sedan' ? ['sedan', 'sedan2', 'sedan', 'van'][i % 4] : k);
+    campus.cars.forEach((c, i) => { const m = MODEL(c[0], i); carCount[m] = (carCount[m] || 0) + 1; });
+    for (const [k, n] of Object.entries(carCount)) { carKits[k] = new InstancedKit(P['car_' + k].scene, lib, n, { colors: true }); }
+    campus.cars.forEach(([k0, x, y, ang, ci], i) => {
+      const k = MODEL(k0, i);
+      p.set(x, groundAt(x, y), -y);
+      q.setFromAxisAngle(up, ang);
+      carKits[k].add(m4.compose(p, q, s), new THREE.Color(k === 'taxi' ? '#ecebe4' : CAR_COLORS[(ci * 7 + i) % CAR_COLORS.length]));
+      colliders.addCircle(x + Math.cos(ang) * 1.2, y + Math.sin(ang) * 1.2, 1.0);
+      colliders.addCircle(x - Math.cos(ang) * 1.2, y - Math.sin(ang) * 1.2, 1.0);
+    });
+    for (const k in carKits) { carKits[k].commit(); carKits[k].addTo(scene); }
+  }
+  for (const t of campus.trees) colliders.addCircle(t[1], t[2], 0.35 * t[3]);
+  const S = campus.statues;
+  colliders.addCircle(S.eagle.pos[0], S.eagle.pos[1], 3.3);                    // stepped platform of the eagle tower
+  colliders.addCircle(S.underwood_statue.pos[0], S.underwood_statue.pos[1], 3.2);   // round steps under the statue
+  scene.add(makeBanners(campus.banners, lib, groundAt));
+  scene.add(makeBoard(campus.landmarks.find((l) => l.id === 'events'), groundAt));
+  // Quaternius CC0 people (blender/characters.py)
+  const cast = new Cast();
+  await cast.load(Object.keys(PEOPLE), () => progress('사람들이 모여드는 중…'));
+
+  // ---------------------------------------------------------------- life
+  const heightFn = (x, y) => groundAt(x, y);
+  const R = campus.baekyangro;
+  const center = new Path(R.pts, heightFn);
+  const eWalk = R.median + R.lane + R.curb + (R.verge || 0);      // inner edge of the sidewalk
+  const paths = [];
+  for (const off of [eWalk + R.walk * 0.4, eWalk + R.walk * 0.68, -(eWalk + R.walk * 0.4), -(eWalk + R.walk * 0.68)]) paths.push(new Path(center.offset(off), heightFn));
+  for (const p of campus.paths) {
+    if (p.kind !== 'footway' || p.pts.length < 2) continue;
+    const L = p.pts.reduce((a, q, i) => (i ? a + Math.hypot(q[0] - p.pts[i - 1][0], q[1] - p.pts[i - 1][1]) : 0), 0);
+    if (L > 45 && Math.abs(p.pts[0][0]) < 260 && p.pts[0][1] > -380 && p.pts[0][1] < 420 && paths.length < 26) paths.push(new Path(p.pts, heightFn));
+  }
+  const groups = [[-40, -45], [-36, -70], [3, -58], [-2, -92], [-96, -400], [58, 200], [-46, -26], [12, -30], [-20, 30], [110, 150], [-88, -186]]
+    .map(([x, y]) => [x, y, groundAt(x, y)]);
+  const crowd = new Crowd(scene, cast, [...STUDENTS, ...STUDENTS, 'man-professor', 'man-staff', 'woman-staff'], paths, groups, isTouch ? 40 : 110);
+  const lanes = [];
+  // one lane each way on the 1997 two-lane road (right-hand traffic)
+  for (const off of [R.median + R.lane * 0.5]) {
+    lanes.push(new Path(center.offset(-off), heightFn));                       // northbound
+    lanes.push(new Path(center.offset(off).reverse(), heightFn));              // southbound
+  }
+  const traffic = new Traffic(scene, { sedan: P.car_sedan, sedan2: P.car_sedan2, hatch: P.car_hatch, taxi: P.car_taxi, van: P.car_van, bus: P.car_bus }, lanes, 14, cast, STUDENTS.concat(['man-professor', 'man-staff', 'woman-staff']));
+
+  // ---------------------------------------------------------------- player / UI / post
+  let heroId = HEROES[0];
+  try { if (HEROES.includes(localStorage.getItem('y97-hero'))) heroId = localStorage.getItem('y97-hero'); } catch { /* ignore */ }
+  const hero = cast.make(heroId);
+  scene.add(hero.holder);
+  const player = new Player(camera, canvas, colliders, walkables, hfNear, hero);
+  player.teleport(campus.spawn.pos[0], campus.spawn.pos[1], campus.spawn.yaw);
+  const post = new Post(renderer, scene, camera);
+  const ui = new UI(campus, {
+    onTeleport: (x, y) => { if (bird.active) leaveBird(); player.teleport(x, y); forest.update(camera.position, true); resume(); },
+    onClose: () => resume(),
+  });
+  // hero picker on the title card (portraits rendered from the real models)
+  const pics = portraits(cast, HEROES);
+  const pickEl = $('#hero-pick');
+  const pickHero = (id) => {
+    heroId = id;
+    try { localStorage.setItem('y97-hero', id); } catch { /* ignore */ }
+    pickEl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+    if (player.actor.id !== id) { const a = cast.make(id); scene.add(a.holder); player.setActor(a); }
+  };
+  for (const id of HEROES) {
+    const b = document.createElement('button');
+    b.dataset.id = id;
+    b.innerHTML = `<img src="${pics[id]}" alt=""><span>${PEOPLE[id]}</span>`;
+    b.addEventListener('click', () => pickHero(id));
+    pickEl.appendChild(b);
+  }
+  pickHero(heroId);
+  progress('준비 완료!');
+  $('#loadfill').style.width = '100%';
+  $('#loadtext').textContent = '1997년 5월, 백양로에 도착했습니다.';
+  $('#start').disabled = false;
+  $('#tour-start').disabled = false;
+
+  const setSeason = (v) => {
+    season = v;
+    try { localStorage.setItem('y97-season', v); } catch { /* ignore */ }
+    lib.setSeason(v);
+    seasonButtons(v);
+    $('#datestamp').textContent = SEASONS[v].date;
+    // impostor textures are rendered from the real trees -> refresh after textures load
+    texturesReady().then(() => forest.rebuildImpostors(renderer));
+    ui.toast(SEASONS[v].label);
+  };
+  $('#datestamp').textContent = SEASONS[season].date;
+  document.querySelectorAll('[data-season]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setSeason(b.dataset.season); }));
+
+  // ---------------------------------------------------------------- input / states
+  let started = false, paused = false;
+  const resume = () => {
+    if (!started || ui.memoryOpen || ui.mapOpen) return;
+    if (bird.active) { paused = false; $('#pause').hidden = true; return; }   // keep the walker parked
+    paused = false;
+    $('#pause').hidden = true;
+    player.enabled = true;
+  };
+  const pause = () => {
+    if (!started || ui.memoryOpen || ui.mapOpen) return;
+    paused = true;
+    player.enabled = false;
+    $('#pause').hidden = false;
+  };
+  const startWalk = (where = null) => {
+    if (started) return;
+    started = true;
+    $('#intro').hidden = true;
+    $('#hud').hidden = false;
+    if (isTouch) $('#touch').hidden = false;
+    resume();
+    ui.toast(where ? `W·S로 걷고 A·D로 방향을 바꿔요 · ${where}에서 출발해요` : 'W·S로 걷고 A·D로 방향을 바꿔요 · 정문에서 백양로를 따라 걸어 보세요', 4200);
+  };
+  $('#start').addEventListener('click', () => startWalk());
+  $('#resume').addEventListener('click', resume);
+  const setFilm = (v) => { $('#opt-film').checked = v; post.setFilm(v); document.body.classList.toggle('film', v); bird.labels({ filmOn: v }); };
+  $('#opt-film').addEventListener('change', (e) => setFilm(e.target.checked));
+  $('#opt-hq').addEventListener('change', (e) => { post.setHQ(e.target.checked); sun.shadow.mapSize.set(e.target.checked ? 4096 : 2048, e.target.checked ? 4096 : 2048); sun.shadow.map?.dispose(); sun.shadow.map = null; });
+  const openNearby = () => {
+    if (ui.memoryOpen) { ui.closeMemory(); return; }
+    const l = ui.nearestLandmark(player.x, player.y);
+    if (l) { player.enabled = false; ui.openMemory(l); }
+  };
+  const toggleMap = () => {
+    if (!started) return;
+    if (ui.mapOpen) { ui.toggleMap(false); return; }
+    player.enabled = false;
+    ui.toggleMap(true, player.x, player.y);
+  };
+
+  // ---------------------------------------------------------------- 캠퍼스 둘러보기 (bird's-eye tour, blender-free: src/birdseye.js)
+  const pickRay = new THREE.Raycaster();
+  pickRay.firstHitOnly = true;
+  const downRay = new THREE.Raycaster();
+  downRay.firstHitOnly = true;
+  let roofs = null;                // walkables + building / landmark meshes, with BVHs, built on first use
+  const surfaceAt = (x, y) => {
+    if (!roofs) {
+      roofs = [...walkables];
+      for (const name of ['buildings', 'landmarks']) {
+        scene.getObjectByName(name)?.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundsTree(); roofs.push(o); } });
+      }
+    }
+    downRay.set(new THREE.Vector3(x, 900, -y), new THREE.Vector3(0, -1, 0));
+    const h = downRay.intersectObjects(roofs, false)[0];
+    return h ? h.point.y : -1e9;
+  };
+  const SEASON_ORDER = ['spring', 'summer', 'autumn'];
+  const SEASON_SHORT = { spring: '4월 · 벚꽃', summer: '5월 · 신록', autumn: '10월 · 은행잎' };
+  const bird = new BirdsEye({
+    camera, dom: canvas, landmarks: campus.landmarks,
+    heightAt: (x, y) => hfNear.height(x, y),
+    surfaceAt,
+    pickGround: (nx, ny) => {
+      pickRay.setFromCamera(new THREE.Vector2(nx, ny), camera);
+      const h = pickRay.intersectObjects(walkables, false)[0];
+      return h ? [h.point.x, -h.point.z] : null;
+    },
+    onWalkHere: (x, y) => {
+      const fromTitle = !started;
+      leaveBird();
+      if (fromTitle) startWalk(ui.placeName(x, y, false));
+      player.teleport(x, y);
+      player.cam.ready = false;
+      forest.update(camera.position, true);
+    },
+    onMemory: (l) => { player.enabled = false; ui.openMemory(l); },
+    onAction: (what) => {
+      if (what === 'back') leaveBird();
+      else if (what === 'film') setFilm(!$('#opt-film').checked);
+      else if (what === 'season') changeSeason(SEASON_ORDER[(SEASON_ORDER.indexOf(season) + 1) % 3]);
+    },
+  });
+  const setShadowSpan = (span) => {
+    if (sun.shadow.camera.right === span) return;
+    Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span });
+    sun.shadow.camera.updateProjectionMatrix();
+    texel = (span * 2) / sun.shadow.mapSize.x;
+  };
+  const enterBird = () => {
+    if (bird.active) return;
+    if (ui.memoryOpen) ui.closeMemory();
+    if (ui.mapOpen) ui.toggleMap(false);
+    paused = false;
+    $('#pause').hidden = true;
+    player.enabled = false;
+    bird.labels({ seasonLabel: SEASON_SHORT[season], filmOn: $('#opt-film').checked });
+    if (started) {
+      const d = camera.getWorldDirection(new THREE.Vector3());
+      bird.enter({ x: player.x, y: player.y, yaw: Math.atan2(d.x, -d.z), player: { x: player.x, y: player.y } });
+    } else {
+      $('#intro').hidden = true;
+      $('#hud').hidden = false;
+      bird.enter({ player: null });
+    }
+    ui.setPrompt(null);
+    ui.toast('캠퍼스 둘러보기 · W A S D로 날고 핀을 누르면 그곳으로 가요', 3200);
+  };
+  const leaveBird = () => {
+    if (!bird.active) return;
+    if (ui.memoryOpen) ui.closeMemory();
+    bird.exit();
+    forest.nearDist = 230;
+    setShadowSpan(SH);
+    if (started) {
+      // swoop back down behind the walker from where the tour camera is now
+      player.cam.pos.copy(camera.position);
+      player.cam.look.copy(bird.focus);
+      player.cam.ready = true;
+      player.enabled = true;
+      lastPlace = -1;
+    } else {
+      $('#hud').hidden = true;
+      $('#intro').hidden = false;
+    }
+    forest.update(camera.position, true);
+  };
+  const toggleBird = () => (bird.active ? leaveBird() : enterBird());
+  const changeSeason = (v) => { setSeason(v); bird.labels({ seasonLabel: SEASON_SHORT[v] }); };
+  $('#birdbtn').addEventListener('click', (e) => { e.stopPropagation(); toggleBird(); e.currentTarget.blur(); });
+  $('#tour-start').addEventListener('click', enterBird);
+
+  addEventListener('keydown', (e) => {
+    if (bird.active) {
+      // the tour's own keys live in birdseye.js; here only leaving it and the game-wide season keys
+      if (ui.memoryOpen) { if (e.code === 'Escape' || e.code === 'Enter') ui.closeMemory(); return; }
+      if (e.code === 'KeyB' || e.code === 'Escape') leaveBird();
+      else if (e.code === 'Digit1') changeSeason('spring');
+      else if (e.code === 'Digit2') changeSeason('summer');
+      else if (e.code === 'Digit3') changeSeason('autumn');
+      return;
+    }
+    if (!started) return;
+    if (e.code === 'KeyB' && !ui.memoryOpen) { enterBird(); return; }
+    if (e.code === 'KeyE' || e.code === 'Enter') openNearby();
+    else if (e.code === 'KeyM') toggleMap();
+    else if (e.code === 'KeyF') setFilm(!$('#opt-film').checked);
+    else if (e.code === 'Digit1') setSeason('spring');
+    else if (e.code === 'Digit2') setSeason('summer');
+    else if (e.code === 'Digit3') setSeason('autumn');
+    else if (e.code === 'Escape') {
+      if (ui.memoryOpen) ui.closeMemory();
+      else if (ui.mapOpen) ui.toggleMap(false);
+      else if (paused) resume(); else pause();
+    }
+  });
+  setupTouch(player, openNearby, toggleMap);
+  $('#t-b').addEventListener('click', toggleBird);
+
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    post.setSize(innerWidth, innerHeight);          // CSS pixels: EffectComposer applies the pixel ratio itself
+  });
+
+  // ---------------------------------------------------------------- loop
+  const clock = new THREE.Clock();
+  let tAcc = 0, lastPlace = 0;
+  let texel = (SH * 2) / 4096;
+  const onRoad = (x, y) => {
+    // distance to 백양로 centre line
+    let best = 1e9;
+    for (let i = 1; i < R.pts.length; i++) {
+      const [ax, ay] = R.pts[i - 1], [bx, by] = R.pts[i];
+      const ex = bx - ax, ey = by - ay;
+      const t = Math.max(0, Math.min(1, ((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey)));
+      best = Math.min(best, Math.hypot(x - ax - ex * t, y - ay - ey * t));
+    }
+    return best < eWalk + R.walk + 1;
+  };
+  let viewW = 0, viewH = 0;        // 0: size once on the first frame too
+  renderer.setAnimationLoop(() => {
+    // a window resized while the tab was in the background may never send 'resize': check every frame
+    if (innerWidth !== viewW || innerHeight !== viewH) { viewW = innerWidth; viewH = innerHeight; dispatchEvent(new Event('resize')); }
+    const dt = Math.min(0.05, clock.getDelta());
+    tAcc += dt;
+    if (started) {
+      crowd.movers(player.x, player.y, player.movers);
+      traffic.movers(player.x, player.y, player.movers);
+      player.update(dt);
+    }
+    if (bird.active) {
+      bird.update(dt, player);
+      // wider shadows and more full-detail trees the higher up the view is
+      const span = bird.cur.dist > 260 ? 340 : bird.cur.dist > 90 ? 220 : SH;
+      setShadowSpan(span);
+      forest.nearDist = bird.cur.dist > 150 ? 330 : 230;
+    }
+    // what the shadows, tree LOD and crowd culling centre on: the camera, or the ground point below a bird's-eye view
+    const focus = bird.active ? bird.focus : camera.position;
+    if (!started && !bird.active) {
+      // slow cinematic drift along 백양로 behind the title card
+      const s = (tAcc * 3.2) % (center.length - 60) + 20;
+      const p = center.at(s), d = center.dir(s);
+      camera.position.set(p.x - d.y * 4, center.h(s) + 9 + Math.sin(tAcc * 0.2) * 2, -(p.y + d.x * 4));
+      camera.lookAt(p.x + d.x * 40, center.h(s + 40) + 6, -(p.y + d.y * 40));
+    }
+    // sun & shadow frustum follow the camera (snapped to shadow texels)
+    const fx = focus.x, fz = focus.z;
+    const cx = Math.round(fx / texel) * texel, cz = Math.round(fz / texel) * texel;
+    sun.target.position.set(cx, bird.active ? focus.y : camera.position.y - 10, cz);
+    sun.position.copy(sun.target.position).addScaledVector(sunDir, 420);
+    sky.position.copy(camera.position);
+    forest.update(focus);
+    crowd.update(dt, tAcc, started ? player : { x: 1e9, y: 1e9 }, focus);
+    traffic.update(dt, started ? player : { x: 1e9, y: 1e9 });
+    if (bird.active) {
+      ui.drawMinimap(bird.cur.x, bird.cur.y, bird.mapYaw);
+      if (tAcc - lastPlace > 0.25) {
+        lastPlace = tAcc;
+        ui.setPlace(`둘러보기 · ${ui.placeName(bird.cur.x, bird.cur.y, onRoad(bird.cur.x, bird.cur.y))}`);
+      }
+    } else if (started) {
+      ui.drawMinimap(player.x, player.y, player.yaw);
+      if (!bird.active && tAcc - lastPlace > 0.25) {
+        lastPlace = tAcc;
+        const l = ui.nearestLandmark(player.x, player.y);
+        ui.setPlace(ui.placeName(player.x, player.y, onRoad(player.x, player.y)));
+        ui.setPrompt(l && !ui.memoryOpen ? `${l.name} · 그때의 추억 보기` : null);
+      }
+    }
+    post.draw(tAcc);
+  });
+  post.setSize(innerWidth, innerHeight);          // CSS pixels: EffectComposer applies the pixel ratio itself
+  window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird };
+}
+
+// 게시판 with the 1997 photos pinned up (the "그때 우리는" memory spot)
+function makeBoard(l, groundAt) {
+  const g = new THREE.Group();
+  if (!l) return g;
+  const W = 1600, H = 900;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = '#6b5236'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#c9a877'; x.fillRect(30, 30, W - 60, H - 60);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const photos = (l.photo || []).map((p) => 'assets/' + p);
+  const posters = [['대동제', '#c0392b'], ['총학생회', '#1d3f9a'], ['동아리 신입회원 모집', '#2e7d32'], ['연고전 응원 연습', '#1d3f9a']];
+  let i = 0;
+  const rnd = mulberry(11);
+  posters.forEach(([t, col], k) => {
+    x.save();
+    x.translate(120 + k * 360, 120 + (k % 2) * 380);
+    x.rotate((rnd() - 0.5) * 0.08);
+    x.fillStyle = '#f7f3e6'; x.fillRect(0, 0, 300, 220);
+    x.fillStyle = col; x.font = 'bold 44px "Do Hyeon", sans-serif'; x.fillText(t, 20, 70);
+    x.fillStyle = '#333'; x.font = '24px "Noto Sans KR", sans-serif';
+    x.fillText('1997. 5. 대강당 앞', 20, 120); x.fillText('많은 참여 바랍니다', 20, 160);
+    x.restore();
+  });
+  photos.forEach((src) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = i++;
+      x.save();
+      x.translate(160 + (k % 3) * 470, 300 + Math.floor(k / 3) * 300 - (k % 2) * 160);
+      x.rotate((rnd() - 0.5) * 0.12);
+      x.fillStyle = '#fff'; x.fillRect(-10, -10, 400, 290);
+      x.drawImage(img, 0, 0, 380, 250);
+      x.fillStyle = '#d33'; x.beginPath(); x.arc(190, -2, 9, 0, 7); x.fill();
+      x.restore();
+      tex.needsUpdate = true;
+    };
+    img.src = src;
+  });
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
+  const board = new THREE.Mesh(new THREE.BoxGeometry(4.0, 2.25, 0.12), [mat, mat, mat, mat, mat, new THREE.MeshStandardMaterial({ color: '#5a4a3a' })]);
+  const h = groundAt(l.pos[0], l.pos[1]);
+  board.position.set(l.pos[0], h + 1.85, -l.pos[1]);
+  board.rotation.y = -Math.PI / 2 + 0.25;
+  board.castShadow = true;
+  g.add(board);
+  for (const s of [-1.7, 1.7]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.0, 0.12), new THREE.MeshStandardMaterial({ color: '#4a3a2a' }));
+    leg.position.set(0, -0.35, 0);
+    leg.position.x = s;
+    board.add(leg);
+  }
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.12, 0.6), new THREE.MeshStandardMaterial({ color: '#2f4f3f' }));
+  roof.position.set(0, 1.25, 0.15);
+  board.add(roof);
+  return g;
+}
+
+function setupTouch(player, onE, onM) {
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const stick = $('#stick'), knob = stick.querySelector('div');
+  let sid = null, cx = 0, cy = 0;
+  stick.addEventListener('pointerdown', (e) => { sid = e.pointerId; const r = stick.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; stick.setPointerCapture(sid); });
+  stick.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== sid) return;
+    const dx = Math.max(-50, Math.min(50, e.clientX - cx)), dy = Math.max(-50, Math.min(50, e.clientY - cy));
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    player.stick.set(dx / 50, dy / 50);
+  });
+  const end = () => { sid = null; knob.style.transform = ''; player.stick.set(0, 0); };
+  stick.addEventListener('pointerup', end);
+  stick.addEventListener('pointercancel', end);
+  $('#t-e').addEventListener('click', onE);
+  $('#t-m').addEventListener('click', onM);
+}
+
+main().catch((e) => {
+  console.error(e);
+  $('#loadtext').textContent = '불러오기 실패: ' + e.message;
+});

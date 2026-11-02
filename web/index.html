@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>신촌 캠퍼스 1997 · 연세 캠퍼스 산책</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23143c8c'/%3E%3Ctext x='32' y='43' font-size='30' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'%3E97%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <!-- title / loading -->
+  <section id="intro">
+    <div class="intro-bg"></div>
+    <div class="intro-card">
+      <p class="eyebrow">설레던 백양로, 첫 시작의 기억</p>
+      <h1>신촌 캠퍼스 1997<br /><span>그 시절 우리 학교는</span></h1>
+      <p class="lead">1997년 5월, 신촌 연세대학교 캠퍼스. 정문에서 백양로를 따라 걸으며 그때의 중앙도서관, 학생회관, 옛 노천극장과 언더우드관을 다시 만나 보세요.</p>
+      <div class="season-pick" role="radiogroup" aria-label="계절">
+        <button data-season="spring">4월 · 벚꽃</button>
+        <button data-season="summer" class="on">5월 · 신록</button>
+        <button data-season="autumn">10월 · 은행잎</button>
+      </div>
+      <p class="pick-label">누구로 걸어 볼까요?</p>
+      <div id="hero-pick" role="radiogroup" aria-label="캐릭터"></div>
+      <div id="loadbar"><div id="loadfill"></div></div>
+      <p id="loadtext">캠퍼스를 불러오는 중…</p>
+      <button id="start" disabled>백양로 걷기 시작</button>
+      <button id="tour-start" class="ghost" disabled title="하늘에서 1997년 캠퍼스를 날아다니며 구경합니다">캠퍼스 둘러보기 (버드 아이뷰)</button>
+      <dl class="keys">
+        <div><dt>W S / ↑↓</dt><dd>앞뒤로 걷기</dd></div>
+        <div><dt>A D / ←→</dt><dd>방향 돌기</dd></div>
+        <div><dt>Shift</dt><dd>뛰기</dd></div>
+        <div><dt>마우스 끌기·휠</dt><dd>카메라</dd></div>
+        <div><dt>E</dt><dd>추억 보기</dd></div>
+        <div><dt>M</dt><dd>캠퍼스 지도</dd></div>
+        <div><dt>B</dt><dd>캠퍼스 둘러보기</dd></div>
+        <div><dt>F · 1 2 3</dt><dd>필름 · 계절</dd></div>
+        <div><dt>Esc</dt><dd>일시정지</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- HUD -->
+  <div id="hud" hidden>
+    <div id="place"><small>지금 여기</small><b>정문</b></div>
+    <canvas id="minimap" width="220" height="220"></canvas>
+    <div id="stamps"><small>추억 수집</small><b>0 / 0</b></div>
+    <div id="prompt" hidden><kbd>E</kbd> <span></span></div>
+    <div id="toast" hidden></div>
+    <div id="datestamp">'97 5 21</div>
+    <button id="birdbtn" title="하늘에서 캠퍼스 둘러보기 (B)">둘러보기 <kbd>B</kbd></button>
+  </div>
+
+  <!-- bird's-eye view: landmark pins + selected place -->
+  <div id="birdpins" hidden></div>
+  <div id="tourbar" hidden>
+    <div class="tour-bar">
+      <b>캠퍼스 둘러보기</b>
+      <button data-tour="season">계절: 5월 · 신록</button>
+      <button data-tour="film">필름: 끔</button>
+      <button data-tour="auto">자동 회전: 켬</button>
+      <button data-tour="street" title="눈높이로 내려가 거리를 따라 보기">거리 높이</button>
+      <button data-tour="overview" title="캠퍼스 전체를 높이서 보기">전체 보기</button>
+      <button data-tour="up" data-hold="up" aria-label="더 높이(내려다보기)">▲</button>
+      <button data-tour="down" data-hold="down" aria-label="더 낮게">▼</button>
+      <button data-tour="in" data-hold="in" aria-label="가까이">＋</button>
+      <button data-tour="out" data-hold="out" aria-label="멀리">－</button>
+      <button data-tour="back" class="back">걷기로 돌아가기</button>
+    </div>
+    <p class="tour-keys"><kbd>↑</kbd><kbd>↓</kbd>/<kbd>W</kbd><kbd>S</kbd> 앞뒤 · <kbd>←</kbd><kbd>→</kbd>/<kbd>A</kbd><kbd>D</kbd> 회전 · <kbd>Q</kbd><kbd>E</kbd> 옆으로 · <kbd>Z</kbd><kbd>X</kbd>/휠 확대·축소 · <kbd>R</kbd><kbd>F</kbd> 높이 · <kbd>Shift</kbd> 빠르게 · <kbd>Space</kbd> 자동 회전 · <kbd>T</kbd> 계절 · <kbd>Y</kbd> 필름 · 끌기 둘러보기 · 오른쪽 끌기 밀기 · 더블클릭 그곳으로 · <kbd>Esc</kbd> 돌아가기</p>
+    <p class="tour-touch">한 손가락 밀기 · 두 손가락 확대·회전 · 핀을 눌러 그곳으로</p>
+  </div>
+  <div id="birdbar" hidden>
+    <b></b>
+    <button class="walk">여기서 걷기</button>
+    <button class="memory">추억 보기</button>
+    <button class="close" aria-label="선택 해제">✕</button>
+  </div>
+
+  <!-- memory card -->
+  <div id="memory" hidden>
+    <article>
+      <div class="photos"></div>
+      <div class="caption">
+        <span class="year"></span>
+        <h2></h2>
+        <p></p>
+        <small class="credit">사진출처: 연세대학교 기록관 · 연세동문회보 · 연세춘추 · 동문 제공</small>
+      </div>
+      <button class="close" aria-label="닫기">닫기 (E)</button>
+    </article>
+  </div>
+
+  <!-- map -->
+  <div id="mapview" hidden>
+    <div class="mapwrap">
+      <h2>1997 연세 캠퍼스 지도 <small>장소를 누르면 그곳으로 이동합니다</small></h2>
+      <canvas id="bigmap" width="900" height="900"></canvas>
+      <button class="close">닫기 (M)</button>
+    </div>
+  </div>
+
+  <!-- pause -->
+  <div id="pause" hidden>
+    <div>
+      <h2>잠시 멈춤</h2>
+      <p>Esc를 누르거나 아래 버튼을 누르면 다시 걷습니다.</p>
+      <div class="season-pick">
+        <button data-season="spring">4월 · 벚꽃</button>
+        <button data-season="summer">5월 · 신록</button>
+        <button data-season="autumn">10월 · 은행잎</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="opt-film" /> 1997 필름 감성</label>
+      <label class="toggle"><input type="checkbox" id="opt-hq" checked /> 고품질 그림자 · 앰비언트 오클루전</label>
+      <button id="resume">계속 걷기</button>
+    </div>
+  </div>
+
+  <!-- touch controls -->
+  <div id="touch" hidden>
+    <div id="stick"><div></div></div>
+    <button id="t-e">E</button>
+    <button id="t-m">지도</button>
+    <button id="t-b">전경</button>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

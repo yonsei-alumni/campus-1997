@@ -1,0 +1,22 @@
+{
+  "name": "yonsei-1997",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@fontsource/do-hyeon": "^5.1.1",
+    "@fontsource/jua": "^5.1.1",
+    "@fontsource/noto-sans-kr": "^5.1.1",
+    "n8ao": "^1.9.4",
+    "three": "^0.170.0",
+    "three-mesh-bvh": "^0.8.3"
+  },
+  "devDependencies": {
+    "vite": "^6.0.7"
+  }
+}

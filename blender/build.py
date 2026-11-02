@@ -1,0 +1,190 @@
+"""Build every 3D asset of the Yonsei-1997 campus and export GLBs for the web app.
+
+usage: blender -b --factory-startup --python blender/build.py -- [buildings] [landmarks] [road] [veg] [props] [polyhaven] [preview]
+(no argument = everything)
+"""
+import sys, os, math, random, json
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bpy
+from mathutils import Vector, Matrix
+import common
+from common import CAMPUS, OUT, reset_scene, export_glb, tri_count, ground
+import generic, landmarks, vegetation, props, road, statues
+
+argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+ALL = not argv
+BLEND = 'blend' in argv
+if BLEND:
+    argv = [a for a in argv if a != 'blend']
+    ALL = not argv
+want = lambda k: ALL or k in argv
+stats = {}
+
+
+def place(mb, x, y, z, rot):
+    mb.xf = Matrix.Translation((x, y, z)) @ Matrix.Rotation(rot, 4, 'Z') @ mb.xf
+    return mb
+
+
+if want('buildings'):
+    reset_scene()
+    rnd = random.Random(1997)
+    objs = []
+    for b in CAMPUS['buildings']:
+        if b['style'].startswith('lm:'):
+            continue
+        ob = generic.build_generic(b, rnd).build()
+        ob['name_ko'] = b['name']
+        ob['bid'] = str(b['id'])
+        objs.append(ob)
+    stats['buildings'] = tri_count(objs)
+    export_glb(objs, os.path.join(OUT, 'campus_buildings.glb'))
+
+if want('landmarks'):
+    reset_scene()
+    objs = []
+    for b in CAMPUS['buildings']:
+        if not b['style'].startswith('lm:'):
+            continue
+        key = b['style'][3:]
+        for mb in landmarks.BUILDERS[key]():
+            ob = mb.build()
+            ob['name_ko'] = b['name']
+            ob['bid'] = str(b['id'])
+            objs.append(ob)
+    for mb in landmarks.amphitheater():
+        objs.append(mb.build())
+    # statues and the gate are modelled in their own frame (front = -Y) and placed by object transform
+    # (a MeshBuilder's xf only affects vertices added after it is set)
+    S = CAMPUS['statues']
+    for key, fn in (('eagle', statues.eagle_statue), ('underwood_statue', statues.underwood_statue), ('gate', lambda: [props.gate().build()])):
+        st = S[key]
+        M = Matrix.Translation((st['pos'][0], st['pos'][1], st['h'])) @ Matrix.Rotation(st['rot'], 4, 'Z')
+        for ob in fn():
+            ob.matrix_world = M @ ob.matrix_world
+            ob.name = key + '_' + ob.name
+            objs.append(ob)
+    stats['landmarks'] = tri_count(objs)
+    export_glb(objs, os.path.join(OUT, 'campus_landmarks.glb'))
+
+if want('road'):
+    reset_scene()
+    mbs, crossings = road.build()
+    objs = [m.build() for m in mbs]
+    stats['road'] = tri_count(objs)
+    export_glb(objs, os.path.join(OUT, 'baekyangro.glb'))
+    json.dump({'crossings': crossings}, open(os.path.join(common.ROOT, 'web/public/data/road_meta.json'), 'w'))
+
+if want('veg'):
+    for sp in vegetation.SPECIES:
+        for v in range(2):
+            reset_scene()
+            mb = vegetation.make_tree(sp, v)
+            ob = mb.build()
+            vegetation.apply_canopy_normals(ob, mb.leaf_center, mb.leaf_radii)
+            stats[f'{sp}_{v}'] = tri_count([ob])
+            export_glb([ob], os.path.join(OUT, 'veg', f'{sp}_{v}.glb'), colors=True)
+    for k in ('topiary_round', 'topiary_cone', 'hedge_blob', 'bush', 'hedge_low', 'azalea_red'):
+        reset_scene()
+        ob = vegetation.make_shrub(k).build()
+        stats[k] = tri_count([ob])
+        export_glb([ob], os.path.join(OUT, 'veg', f'{k}.glb'), colors=True)
+
+if want('props'):
+    for name, fn in (('lamp_double', props.lamp_double), ('motorbike', props.motorbike), ('lamp_arm', props.lamp_arm),
+                     ('flag_white', props.flag_white), ('planter', props.planter), ('stone_marker', props.stone_marker),
+                     ('sign_board', props.sign_board)):
+        reset_scene()
+        ob = fn().build()
+        stats[name] = tri_count([ob])
+        export_glb([ob], os.path.join(OUT, 'props', f'{name}.glb'))
+    import cars
+    for k in ('sedan', 'sedan2', 'hatch', 'taxi', 'van', 'bus'):
+        reset_scene()
+        mb, wheels = cars.build_car(k) if k != 'bus' else cars.build_bus()
+        body = mb.build()
+        body.name = 'body'
+        try:
+            body.data.set_sharp_from_angle(angle=math.radians(38))
+        except Exception:
+            pass
+        objs = [body]
+        for w in wheels:
+            o = w.build()
+            o.name = w.name
+            o.location = w.wheel_pos
+            objs.append(o)
+        stats['car_' + k] = tri_count(objs)
+        export_glb(objs, os.path.join(OUT, 'props', f'car_{k}.glb'))
+
+if want('polyhaven'):
+    # CC0 Poly Haven props: decimate to game budgets, keep their own PBR textures (1k JPEG)
+    PH = os.path.join(common.ROOT, 'assets_src', 'models')
+    for name, src, ratio in (('payphone', 'korean_public_payphone_01', 0.06), ('bench', 'painted_wooden_bench', 1.0),
+                             ('trashcan', 'metal_trash_can', 0.15)):
+        reset_scene()
+        bpy.ops.import_scene.gltf(filepath=os.path.join(PH, src, f'{src}_1k.gltf'))
+        objs = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+        for o in objs:
+            if ratio < 1:
+                m = o.modifiers.new('dec', 'DECIMATE')
+                m.ratio = ratio
+        bpy.ops.object.select_all(action='DESELECT')
+        for o in objs:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = objs[0]
+        bpy.ops.object.convert(target='MESH')
+        # normalise scale: payphone source is authored in cm
+        bb = [o.matrix_world @ Vector(c) for o in objs for c in o.bound_box]
+        hgt = max(v.z for v in bb) - min(v.z for v in bb)
+        target = {'payphone': 2.05, 'bench': None, 'trashcan': None}[name]
+        if target and hgt > 0:
+            s = target / hgt
+            for o in objs:
+                o.scale = (o.scale[0] * s, o.scale[1] * s, o.scale[2] * s)
+            bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        for img in bpy.data.images:
+            if img.size[0] > 512:
+                img.scale(512, 512)
+        stats[name] = tri_count(objs)
+        path = os.path.join(OUT, 'props', f'{name}.glb')
+        bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True,
+                                  export_image_format='JPEG', export_jpeg_quality=85, export_draco_mesh_compression_enable=True)
+        print('exported', path, os.path.getsize(path) // 1024, 'KB')
+
+if BLEND:
+    # One editable Blender scene of the whole 1997 campus (buildings + landmarks + 백양로 + terrain)
+    import numpy as np
+    reset_scene()
+    rnd = random.Random(1997)
+    for b in CAMPUS['buildings']:
+        if b['style'].startswith('lm:'):
+            continue
+        generic.build_generic(b, rnd).build()
+    for b in CAMPUS['buildings']:
+        if b['style'].startswith('lm:'):
+            for mb in landmarks.BUILDERS[b['style'][3:]]():
+                mb.build()
+    for mb in landmarks.amphitheater():
+        mb.build()
+    for m in road.build()[0]:
+        m.build()
+    H = np.load(os.path.join(common.ROOT, 'data', 'terrain_near.npy'))
+    n = H.shape[0]
+    half, step = CAMPUS['terrain']['near']['half'], CAMPUS['terrain']['near']['step']
+    sub = range(40, n - 40)          # +-600 m around the campus
+    verts = [(-half + i * step, -half + j * step, float(H[j, i])) for j in sub for i in sub]
+    m = len(sub)
+    faces = [(j * m + i, j * m + i + 1, (j + 1) * m + i + 1, (j + 1) * m + i) for j in range(m - 1) for i in range(m - 1)]
+    me = bpy.data.meshes.new('terrain')
+    me.from_pydata(verts, [], faces)
+    me.materials.append(common.material('grass'))
+    ob = bpy.data.objects.new('terrain', me)
+    bpy.context.scene.collection.objects.link(ob)
+    import preview
+    preview.setup_world()
+    path = os.path.join(common.ROOT, 'assets_src', 'yonsei1997_campus.blend')
+    bpy.ops.wm.save_as_mainfile(filepath=path)
+    print('saved', path)
+
+print('STATS', json.dumps(stats))
