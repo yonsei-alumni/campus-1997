@@ -54,7 +54,7 @@ RIG_SOURCE = {'rig-umc': 'Suit', 'rig-women': 'Casual'}     # the outfit file wh
 # colours are sRGB hex. A key 'Mat' recolours that material everywhere, 'part:Mat' only on that part (head, body, legs, feet).
 SKIN = {'a': '#f0c9a4', 'b': '#e6b991', 'c': '#d9a77d', 'd': '#c99168'}          # East Asian skin tones
 HAIR = {'black': '#141110', 'dark': '#2b1f18', 'brown': '#5a3a24', 'dyed': '#7a4a26', 'grey': '#8e8b88'}
-JEANS = {'mid': '#46638f', 'dark': '#2b3c5c', 'light': '#7f9cc0'}
+JEANS = {'mid': '#46638f', 'dark': '#2b3c5c', 'light': '#7f9cc0', 'stone': '#8fa8c8'}     # 1997: stone-washed denim
 
 
 def man(head, body, legs, feet, colors=None, note=''):
@@ -65,25 +65,25 @@ def woman(head, body, legs, feet, colors=None, note=''):
     return {'rig': 'women', 'parts': {'head': head, 'body': body, 'legs': legs, 'feet': feet}, 'colors': colors or {}, 'note': note}
 
 
-# 1997 campus fashion: jeans and white tees, checked shirts, navy windbreakers and hoodies, the Yonsei-blue cheer
-# jacket, long floral or beige dresses, cardigans, a professor in a grey suit, staff in work vests.
+# 1997 campus fashion: baggy stone-washed jeans and wide trousers, big tees and sweatshirts, checked shirts, navy hoodies,
+# the Yonsei-blue cheer jacket, long floral or beige dresses, cardigans, a professor in a grey suit, staff in work vests.
 PEOPLE = {
     'man-tee': man('Casual_Hoodie', 'Casual_2', 'Casual_2', 'Casual_2',
-                   {'LightBrown': '#f1efe8', 'LightBlue': JEANS['mid'], 'Red_Dark': '#e8e6e0', 'feet:White': '#c9c6be',
+                   {'LightBrown': '#f1efe8', 'LightBlue': JEANS['stone'], 'Red_Dark': '#e8e6e0', 'feet:White': '#c9c6be',
                     'Skin': SKIN['b'], 'Skin_Darker': '#c99168', 'Hair': HAIR['black'], 'Eyebrows': HAIR['black']},
-                   'white tee, blue jeans, white sneakers'),
+                   'big white tee, baggy stone-washed jeans, white sneakers'),
     'man-check': man('Suit', 'Casual_2', 'Casual_2', 'Casual_2',
                      {'LightBrown': '#8a3a33', 'LightBlue': JEANS['dark'], 'Red_Dark': '#3a2c24', 'Skin': SKIN['c'],
                       'Hair': HAIR['black'], 'Eyebrows': HAIR['black']}, 'burgundy shirt, dark jeans, brown shoes'),
     'man-hoodie': man('Casual_Hoodie', 'Casual_Hoodie', 'Casual_2', 'Casual_Hoodie',
-                      {'Purple': '#23345e', 'LightBlue': '#b8a27a', 'feet:White': '#e8e6e0', 'Skin': SKIN['a'],
-                       'Hair': HAIR['dark'], 'Eyebrows': HAIR['dark']}, 'navy hoodie, khaki trousers'),
+                      {'Purple': '#23345e', 'LightBlue': '#a8946a', 'feet:White': '#e8e6e0', 'Skin': SKIN['a'],
+                       'Hair': HAIR['dark'], 'Eyebrows': HAIR['dark']}, 'oversized navy hoodie, wide khaki cargo trousers'),
     'man-cheer': man('Casual_2', 'Casual_Hoodie', 'Casual_2', 'Casual_2',
                      {'Purple': '#1d3fa0', 'LightBlue': JEANS['mid'], 'Red_Dark': '#f2f2ee', 'Skin': SKIN['c'],
                       'Skin_Darker': '#b9825c', 'Hair': HAIR['black'], 'Eyebrows': HAIR['black']}, 'Yonsei-blue cheer jacket, jeans'),
     'man-grey': man('Casual_Hoodie', 'Casual_Hoodie', 'Casual_2', 'Casual_Hoodie',
-                    {'Purple': '#8a8d92', 'LightBlue': JEANS['dark'], 'feet:Purple': '#2a2a2e', 'Skin': SKIN['b'],
-                     'Hair': HAIR['dyed'], 'Eyebrows': HAIR['dark']}, 'grey sweatshirt, jeans, brown-dyed hair (1997!)'),
+                    {'Purple': '#b3262e', 'LightBlue': JEANS['light'], 'feet:Purple': '#2a2a2e', 'Skin': SKIN['b'],
+                     'Hair': HAIR['dyed'], 'Eyebrows': HAIR['dark']}, 'big red sweatshirt, wide light jeans, brown-dyed hair (1997!)'),
     'man-blazer': man('Casual_2', 'Suit', 'Casual_2', 'Suit',
                       {'Suit': '#5e4634', 'White': '#dfe7ee', 'Tie': '#dfe7ee', 'LightBlue': JEANS['dark'], 'Black': '#3a2a1f',
                        'Skin': SKIN['a'], 'Skin_Darker': '#c99168', 'Hair': HAIR['black'], 'Eyebrows': HAIR['black']},
@@ -95,13 +95,13 @@ PEOPLE = {
                      {'Worker_Vest': '#3d4f6a', 'Worker_Yellow': '#c9c3b2', 'LightBrown': '#c9c3b2', 'Suit': '#3a3f47',
                       'Skin': SKIN['d'], 'Hair': HAIR['dark'], 'Eyebrows': HAIR['dark']}, 'campus staff: navy vest, grey trousers'),
     'woman-tee': woman('Casual', 'Casual', 'Casual', 'Casual',
-                       {'White': '#f4f1e8', 'Orange': JEANS['mid'], 'Grey': '#e8e6e0', 'Skin': SKIN['a'],
+                       {'White': '#f4f1e8', 'Orange': JEANS['stone'], 'Grey': '#e8e6e0', 'Skin': SKIN['a'],
                         'head:Hair_Blond': HAIR['black'], 'head:Hair_Brown': HAIR['black'], 'Brown': HAIR['black']},
-                       'white tee, jeans, long black hair'),
+                       'loose white tee, wide stone-washed jeans, long black hair'),
     'woman-pink': woman('Casual', 'Casual', 'Casual', 'Casual',
                         {'White': '#e7a7b6', 'Orange': '#cdb994', 'Grey': '#f0eee8', 'Skin': SKIN['b'],
                          'head:Hair_Blond': HAIR['dark'], 'head:Hair_Brown': HAIR['dark'], 'Brown': HAIR['dark']},
-                        'pink knit, beige trousers'),
+                        'pink knit, wide beige trousers'),
     'woman-dress': woman('Formal', 'Formal', 'Formal', 'Formal',
                          {'LimeGreen': '#e3d7bd', 'Gold': '#a8835a', 'feet:Red': '#4a3426', 'Skin': SKIN['a'],
                           'head:Red': HAIR['black'], 'Brown': HAIR['black']}, 'long beige dress, black hair'),
@@ -385,6 +385,104 @@ def mesh_name(rig, outfit, part):
     return MESH_NAME.get((rig, outfit, part)) or MESH_PREFIX.get(outfit, outfit) + PART_MESH[part]
 
 
+# ---------- 1997 cut: baggy trousers, oversized tops ----------
+# Late-90s Korean campus fashion: wide hip-hop jeans and roomy pleated trousers that pile up on the shoes, big
+# sweatshirts, hoodies and tees.  The source outfits are slim, so the clothing is loosened around each limb's own
+# centre line (skin, i.e. hands and faces, is never touched; long dresses are left alone).
+BAGGY = {'Casual_2': 1.5, 'Casual_Hoodie': 1.5, 'Casual': 1.45, 'Worker': 1.3, 'Suit': 1.2, 'Adventurer': 1.3}
+ROOMY = {'Casual_2': 1.13, 'Casual_Hoodie': 1.15, 'Casual': 1.1, 'Worker': 1.06, 'Suit': 1.03, 'Adventurer': 1.06, 'Formal': 1.0}
+
+
+def _smooth(a, b, x):
+    t = max(0.0, min(1.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+
+
+def _skin_verts(me):
+    skin = set()
+    for poly in me.polygons:
+        m = me.materials[poly.material_index] if poly.material_index < len(me.materials) else None
+        if m and m.name.startswith('Skin'):
+            skin.update(poly.vertices)
+    return skin
+
+
+def _centres(points, key_fn):
+    """Centroid of the points in each bin, averaged with the neighbouring bins (smooth centre lines)."""
+    acc = {}
+    for p in points:
+        k = key_fn(p)
+        a = acc.setdefault(k, [0.0, 0.0, 0.0, 0])
+        a[0] += p[0]; a[1] += p[1]; a[2] += p[2]; a[3] += 1
+    cen = {}
+    for k in acc:
+        sx = sy = sz = n = 0.0
+        for d in (-1, 0, 1):
+            kk = (k[0], k[1] + d)
+            if kk in acc:
+                a = acc[kk]
+                sx += a[0]; sy += a[1]; sz += a[2]; n += a[3]
+        cen[k] = (sx / n, sy / n, sz / n)
+    return cen
+
+
+def loosen(ob, part, outfit):
+    """Widen trousers (legs) or tops (body) of one outfit part, in world space."""
+    F = (BAGGY if part == 'legs' else ROOMY if part == 'body' else {}).get(outfit, 1.0)
+    if F <= 1.0:
+        return
+    me = ob.data
+    mw = ob.matrix_world.copy()
+    inv = mw.inverted()
+    skin = _skin_verts(me)
+    co = {v.index: mw @ v.co for v in me.vertices if v.index not in skin}
+    if not co:
+        return
+    zs = [c.z for c in co.values()]
+    zb, zt = min(zs), max(zs)
+    H = zt - zb
+    if part == 'legs':
+        bs = H / 45
+        key = lambda c: (1 if c.x >= 0 else -1, int((c.z - zb) / bs))
+        cen = _centres(co.values(), key)
+        for i, c in co.items():
+            h = (c.z - zb) / H
+            w = 1 - _smooth(0.62, 0.9, h)                  # the waistband and seat stay fitted
+            f = 1 + (F - 1) * w * (0.8 + 0.3 * (1 - h))      # widest at the hem
+            cx, cy, _ = cen[key(c)]
+            c.x = cx + (c.x - cx) * f
+            c.y = cy + (c.y - cy) * f
+            if h < 0.07:                                    # the hem breaks over the shoes
+                c.z -= 0.035 * H * (1 - h / 0.07)
+    else:
+        # torso about its vertical centre line; sleeves (T-pose: along x) about the arm's axis
+        xs = [abs(c.x) for c in co.values()]
+        span = max(xs)
+        torso_w = 0.27 * span
+        bt = H / 30
+        tkey = lambda c: (0, int((c.z - zb) / bt))
+        ba = span / 40
+        akey = lambda c: (1 if c.x >= 0 else -1, int(abs(c.x) / ba))
+        tcen = _centres([c for c in co.values() if abs(c.x) < torso_w], tkey)
+        acen = _centres([c for c in co.values() if abs(c.x) >= torso_w * 0.8], akey)
+        for i, c in co.items():
+            a = _smooth(torso_w * 0.8, torso_w * 1.25, abs(c.x))     # 0 torso .. 1 sleeve
+            h = (c.z - zb) / H
+            if a < 1 and tkey(c) in tcen:
+                tx, ty, _ = tcen[tkey(c)]
+                ft = 1 + (F - 1) * (1 - a) * (0.6 + 0.6 * (1 - h))    # roomier toward the hem
+                c.x = tx + (c.x - tx) * ft if abs(c.x) < torso_w else c.x
+                c.y = ty + (c.y - ty) * ft
+            if a > 0 and akey(c) in acen:
+                _, ay, az = acen[akey(c)]
+                fa = 1 + (F - 1) * 1.2 * a
+                c.y = ay + (c.y - ay) * fa
+                c.z = az + (c.z - az) * fa
+    for v in me.vertices:
+        if v.index in co:
+            v.co = inv @ co[v.index]
+
+
 def build_person(pid, spec):
     rig = spec['rig']
     s = HEIGHT[rig] / TOP[rig]
@@ -409,6 +507,7 @@ def build_person(pid, spec):
             if m.type == 'ARMATURE':
                 m.object = arm
         recolour(ob, part, spec['colors'])
+        loosen(ob, part, outfit)
         ob.name = f'{pid}-{part}'
         parts.append(ob)
     keep = set(parts) | {arm}
