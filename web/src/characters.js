@@ -3,6 +3,7 @@
 // cross-faded clips, and walk/run cycles whose playback speed follows the ground speed (no foot sliding).
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadGLB } from './world.js';
 
 export const PEOPLE = {
@@ -25,6 +26,62 @@ export const STUDENTS = ['man-tee', 'man-check', 'man-cheer', 'man-hoodie', 'man
   'woman-tee', 'woman-pink', 'woman-dress', 'woman-dress-blue', 'woman-cardigan'];
 export const HEROES = ['man-tee', 'man-cheer', 'man-check', 'woman-tee', 'woman-dress', 'woman-cardigan'];
 
+// Every part of a person (skin, clothes, hair, eyes ...) is a flat colour, so one vertex-coloured material serves
+// everyone and each person is a single SkinnedMesh: one draw call (and one in the shadow pass) instead of 6-10.
+// The per-part roughness (hair is glossier) rides along as a vertex attribute.
+const PERSON_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, envMapIntensity: 0.8 });
+PERSON_MAT.name = 'person';
+PERSON_MAT.onBeforeCompile = (sh) => {
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute float rough;\nvarying float vRough;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRough = rough;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying float vRough;')
+    .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vRough;');
+};
+
+// The bounds the frustum (and shadow frustum) test uses: the rest pose sphere, grown to hold swinging arms,
+// strides, gestures and the seated pose.
+const POSE_SLACK = 1.35;
+
+function mergeParts(root) {
+  const parts = [];
+  root.traverse((o) => { if (o.isSkinnedMesh) parts.push(o); });
+  if (!parts.length) return;
+  const first = parts[0];
+  const geos = parts.map((m) => {
+    const src = m.geometry, n = src.attributes.position.count;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', src.attributes.position);
+    g.setAttribute('normal', src.attributes.normal);
+    // the parts may store joints / weights in different array types: unify them so they merge
+    const si = src.attributes.skinIndex, sw = src.attributes.skinWeight;
+    const idx = new Uint16Array(n * 4), wt = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      for (let k = 0; k < 4; k++) { idx[i * 4 + k] = si.getComponent(i, k); wt[i * 4 + k] = sw.getComponent(i, k); }
+    }
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
+    const c = m.material.color, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('rough', new THREE.Float32BufferAttribute(new Float32Array(n).fill(/Hair/.test(m.material.name) ? 0.55 : 0.85), 1));
+    g.setIndex(src.index ? Array.from(src.index.array) : Array.from({ length: n }, (_, i) => i));
+    return g;
+  });
+  const merged = mergeGeometries(geos, false);
+  if (!merged) { console.warn('could not merge person parts', root.name); return; }
+  const mesh = new THREE.SkinnedMesh(merged, PERSON_MAT);
+  mesh.name = first.name;
+  mesh.position.copy(first.position); mesh.quaternion.copy(first.quaternion); mesh.scale.copy(first.scale);
+  first.parent.add(mesh);
+  mesh.bind(first.skeleton, first.bindMatrix);
+  merged.computeBoundingSphere();
+  mesh.boundingSphere = merged.boundingSphere.clone();
+  mesh.boundingSphere.radius *= POSE_SLACK;
+  for (const p of parts) { p.parent.remove(p); p.geometry.dispose(); }
+}
+
 export class Cast {
   constructor() { this.models = {}; this.rigs = {}; }
 
@@ -39,13 +96,8 @@ export class Cast {
     await Promise.all(ids.map(async (id) => {
       const g = await loadGLB(base + id + '.glb');
       let rig = 'rig-umc';
-      g.scene.traverse((o) => {
-        if (o.userData && typeof o.userData.rig === 'string') rig = o.userData.rig;
-        if (o.isMesh) {
-          const mats = Array.isArray(o.material) ? o.material : [o.material];
-          for (const m of mats) { m.roughness = /Hair/.test(m.name) ? 0.55 : 0.85; m.metalness = 0; m.envMapIntensity = 0.8; }
-        }
-      });
+      g.scene.traverse((o) => { if (o.userData && typeof o.userData.rig === 'string') rig = o.userData.rig; });
+      mergeParts(g.scene);
       this.models[id] = { scene: g.scene, rig };
       onEach?.();
     }));
@@ -55,9 +107,8 @@ export class Cast {
     const src = this.models[id];
     const holder = new THREE.Group();
     const root = skeletonClone(src.scene);
-    root.traverse((o) => {
-      if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
-    });
+    // frustum culled by the posed bounds above (off-screen people cost nothing, in the shadow pass too)
+    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     holder.add(root);
     const rig = this.rigs[src.rig];
     const mixer = new THREE.AnimationMixer(root);

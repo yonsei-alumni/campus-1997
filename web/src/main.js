@@ -13,6 +13,7 @@ import { Post } from './post.js';
 import { Path, makeBanners, Crowd, Traffic, CAR_COLORS } from './life.js';
 import { Cast, PEOPLE, STUDENTS, HEROES, portraits } from './characters.js';
 import { BirdsEye } from './birdseye.js';
+import { SunShadows } from './shadows.js';
 import { $, MOBILE, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
 const canvas = $('#view');
@@ -81,6 +82,8 @@ async function main() {
   sun.shadow.bias = -0.0002;
   sun.shadow.normalBias = 0.05;
   scene.add(sun, sun.target);
+  // static casters cached, only people and cars redrawn each frame (src/shadows.js)
+  const shadows = new SunShadows(renderer, scene, sun, sunDir);
   scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x5a6a48, 0.35));
 
   const sky = makeSky(skyMeta, fogColor.clone().convertSRGBToLinear());
@@ -232,6 +235,7 @@ async function main() {
   const groups = [[-40, -45], [-36, -70], [3, -58], [-2, -92], [-96, -400], [58, 200], [-46, -26], [12, -30], [-20, 30], [110, 150], [-88, -186]]
     .map(([x, y]) => [x, y, groundAt(x, y)]);
   const crowd = new Crowd(scene, cast, [...STUDENTS, ...STUDENTS, 'man-professor', 'man-staff', 'woman-staff'], paths, groups, MOBILE ? 40 : 110);
+  for (const p of crowd.people) shadows.addDynamic(p.a.holder);
   const lanes = [];
   // one lane each way on the 1997 two-lane road (right-hand traffic)
   for (const off of [R.median + R.lane * 0.5]) {
@@ -239,12 +243,14 @@ async function main() {
     lanes.push(new Path(center.offset(off).reverse(), heightFn));              // southbound
   }
   const traffic = new Traffic(scene, { sedan: P.car_sedan, sedan2: P.car_sedan2, hatch: P.car_hatch, taxi: P.car_taxi, van: P.car_van, bus: P.car_bus }, lanes, 14, cast, STUDENTS.concat(['man-professor', 'man-staff', 'woman-staff']));
+  for (const c of traffic.cars) shadows.addDynamic(c.root, c.len / 2 + 1.5);
 
   // ---------------------------------------------------------------- player / UI / post
   let heroId = safeGet('y97-hero');
   if (!HEROES.includes(heroId)) heroId = HEROES[0];
   const hero = cast.make(heroId);
   scene.add(hero.holder);
+  shadows.addDynamic(hero.holder);
   const player = new Player(camera, canvas, colliders, walkables, hfNear, hero);
   player.teleport(campus.spawn.pos[0], campus.spawn.pos[1], campus.spawn.yaw);
   const post = new Post(renderer, scene, camera);
@@ -259,7 +265,7 @@ async function main() {
     heroId = id;
     safeSet('y97-hero', id);
     pickEl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
-    if (player.actor.id !== id) { const a = cast.make(id); scene.add(a.holder); player.setActor(a); }
+    if (player.actor.id !== id) { const a = cast.make(id); scene.add(a.holder); shadows.addDynamic(a.holder); player.setActor(a); }
   };
   for (const id of HEROES) {
     const b = document.createElement('button');
@@ -282,8 +288,9 @@ async function main() {
     seasonButtons(v);
     $('#datestamp').textContent = SEASONS[v].date;
     bird.labels({ seasonLabel: SEASONS[v].short });
-    // impostor textures are rendered from the real trees -> refresh after textures load
-    texturesReady().then(() => forest.renderImpostors(renderer));
+    // impostor textures and the cached tree shadows come from the leaf textures -> refresh after they load
+    shadows.invalidate();
+    texturesReady().then(() => { forest.renderImpostors(renderer); shadows.invalidate(); });
     ui.toast(SEASONS[v].label);
   };
   $('#datestamp').textContent = SEASONS[season].date;
@@ -318,7 +325,7 @@ async function main() {
   const setFilm = (v) => { $('#opt-film').checked = v; post.setFilm(v); document.body.classList.toggle('film', v); bird.labels({ filmOn: v }); };
   const toggleFilm = () => setFilm(!$('#opt-film').checked);
   $('#opt-film').addEventListener('change', (e) => setFilm(e.target.checked));
-  $('#opt-hq').addEventListener('change', (e) => { post.setHQ(e.target.checked); sun.shadow.mapSize.set(e.target.checked ? 4096 : 2048, e.target.checked ? 4096 : 2048); sun.shadow.map?.dispose(); sun.shadow.map = null; });
+  $('#opt-hq').addEventListener('change', (e) => { post.setHQ(e.target.checked); sun.shadow.mapSize.set(e.target.checked ? 4096 : 2048, e.target.checked ? 4096 : 2048); sun.shadow.map?.dispose(); sun.shadow.map = null; shadows.invalidate(); });
   const openNearby = () => {
     if (ui.memoryOpen) { ui.closeMemory(); return; }
     const l = ui.nearestLandmark(player.x, player.y);
@@ -374,12 +381,6 @@ async function main() {
       else if (what === 'season') setSeason(SEASON_ORDER[(SEASON_ORDER.indexOf(season) + 1) % 3]);
     },
   });
-  const setShadowSpan = (span) => {
-    if (sun.shadow.camera.right === span) return;
-    Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span });
-    sun.shadow.camera.updateProjectionMatrix();
-    texel = (span * 2) / sun.shadow.mapSize.x;
-  };
   const enterBird = () => {
     if (bird.active) return;
     if (ui.memoryOpen) ui.closeMemory();
@@ -404,7 +405,6 @@ async function main() {
     if (ui.memoryOpen) ui.closeMemory();
     bird.exit();
     forest.nearDist = 230;
-    setShadowSpan(SH);
     if (started) {
       // swoop back down behind the walker from where the tour camera is now
       player.cam.pos.copy(camera.position);
@@ -455,7 +455,6 @@ async function main() {
   // ---------------------------------------------------------------- loop
   const clock = new THREE.Clock();
   let tAcc = 0, lastPlace = 0;
-  let texel = (SH * 2) / 4096;
   const onRoad = (x, y) => {
     // distance to 백양로 centre line
     let best = 1e9;
@@ -477,11 +476,11 @@ async function main() {
       traffic.movers(player.x, player.y, player.movers);
       player.update(dt);
     }
+    let span = SH;
     if (bird.active) {
       bird.update(dt, player);
       // wider shadows and more full-detail trees the higher up the view is
-      const span = bird.cur.dist > 260 ? 340 : bird.cur.dist > 90 ? 220 : SH;
-      setShadowSpan(span);
+      span = bird.cur.dist > 260 ? 340 : bird.cur.dist > 90 ? 220 : SH;
       forest.nearDist = bird.cur.dist > 150 ? 330 : 230;
     }
     // what the shadows, tree LOD and crowd culling centre on: the camera, or the ground point below a bird's-eye view
@@ -493,15 +492,12 @@ async function main() {
       camera.position.set(p.x - d.y * 4, center.h(s) + 9 + Math.sin(tAcc * 0.2) * 2, -(p.y + d.x * 4));
       camera.lookAt(p.x + d.x * 40, center.h(s + 40) + 6, -(p.y + d.y * 40));
     }
-    // sun & shadow frustum follow the camera (snapped to shadow texels)
-    const fx = focus.x, fz = focus.z;
-    const cx = Math.round(fx / texel) * texel, cz = Math.round(fz / texel) * texel;
-    sun.target.position.set(cx, bird.active ? focus.y : camera.position.y - 10, cz);
-    sun.position.copy(sun.target.position).addScaledVector(sunDir, 420);
     sky.position.copy(camera.position);
     forest.update(focus);
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
     traffic.update(dt, started ? player : NOBODY);
+    // the shadow frustum follows the view in texel-snapped steps; people and cars are redrawn into it every frame
+    shadows.update(focus, bird.active ? focus.y : camera.position.y - 10, span);
     if (bird.active) {
       ui.drawMinimap(bird.cur.x, bird.cur.y, bird.mapYaw);
       if (tAcc - lastPlace > 0.25) {
@@ -543,7 +539,7 @@ async function main() {
       renderer.setAnimationLoop(frame);
     },
   };
-  window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird,
+  window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows,
     startWalk, enterBird, leaveBird, record };
 }
 
