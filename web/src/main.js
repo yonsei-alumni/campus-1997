@@ -174,7 +174,7 @@ async function main() {
   for (const k in shrubKits) { shrubKits[k].commit(); shrubKits[k].addTo(scene); }
 
   // ---------------------------------------------------------------- props
-  const propNames = ['lamp_double', 'lamp_arm', 'flag_white', 'planter', 'stone_marker', 'sign_board', 'motorbike', 'car_sedan', 'car_sedan2', 'car_hatch', 'car_taxi', 'car_van', 'car_bus', 'payphone', 'bench', 'trashcan'];
+  const propNames = ['lamp_double', 'lamp_arm', 'flag_white', 'planter', 'stone_marker', 'sign_board', 'motorbike', 'car_sedan', 'car_sedan2', 'car_hatch', 'car_tico', 'car_taxi', 'car_van', 'payphone', 'bench', 'trashcan'];
   const P = {};
   await Promise.all(propNames.map(async (n) => {
     const g = await load(`props/${n}.glb`, '공중전화를 놓는 중…');
@@ -204,7 +204,7 @@ async function main() {
     // parked cars
     const carKits = {};
     const PARKED_COLORS = [...CAR_COLORS, '#8c8f94'];
-    const MODEL = (k, i) => (k === 'sedan' ? ['sedan', 'sedan2', 'sedan', 'van'][i % 4] : k);
+    const MODEL = (k, i) => (k === 'sedan' ? ['sedan', 'sedan2', 'sedan', 'van'][i % 4] : k === 'hatch' ? ['hatch', 'tico'][i % 2] : k);
     const carCount = countBy(campus.cars, (c, i) => MODEL(c[0], i));
     for (const [k, n] of Object.entries(carCount)) { carKits[k] = new InstancedKit(P['car_' + k].scene, lib, n, { colors: true }); }
     campus.cars.forEach(([k0, x, y, ang, ci], i) => {
@@ -254,7 +254,7 @@ async function main() {
     lanes.push(new Path(center.offset(-off), heightFn));                       // northbound
     lanes.push(new Path(center.offset(off).reverse(), heightFn));              // southbound
   }
-  const traffic = new Traffic(scene, { sedan: P.car_sedan, sedan2: P.car_sedan2, hatch: P.car_hatch, taxi: P.car_taxi, van: P.car_van, bus: P.car_bus }, lanes, 14, cast, STUDENTS.concat(['man-professor', 'man-staff', 'woman-staff']));
+  const traffic = new Traffic(scene, { sedan: P.car_sedan, sedan2: P.car_sedan2, hatch: P.car_hatch, tico: P.car_tico, taxi: P.car_taxi, van: P.car_van }, lanes, 14, cast, STUDENTS.concat(['man-professor', 'man-staff', 'woman-staff']));
   for (const c of traffic.cars) shadows.addDynamic(c.root, c.len / 2 + 1.5);
 
   // ---------------------------------------------------------------- player / UI / post

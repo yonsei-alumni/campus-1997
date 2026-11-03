@@ -99,9 +99,9 @@ if want('props'):
         stats[name] = tri_count([ob])
         export_glb([ob], os.path.join(OUT, 'props', f'{name}.glb'))
     import cars
-    for k in ('sedan', 'sedan2', 'hatch', 'taxi', 'van', 'bus'):
+    for k in ('sedan', 'sedan2', 'hatch', 'tico', 'taxi', 'van'):
         reset_scene()
-        mb, wheels = cars.build_car(k) if k != 'bus' else cars.build_bus()
+        mb, wheels = cars.build_car(k)
         body = mb.build()
         body.name = 'body'
         try:

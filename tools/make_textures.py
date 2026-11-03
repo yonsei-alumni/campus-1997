@@ -326,7 +326,7 @@ print('signs ok')
 
 
 # ---------------------------------------------------------------- pre-2004 Korean licence plates + taxi sign
-# 2x2 atlas (512x256 each): [0] green private, [1] green private, [2] yellow commercial (taxi/bus), [3] taxi roof sign
+# 2x2 atlas (512x256 each): [0] green private, [1] green private, [2] yellow commercial (taxi), [3] taxi roof sign
 PW, PH = 512, 256
 img = Image.new('RGB', (PW * 2, PH * 2), (0, 0, 0))
 d = ImageDraw.Draw(img)
@@ -351,15 +351,4 @@ w = d.textlength('개인', font=f)
 d.text((x0 + PW / 2 - w / 2, y0 + PH / 2 + 4), '개인', font=f, fill=(25, 25, 25), anchor='lm')
 img.save(os.path.join(OUT, 'plates.png'), optimize=True)
 
-# bus destination sign (amber LED look on black)
-img = Image.new('RGB', (1024, 128), (12, 12, 12))
-d = ImageDraw.Draw(img)
-f = font(FONT_B, 84)
-txt = '7024  연세대 · 신촌'
-w = d.textlength(txt, font=f)
-d.text((512 - w / 2, 68), txt, font=f, fill=(255, 170, 40), anchor='lm')
-arr = np.array(img).astype(np.float32)
-mask = (np.indices(arr.shape[:2]).sum(0) % 3 == 0)[..., None]
-arr = arr * (0.75 + 0.25 * mask)
-Image.fromarray(arr.astype(np.uint8)).save(os.path.join(OUT, 'bus_sign.png'))
 print('plates ok')

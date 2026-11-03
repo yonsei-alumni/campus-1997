@@ -270,10 +270,12 @@ function playGesture(a, name) {
 // ---------------------------------------------------------------- traffic
 // Cars from blender/cars.py: wheels spin with the distance travelled, brake lights come on when slowing,
 // a seated driver (Quaternius 'sit' clip) behind the wheel; they keep their distance and stop for you.
-// 1997 paint: lots of white, silver and dark navy, a few burgundy / green / gold
-export const CAR_COLORS = ['#eeeeea', '#f2f1ec', '#b9bdc3', '#a9aeb5', '#1b2333', '#2a2d33', '#6e1b1f', '#244a3a', '#b59a6a', '#2c4a78'];
-const WEIGHTS = { sedan: 4, sedan2: 3, hatch: 3, taxi: 3, van: 2, bus: 1 };
-const DRIVER = { sedan: [-0.06, 0.40], sedan2: [-0.03, 0.38], hatch: [-0.25, 0.36], taxi: [-0.06, 0.40], van: [0.92, 0.38], bus: [4.35, 0.75] };
+// 1997 paint: lots of white, silver and dark navy, the mid-90s dark green (진녹색), a few wine / gunmetal / gold
+export const CAR_COLORS = ['#eeeeea', '#f2f1ec', '#b9bdc3', '#a9aeb5', '#1b2333', '#2a2d33', '#6e1b1f', '#244a3a', '#1d3b30', '#3a3f45', '#b59a6a', '#2c4a78'];
+// sedan 쏘나타Ⅱ type, sedan2 프린스 type, hatch 프라이드 type, tico 티코 type, van 그레이스 type (blender/cars.py)
+const WEIGHTS = { sedan: 4, sedan2: 3, hatch: 3, tico: 2, taxi: 3, van: 2 };
+// driver's hips in the car frame (blender/cars.py driver_seat)
+const DRIVER = { sedan: [-0.05, 0.38], sedan2: [-0.03, 0.38], hatch: [-0.25, 0.36], tico: [-0.30, 0.31], taxi: [-0.05, 0.38], van: [0.92, 0.38] };
 
 export class Traffic {
   constructor(scene, carGltfs, lanes, n = 12, cast = null, driverIds = [], rndSeed = 9) {
@@ -281,7 +283,7 @@ export class Traffic {
     const rnd = mulberry(rndSeed);
     const bag = Object.entries(WEIGHTS).filter(([k]) => carGltfs[k]).flatMap(([k, w]) => Array(w).fill(k));
     for (let i = 0; i < n; i++) {
-      const kind = i === 0 && carGltfs.bus ? 'bus' : bag[Math.floor(rnd() * bag.length)];
+      const kind = bag[Math.floor(rnd() * bag.length)];
       const root = carGltfs[kind].scene.clone(true);
       const col = new THREE.Color(kind === 'taxi' ? '#ecebe4' : CAR_COLORS[Math.floor(rnd() * CAR_COLORS.length)]);
       const brake = [];
@@ -302,14 +304,14 @@ export class Traffic {
         play(driver, 'sit', { fade: 0 });
         const [dx, dy] = DRIVER[kind];
         // car frame: +X forward, Blender +Y (left, the driver's side) is three -Z; the seated hips sit ~0.29 above the feet
-        driver.holder.position.set(dx, kind === 'bus' ? 0.95 : 0.36, -dy);
+        driver.holder.position.set(dx, 0.36, -dy);
         driver.holder.rotation.y = Math.PI / 2;
         root.add(driver.holder);
       }
       scene.add(root);
       const lane = lanes[i % lanes.length];
-      const radius = kind === 'bus' ? 0.5 : 0.3;
-      this.cars.push({ root, lane, s: (i / n) * lane.length * 2 % lane.length + rnd() * 20, speed: kind === 'bus' ? 7 : 8 + rnd() * 4,
+      const radius = 0.3;
+      this.cars.push({ root, lane, s: (i / n) * lane.length * 2 % lane.length + rnd() * 20, speed: 8 + rnd() * 4,
         v: 8, len, wheels, brake, radius, driver, kind });
     }
   }
@@ -352,7 +354,7 @@ export class Traffic {
       const n = Math.max(1, Math.round(c.len / 1.6));
       for (let k = 0; k < n; k++) {
         const t = (k / Math.max(1, n - 1) - 0.5) * (c.len - 1.6);
-        out.push({ x: x + fx * t, y: y + fy * t, r: c.kind === 'bus' ? 1.3 : 0.9 });
+        out.push({ x: x + fx * t, y: y + fy * t, r: 0.9 });
       }
     }
     return out;
