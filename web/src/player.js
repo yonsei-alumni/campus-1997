@@ -1,12 +1,14 @@
 // Third-person walker in the manner of sim-office (office/engine/movement.js + camera.js):
 // ↑↓ / W S walk forward and back, ← → / A D turn, Shift runs; the camera follows behind and above.
 // Mouse drag swings the camera round (it settles back behind you when you walk), the wheel zooms.
+// The touch stick (touch.js) is camera-relative instead: push it the way you want to go on screen and the
+// walker turns that way; the camera keeps its direction and only drifts back behind you while you head away from it.
 // Collisions: building footprints and circles (trees, lamps, statues, people); ground follows the
 // terrain, the 백양로 curbs and the amphitheater terraces through a BVH raycast.
 import * as THREE from 'three';
 import { computeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 import { locomotion } from './characters.js';
-import { clamp, closestOnSegment } from './util.js';
+import { clamp, closestOnSegment, wrapAngle } from './util.js';
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
@@ -129,7 +131,7 @@ export class Player {
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
     dom.addEventListener('pointerdown', (e) => {
-      if (!this.enabled || e.target !== dom) return;
+      if (!this.enabled || e.target !== dom || e.pointerType === 'touch') return;   // touch: touch.js
       this.cam.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
       dom.setPointerCapture(e.pointerId);
     });
@@ -186,13 +188,27 @@ export class Player {
     if (k.has('ArrowDown') || k.has('KeyS')) fwd -= 1;
     if (k.has('ArrowLeft') || k.has('KeyA')) turn += 1;
     if (k.has('ArrowRight') || k.has('KeyD')) turn -= 1;
-    if (this.stick.lengthSq() > 0.01) { fwd += -this.stick.y; turn += -this.stick.x * 0.9; }
-    const run = k.has('ShiftLeft') || k.has('ShiftRight') || this.stick.length() > 0.95;
+    const run = k.has('ShiftLeft') || k.has('ShiftRight');
+    const m = this.stick.length();
+    if (!fwd && !turn && m > 0.15) {
+      // stick: the screen direction pushed (0 = straight ahead, + = left), relative to where the camera looks
+      return { fwd: 0, turn: 0, run: m > 0.9, stick: { rel: Math.atan2(-this.stick.x, -this.stick.y), m: Math.min(1, (m - 0.15) / 0.75) } };
+    }
     return { fwd: clamp(fwd, -1, 1), turn: clamp(turn, -1, 1), run };
   }
 
   update(dt) {
     const inp = this.enabled ? this.input() : { fwd: 0, turn: 0, run: false };
+    if (inp.stick) {
+      // turn quickly towards the pushed direction; the camera keeps its own direction meanwhile
+      const c = this.cam, want = this.heading + c.orbit + inp.stick.rel;
+      const d = wrapAngle(want - this.heading) * Math.min(1, dt * 9);
+      this.heading += d;
+      c.orbit = wrapAngle(c.orbit - d);
+      inp.fwd = inp.stick.m;
+      // drift back behind the walker only while walking away from the camera (never while coming towards it)
+      inp.recenter = 1.3 * Math.max(0, Math.cos(inp.stick.rel));
+    }
     this.heading += inp.turn * TURN * dt;
     const target = inp.fwd * (inp.run && inp.fwd > 0 ? RUN : WALK * (inp.fwd < 0 ? 0.6 : 1));
     this.speed += (target - this.speed) * Math.min(1, dt * 10);
@@ -218,7 +234,10 @@ export class Player {
   updateCamera(dt, inp = { fwd: 0, turn: 0 }) {
     const c = this.cam, p = this.pos;
     // walking: the camera swings back behind you
-    if (!c.drag && (inp.fwd || inp.turn)) c.orbit *= Math.exp(-dt * 1.6);
+    if (!c.drag && (inp.fwd || inp.turn)) {
+      c.orbit = wrapAngle(c.orbit);
+      c.orbit *= Math.exp(-dt * (inp.recenter ?? 1.6));
+    }
     const a = this.heading + c.orbit;
     const back = c.dist * Math.cos(0.36 + c.lift * 0.5), high = 1.25 + c.dist * Math.sin(0.36 + c.lift * 0.5);
     const want = this._want.set(p.x - Math.sin(a) * back, p.y + high, p.z - Math.cos(a) * back);

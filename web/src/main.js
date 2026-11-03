@@ -14,6 +14,7 @@ import { Path, makeBanners, Crowd, Traffic, CAR_COLORS } from './life.js';
 import { Cast, PEOPLE, STUDENTS, HEROES, portraits } from './characters.js';
 import { BirdsEye } from './birdseye.js';
 import { SunShadows } from './shadows.js';
+import { TouchControls } from './touch.js';
 import { $, MOBILE, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
 const canvas = $('#view');
@@ -318,7 +319,8 @@ async function main() {
     $('#hud').hidden = false;
     if (MOBILE) $('#touch').hidden = false;
     resume();
-    ui.toast(where ? `W·S로 걷고 A·D로 방향을 바꿔요 · ${where}에서 출발해요` : 'W·S로 걷고 A·D로 방향을 바꿔요 · 정문에서 백양로를 따라 걸어 보세요', 4200);
+    const how = MOBILE ? '화면 왼쪽을 누른 채 밀어서 걸어요' : '↑↓(W·S)로 걷고 ←→(A·D)로 방향을 바꿔요';
+    ui.toast(`${how} · ${where ? `${where}에서 출발해요` : '정문에서 백양로를 따라 걸어 보세요'}`, 5000);
   };
   $('#start').addEventListener('click', () => startWalk());
   $('#resume').addEventListener('click', resume);
@@ -388,6 +390,7 @@ async function main() {
     paused = false;
     $('#pause').hidden = true;
     player.enabled = false;
+    touch.reset();
     bird.labels({ seasonLabel: SEASONS[season].short, filmOn: $('#opt-film').checked });
     if (started) {
       const d = camera.getWorldDirection(new THREE.Vector3());
@@ -398,7 +401,8 @@ async function main() {
       bird.enter({ player: null });
     }
     ui.setPrompt(null);
-    ui.toast('캠퍼스 둘러보기 · W A S D로 날고 핀을 누르면 그곳으로 가요', 3200);
+    ui.toast(MOBILE ? '캠퍼스 둘러보기 · 한 손가락으로 밀고 두 손가락으로 확대·회전, 이름표를 누르면 그곳으로 가요'
+      : '캠퍼스 둘러보기 · 방향키(WASD)로 날고 이름표를 누르면 그곳으로 가요', 4000);
   };
   const leaveBird = () => {
     if (!bird.active) return;
@@ -442,8 +446,13 @@ async function main() {
       else if (paused) resume(); else pause();
     }
   });
-  setupTouch(player, openNearby, toggleMap);
-  $('#t-b').addEventListener('click', toggleBird);
+  // HUD buttons (the only way in on a phone: no keys there)
+  const touch = new TouchControls(player, canvas, $('#stick'));
+  const tap = (sel, fn) => $(sel).addEventListener('click', (e) => { e.stopPropagation(); e.currentTarget.blur(); fn(); });
+  tap('#prompt', openNearby);
+  tap('#minimap', toggleMap);
+  tap('#mapbtn', toggleMap);
+  tap('#menubtn', pause);
 
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
@@ -510,7 +519,7 @@ async function main() {
         lastPlace = tAcc;
         const l = ui.nearestLandmark(player.x, player.y);
         ui.setPlace(ui.placeName(player.x, player.y, onRoad(player.x, player.y)));
-        ui.setPrompt(l && !ui.memoryOpen ? `${l.name} · 그때의 추억 보기` : null);
+        ui.setPrompt(l && !ui.memoryOpen ? `${l.name} · ${MOBILE ? '눌러서 ' : ''}그때의 추억 보기` : null);
       }
     }
     post.draw(tAcc);
@@ -601,24 +610,6 @@ function makeBoard(l, groundAt) {
   roof.position.set(0, 1.25, 0.15);
   board.add(roof);
   return g;
-}
-
-function setupTouch(player, onE, onM) {
-  if (!MOBILE) return;
-  const stick = $('#stick'), knob = stick.querySelector('div');
-  let sid = null, cx = 0, cy = 0;
-  stick.addEventListener('pointerdown', (e) => { sid = e.pointerId; const r = stick.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; stick.setPointerCapture(sid); });
-  stick.addEventListener('pointermove', (e) => {
-    if (e.pointerId !== sid) return;
-    const dx = Math.max(-50, Math.min(50, e.clientX - cx)), dy = Math.max(-50, Math.min(50, e.clientY - cy));
-    knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    player.stick.set(dx / 50, dy / 50);
-  });
-  const end = () => { sid = null; knob.style.transform = ''; player.stick.set(0, 0); };
-  stick.addEventListener('pointerup', end);
-  stick.addEventListener('pointercancel', end);
-  $('#t-e').addEventListener('click', onE);
-  $('#t-m').addEventListener('click', onM);
 }
 
 main().catch((e) => {

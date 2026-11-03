@@ -3,8 +3,10 @@ import * as THREE from 'three';
 
 export const $ = (s) => document.querySelector(s);
 
-// Phones / tablets: no shadow maps, smaller textures, fewer people, the touch stick.
-export const MOBILE = matchMedia('(pointer: coarse)').matches;
+// Phones / tablets: no shadow maps, smaller textures, fewer people, touch controls and touch help texts.
+// ?touch in the URL forces it (testing the phone layout on a desktop browser).
+export const MOBILE = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
+document.documentElement.classList.toggle('touch', MOBILE);
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));

@@ -10,13 +10,21 @@
   --hud-ink: #f4f1e8;
   --font: 'Noto Sans KR', system-ui, sans-serif;
   --title: 'Jua', 'Noto Sans KR', sans-serif;
+  /* notch / home-bar insets (viewport-fit=cover) */
+  --st: env(safe-area-inset-top, 0px);
+  --sr: env(safe-area-inset-right, 0px);
+  --sb: env(safe-area-inset-bottom, 0px);
+  --sl: env(safe-area-inset-left, 0px);
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #9fb6cc; color: var(--ink); font-family: var(--font); }
-#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #9fb6cc; color: var(--ink); font-family: var(--font); -webkit-tap-highlight-color: transparent; }
+#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#hud, #touch, #tourbar, #birdpins, #birdbar { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 [hidden] { display: none !important; }
-button { font-family: inherit; cursor: pointer; }
+button { font-family: inherit; cursor: pointer; touch-action: manipulation; }
+/* keyboard help on computers, touch help on phones and tablets (html.touch: util.js) */
+html.touch .pc-only, html:not(.touch) .touch-only { display: none !important; }
 
 /* ------------------------------------------------------------ intro */
 #intro { position: fixed; inset: 0; display: grid; place-items: center; z-index: 30; padding: 16px; }
@@ -62,18 +70,24 @@ h1 span { color: var(--ink); font-size: .72em; }
 .keys div { display: flex; gap: 6px; align-items: baseline; }
 .keys dt { font-weight: 800; white-space: nowrap; }
 .keys dd { margin: 0; color: #5c6572; }
+.keys-touch { margin: 14px 0 0; padding: 10px 12px 10px 28px; background: #f3efe2; border-radius: 10px; font-size: 13px; line-height: 1.6; color: #34404f; }
+.keys-touch b { color: var(--ink); }
 
 /* ------------------------------------------------------------ HUD */
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; color: var(--hud-ink); }
-#place { position: absolute; top: 16px; left: 16px; background: var(--hud-bg); padding: 8px 14px 9px; border-radius: 10px; backdrop-filter: blur(6px); }
+#place { position: absolute; top: calc(16px + var(--st)); left: calc(16px + var(--sl)); background: var(--hud-bg); padding: 8px 14px 9px; border-radius: 10px; backdrop-filter: blur(6px); }
 #place small, #stamps small { display: block; font-size: 11px; opacity: .7; }
 #place b { font-family: var(--title); font-weight: 400; font-size: 22px; }
-#minimap { position: absolute; top: 16px; right: 16px; width: 200px; height: 200px; border-radius: 50%; background: rgba(14,22,34,.5); box-shadow: 0 0 0 3px rgba(255,255,255,.75), 0 6px 20px rgba(0,0,0,.25); }
-#stamps { position: absolute; top: 228px; right: 16px; width: 200px; text-align: center; background: var(--hud-bg); border-radius: 10px; padding: 6px; }
+#minimap { position: absolute; top: calc(16px + var(--st)); right: calc(16px + var(--sr)); pointer-events: auto; cursor: pointer; width: 200px; height: 200px; border-radius: 50%; background: rgba(14,22,34,.5); box-shadow: 0 0 0 3px rgba(255,255,255,.75), 0 6px 20px rgba(0,0,0,.25); }
+#stamps { position: absolute; top: calc(228px + var(--st)); right: calc(16px + var(--sr)); width: 200px; text-align: center; background: var(--hud-bg); border-radius: 10px; padding: 6px; }
 #stamps b { font-family: var(--title); font-weight: 400; font-size: 18px; color: var(--yellow); }
-#prompt { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); background: var(--paper); color: var(--ink); padding: 10px 18px; border-radius: 999px; font-weight: 700; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+#prompt { position: absolute; left: 50%; bottom: calc(13% + var(--sb)); transform: translateX(-50%); background: var(--paper); color: var(--ink); padding: 10px 18px; border: 0; border-radius: 999px; font: 700 16px var(--font); white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.25); pointer-events: auto; cursor: pointer; }
+#prompt:hover { background: #fff; }
+html.touch #prompt { bottom: calc(200px + var(--sb)); padding: 13px 22px; font-size: 17px; background: var(--yellow); animation: nudge 1.6s ease-in-out infinite; }
+html.touch #prompt kbd { display: none; }
+@keyframes nudge { 50% { box-shadow: 0 6px 18px rgba(0,0,0,.25), 0 0 0 7px rgba(255, 231, 106, .45); } }
 #prompt kbd { display: inline-block; background: var(--ink); color: #fff; border-radius: 6px; padding: 1px 8px; margin-right: 6px; font-family: inherit; }
-#toast { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); background: var(--yellow); color: var(--ink); padding: 10px 20px; border-radius: 6px; font-family: var(--title); font-size: 20px; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+#toast { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); text-align: center; line-height: 1.35; background: var(--yellow); color: var(--ink); padding: 10px 20px; border-radius: 6px; font-family: var(--title); font-size: 20px; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
 #datestamp {
   position: absolute; right: 26px; bottom: 22px; display: none;
   font-family: 'Courier New', monospace; font-weight: 700; font-size: 26px; letter-spacing: 2px;
@@ -116,18 +130,23 @@ body.film #datestamp { display: block; }
 
 /* ------------------------------------------------------------ touch */
 #touch { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
-#stick { position: absolute; left: 24px; bottom: 24px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.18); border: 2px solid rgba(255,255,255,.5); pointer-events: auto; touch-action: none; }
-#stick div { position: absolute; left: 40px; top: 40px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.75); }
-#touch button { position: absolute; right: 24px; pointer-events: auto; border: 0; border-radius: 50%; width: 64px; height: 64px; background: rgba(255,255,255,.8); font-weight: 800; }
-#t-e { bottom: 110px; }
-#t-m { bottom: 30px; font-size: 13px; }
-#t-b { bottom: 190px; font-size: 13px; }
+/* the stick rests bottom-left as a hint; a touch anywhere on the left of the screen brings it under the thumb (touch.js) */
+#stick { position: absolute; left: calc(28px + var(--sl)); bottom: calc(36px + var(--sb)); width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.16); border: 2px solid rgba(255,255,255,.5); pointer-events: none; opacity: .7; transition: opacity .2s; }
+#stick.live { opacity: 1; transition: none; background: rgba(255,255,255,.22); }
+#stick div { position: absolute; left: 40px; top: 40px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.8); box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+#stick::after { content: '눌러서 밀면 걸어요'; position: absolute; left: 50%; top: 100%; margin-top: 6px; transform: translateX(-50%); white-space: nowrap;
+  font: 700 12px var(--font); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+#stick.used::after { display: none; }
 
 /* ------------------------------------------------------------ bird's-eye view */
-#birdbtn { position: absolute; top: 272px; right: 16px; width: 200px; pointer-events: auto; border: 0; border-radius: 10px; padding: 8px 10px;
-  background: var(--paper); color: var(--ink); font-family: var(--title); font-size: 17px; box-shadow: 0 4px 14px rgba(0,0,0,.25); cursor: pointer; }
-#birdbtn kbd { display: inline-block; background: var(--ink); color: #fff; border-radius: 5px; padding: 0 6px; font-family: inherit; font-size: 13px; margin-left: 4px; }
+#hudbtns { position: absolute; top: calc(272px + var(--st)); right: calc(16px + var(--sr)); width: 200px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#hudbtns button { pointer-events: auto; border: 0; border-radius: 10px; padding: 8px 6px; white-space: nowrap;
+  background: var(--paper); color: var(--ink); font-family: var(--title); font-size: 16px; box-shadow: 0 4px 14px rgba(0,0,0,.25); cursor: pointer; }
+#hudbtns #birdbtn { grid-column: 1 / -1; font-size: 17px; }
+#hudbtns kbd { display: inline-block; background: var(--ink); color: #fff; border-radius: 5px; padding: 0 5px; font-family: inherit; font-size: 12px; margin-left: 3px; }
+html.touch #hudbtns kbd { display: none; }
 body.birds #birdbtn { background: var(--yellow); }
+body.birds #mapbtn, body.birds #menubtn { display: none; }
 body.birds #prompt { display: none; }
 #tourbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; padding: 10px 14px calc(12px + env(safe-area-inset-bottom)); display: grid; gap: 6px; justify-items: center; pointer-events: none; }
 #tourbar .tour-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; background: rgba(14, 22, 34, .85); color: #fff; border-radius: 12px; padding: 7px 12px; pointer-events: auto; }
@@ -138,10 +157,11 @@ body.birds #prompt { display: none; }
 #tourbar .tour-keys, #tourbar .tour-touch { margin: 0; font-size: 12px; color: #fff; background: rgba(14, 22, 34, .7); border-radius: 10px; padding: 5px 12px; text-align: center; max-width: 980px; }
 #tourbar .tour-keys kbd { display: inline-block; background: #fff; color: var(--ink); border-radius: 4px; padding: 0 5px; margin: 0 1px; font: 700 11px var(--font); }
 #tourbar .tour-touch { display: none; }
-@media (pointer: coarse) { #tourbar .tour-keys { display: none; } #tourbar .tour-touch { display: block; } }
+html.touch #tourbar .tour-keys { display: none; }
+html.touch #tourbar .tour-touch { display: block; }
 body.birds #view { cursor: grab; touch-action: none; }
 body.birds #view.grabbing { cursor: grabbing; }
-body.birds #stamps, body.birds #touch button { display: none; }
+body.birds #stamps { display: none; }
 #tour-start { margin-top: 8px; width: 100%; border: 2px solid var(--ink); background: #fff; color: var(--ink); border-radius: 10px; padding: 10px; font-size: 16px; font-family: var(--title); cursor: pointer; }
 #tour-start:disabled { opacity: .45; cursor: progress; }
 #birdpins { position: fixed; inset: 0; z-index: 9; pointer-events: none; overflow: hidden; --pin-scale: 1; }
@@ -166,11 +186,29 @@ body.birds #stamps, body.birds #touch button { display: none; }
   .keys { grid-template-columns: repeat(2, 1fr); }
   #hero-pick { grid-template-columns: repeat(3, 1fr); }
   #minimap { width: 120px; height: 120px; }
-  #stamps { top: 146px; width: 120px; }
-  #birdbtn { top: 196px; width: 120px; font-size: 15px; }
-  #birdbtn kbd { display: none; }
+  #stamps { top: calc(146px + var(--st)); width: 120px; }
+  #hudbtns { top: calc(196px + var(--st)); width: 120px; }
+  #hudbtns button, #hudbtns #birdbtn { font-size: 15px; padding: 9px 4px; }
+  #hudbtns kbd { display: none; }
+  #prompt { font-size: 15px; }
   #birdbar { bottom: 150px; flex-wrap: wrap; justify-content: center; }
   #place b { font-size: 18px; }
   .intro-card { padding: 22px 18px; }
+}
+/* phones held sideways: little height, so a smaller minimap and the buttons beside it */
+@media (max-height: 500px) {
+  #minimap { top: calc(10px + var(--st)); width: 104px; height: 104px; }
+  #stamps { top: calc(10px + var(--st)); right: calc(128px + var(--sr)); width: auto; padding: 4px 10px; }
+  #stamps small { display: none; }
+  #hudbtns { top: calc(122px + var(--st)); width: 104px; gap: 5px; }
+  #hudbtns button, #hudbtns #birdbtn { font-size: 14px; padding: 7px 3px; }
+  #hudbtns kbd { display: none; }
+  #place { top: calc(10px + var(--st)); padding: 5px 12px 6px; }
+  #place b { font-size: 17px; }
+  #toast { top: 12%; font-size: 17px; }
+  html.touch #prompt { bottom: calc(13% + var(--sb)); }   /* wide screen: the button sits clear of the stick */
+  #stick { bottom: calc(24px + var(--sb)); width: 116px; height: 116px; }
+  #stick div { left: 33px; top: 33px; }
+  .intro-card { padding: 18px 20px; }
 }
 body.birds #stick { display: none; }
