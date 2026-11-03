@@ -14,7 +14,7 @@ const BOUNDS = { x0: -480, x1: 580, y0: -520, y1: 600 };
 const DIST = [6, 1400], PITCH = [0.04, 1.5];
 
 export class BirdsEye {
-  constructor({ camera, dom, landmarks, heightAt, surfaceAt, pickGround, onWalkHere, onMemory, onAction }) {
+  constructor({ camera, dom, landmarks, markers = [], heightAt, surfaceAt, pickGround, onWalkHere, onMemory, onAction }) {
     Object.assign(this, { camera, dom, heightAt, surfaceAt, pickGround, onWalkHere, onMemory, onAction });
     this.active = false;
     this.cur = { x: 0, y: -60, dist: 600, yaw: 0, pitch: 0.9, lift: 0 };    // lift: aim above the ground (statues)
@@ -37,6 +37,15 @@ export class BirdsEye {
       el.addEventListener('click', (e) => { e.stopPropagation(); this.select(l); });
       this.layer.appendChild(el);
       return { l, el, h: null, prio: l.id === 'events' ? 99 : i };
+    });
+    // smaller name tags over the other buildings (campus.markers), placed after the landmarks so they give way
+    markers.forEach((l, i) => {
+      const el = document.createElement('button');
+      el.className = 'pin bld';
+      el.innerHTML = `<span>${l.name}</span>`;
+      el.addEventListener('click', (e) => { e.stopPropagation(); this.select(l); });
+      this.layer.appendChild(el);
+      this.pins.push({ l, el, h: l.top + 3, prio: 100 + i, bld: true });
     });
     this.me = document.createElement('div');
     this.me.className = 'pin me';
@@ -290,12 +299,12 @@ export class BirdsEye {
     for (const p of order) {
       if (p.h === null) p.h = this.heightAt(p.l.pos[0], p.l.pos[1]) + 24;
       // at street level only nearby places get a pin
-      const far = Math.hypot(p.l.pos[0] - cam.x, p.l.pos[1] + cam.z) > Math.max(260, this.cur.dist * 3);
+      const far = Math.hypot(p.l.pos[0] - cam.x, p.l.pos[1] + cam.z) > (p.bld ? Math.max(170, this.cur.dist * 1.8) : Math.max(260, this.cur.dist * 3));
       if (far && p.l !== this.selected) { p.el.style.display = 'none'; continue; }
       place(p.el, p.l.pos[0], p.l.pos[1], p.h);
       if (p.el.style.display === 'none') continue;
       const sx = ((v.x + 1) / 2) * W, sy = ((1 - v.y) / 2) * H;
-      const w = (p.l.name.length * 15 + 26) * scale, h = 30 * scale;
+      const w = (p.l.name.length * (p.bld ? 12 : 15) + 22) * scale, h = (p.bld ? 24 : 30) * scale;
       const box = [sx - w / 2, sy - 10 - h, sx + w / 2, sy - 10];
       if (boxes.some((q) => box[0] < q[2] + 4 && box[2] > q[0] - 4 && box[1] < q[3] + 2 && box[3] > q[1] - 2)) {
         p.el.style.display = 'none';

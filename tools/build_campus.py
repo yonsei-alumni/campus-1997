@@ -36,6 +36,9 @@ ways = {e['id']: e for e in osm if e.get('geometry')}
 # Buildings built after 1997 (학술정보원, 공학원, 새천년관, 경영관, 백양누리, 암병원 ...)
 # are intentionally omitted.
 # ---------------------------------------------------------------------------
+# Names are the ones a 1997 student used (several halls were renamed in 1999, 2001 and 2013); halls built after
+# May 1997 are left out, the ones going up then are marked 공사중.  Checked against the university's building history
+# (yonsei.ac.kr/sc/349/subview.do), namu.wiki and OSM; three outlines once listed here are on the Ewha campus.
 B = {
     163525865: ('lm:library', 5, '중앙도서관'),
     1444448640: ('lm:union', 4, '학생회관'),
@@ -52,35 +55,36 @@ B = {
     # engineering / science quarter
     1451926793: ('modern', 5, '제1공학관'), 1451926787: ('modern', 5, '제1공학관'),
     1451926794: ('modern', 4, '제1공학관'), 256932940: ('modern', 6, '제2공학관'),
-    224955691: ('modern', 5, '제3공학관'), 324328471: ('white', 2, '별동연구동'),
+    224955691: ('modern', 5, '제3공학관 (공사중)'), 324328471: ('white', 2, '별동연구동'),
     222843398: ('white', 6, '과학관'), 468614722: ('modern', 5, '광복관'),
-    468614771: ('white', 3, '광복관 별관'), 256933753: ('white', 5, '백양관'),
+    256933753: ('white', 5, '경영학교실단'),
     421415366: ('gym', 2, '체육관'), 421415365: ('white', 3, '체육교육관'),
     # humanities / north campus
-    246156112: ('modern', 5, '외솔관'), 246156114: ('modern', 4, '외솔관'),
-    246156119: ('white', 4, '위당관'), 245623759: ('white', 4, '연희관'),
-    246156121: ('white', 4, '신학관'), 246156123: ('modern', 6, '교육과학관'),
-    246156117: ('white', 4, '성암관'), 246156111: ('stone', 3, '유억겸기념관'),
-    245623193: ('white', 3, '빌링슬리관'), 413217834: ('white', 1, '논지당'),
-    242897922: ('modern', 5, '대우관'), 242897923: ('modern', 4, '대우관 별관'),
-    429077789: ('white', 4, '음악관'), 429077790: ('white', 4, '음악관'),
-    429079066: ('house', 2, '언더우드가 기념관'), 472512289: ('house', 2, '알렌관'),
-    472512292: ('white', 2, '어린이생활지도연구원'), 472965030: ('white', 2, '법인본부'),
+    246156112: ('modern', 5, '인문관'), 246156114: ('modern', 4, '인문관'),
+    246156119: ('white', 4, '제2인문관 (공사중)'), 245623759: ('stone', 4, '연희관'),
+    246156121: ('white', 4, ''), 246156123: ('modern', 6, '종합관'),
+    246156117: ('white', 4, '성암관'), 246156111: ('stone', 3, '교육관'),
+    245623193: ('white', 3, '생활과학관'), 413217834: ('white', 1, '논지당'),
+    242897922: ('lm:daewoo', 6, '대우관'), 242897923: ('lm:daewoo_annex', 5, '대우관 별관'),
+    429077789: ('white', 4, '음악대학'), 429077790: ('white', 4, '음악대학'),
+    429079066: ('house', 2, '언더우드가 사택'), 472512289: ('house', 2, '알렌관'),
+    472512292: ('white', 2, '어린이생활지도연구원'), 472965030: ('house', 2, '대학사택'),
     472987415: ('house', 2, '대학사택'), 472987419: ('house', 2, '대학사택'),
     472534641: ('house', 2, '영빈관'), 472534642: ('house', 2, '총장공관'),
     472516998: ('white', 3, '국제학사'), 371403603: ('white', 4, '한국어학당'),
     429077785: ('white', 1, '영선실'), 472516999: ('white', 1, '차량실'),
     722550503: ('white', 2, '행정동'),
     # medical quarter (old Severance)
-    472648570: ('modern', 10, '세브란스병원'), 429249489: ('modern', 6, '종합관'),
+    472648570: ('modern', 10, '세브란스병원'), 429249489: ('modern', 6, '의료원 종합관'),
     429249493: ('white', 5, '치과대학'), 429249490: ('modern', 6, '치과대학병원'),
-    429249494: ('white', 5, '간호대학'), 429249495: ('white', 4, '러들러교수동'),
+    429249494: ('white', 5, '간호대학'),
     473006250: ('white', 4, '광혜관'), 473006251: ('white', 5, '제중관'),
     324328456: ('white', 4, '의학도서관'), 473014379: ('modern', 5, '임상의학연구센터'),
     1178739301: ('white', 5, '의과대학'), 1178739302: ('white', 5, '의과대학'),
     473014385: ('white', 4, '동문회관'), 429079067: ('white', 4, '재활병원'),
-    324328424: ('white', 3, '국제교육관'), 324328468: ('white', 2, '대학교회'),
-    324328428: ('white', 4, '생활환경관'),
+    324328481: ('modern', 7, '심장혈관병원'), 324328472: ('white', 5, '안·이비인후과병원'),
+    # in 1997 too, missing before
+    246156110: ('stone', 2, '한경관'), 429249497: ('house', 1, '수경원 정자각'),
 }
 FLOOR_H = {'modern': 3.8, 'white': 3.6, 'stone': 4.2, 'house': 3.4, 'gym': 6.5, 'city': 3.0}
 
@@ -119,7 +123,7 @@ for w in ways.values():
 bys = list(reversed(bys))                       # gate (south) -> north
 bys = [(-108.0, -428.0)] + bys[1:] + [(33.0, 145.0), (38.0, 168.0)]
 bline = LineString(bys)
-# Road cross-section, half widths from the centre line.  As in the 1997 aerial photo (reference.pdf p.4-5):
+# Road cross-section, half widths from the centre line.  As in the 1997 aerial photo (reference/1997_백양로_항공사진.jpg):
 # a two-lane carriageway (white dashed centre line, yellow edge lines) with no median, a raised verge of
 # clipped round boxwood on each side, a wide paver sidewalk, and an outer planting strip carrying the
 # ginkgo row and a low clipped hedge.
@@ -251,6 +255,32 @@ for wid, (style, lv, label) in B.items():
                           height=round(lv * fh + (1.2 if not style.startswith('lm') else 0), 2),
                           base=round(min(hs), 2), top_ground=round(max(hs), 2),
                           footprint=[[round(x, 2), round(y, 2)] for x, y in list(poly.exterior.coords)[:-1]]))
+
+# 용재관 (demolished; 경영관 has stood on its site since 2015, so it is not in OSM).  Placed from the 경영관 indoor
+# corridors in OSM (x 72..120, y 88..136) and reference/용재관.jpg, taken from behind the Underwood statue looking
+# south-east: a white modernist hall whose slender stair tower faces the end of 백양로, a three-storey wing with a
+# dark hipped roof and the entrance canopy beside it, and a five-storey block behind.
+YONGJAE = dict(o=(74.0, 124.0), ang=math.radians(20), parts=[
+    (990001, 'lm:yongjae', 7, (-3.2, 3.2, -4, 3.5)),        # tower: u0, u1, v0, v1 (v = towards 백양로 / the statue)
+    (990002, 'lm:none', 3, (3.2, 34, -11, 1)),          # wing
+    (990003, 'lm:none', 5, (-2, 36, -27, -11)),       # block
+])
+
+
+def yongjae_poly(u0, u1, v0, v1):
+    (ox, oy), a = YONGJAE['o'], YONGJAE['ang']
+    c, s_ = math.cos(a), math.sin(a)
+    return Polygon([(ox + u * c - v * s_, oy + u * s_ + v * c) for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))])
+
+
+for pid, style, lv, uv in YONGJAE['parts']:
+    poly = yongjae_poly(*uv)
+    campus_polys.append(poly)
+    hs = [ground_h(x, y) for x, y in poly.exterior.coords]
+    buildings.append(dict(id=pid, name='용재관', style=style, levels=lv, height=round(lv * 3.6, 2),
+                          base=round(min(hs), 2), top_ground=round(max(hs), 2),
+                          footprint=[[round(x, 2), round(y, 2)] for x, y in list(poly.exterior.coords)[:-1]],
+                          frame=dict(o=YONGJAE['o'], ang=round(YONGJAE['ang'], 5), uv=uv)))
 
 campus_zone = unary_union([p.buffer(60) for p in campus_polys]).buffer(-20)
 
@@ -665,9 +695,15 @@ BANNERS = [
     (138, dict(text='설계공동연구소 10주년 기념식 및 초청강연회'), 'white'),
     (190, dict(text='독수리여! 본질을 꿰뚫는 이성으로  —  연세대학교 응원단'), 'blue'),
     (250, dict(text='거친파도 해치고 나가자. 연세!'), 'blue'),
-    (310, dict(text='’97 대동제  ·  5월, 백양로에서 만나요'), 'yellow'),
-    (390, dict(text='신입생 여러분 환영합니다  —  총학생회'), 'white'),
-    (460, dict(text='’97 정기 연고전 필승!  가자 잠실로!'), 'blue'),
+    (310, dict(text='’97 대동제  ·  5월, 백양로에서 만나요',
+               seasons=dict(autumn=dict(text='’97 가을 학술제  ·  학과별 발표회와 초청강연', color='white'))), 'yellow'),
+    (390, dict(text='신입생 여러분 환영합니다  —  총학생회',
+               seasons=dict(autumn=dict(text='2학기 중간고사  ·  중앙도서관 열람실 24시간 개방  —  총학생회'))), 'white'),
+    # 연고전 is in September: in spring the 4·19 marathon (reference/1997_마라톤대회.jpg), in May the 대동제 shows,
+    # in late October the victory (reference/1997_연고전_승리.jpg: 3승 1무 1패)
+    (460, dict(text='’97 4·19 마라톤대회  —  4월 19일 백양로 출발',
+               seasons=dict(summer=dict(text='’97 대동제 축하공연  ·  노천극장', color='yellow'),
+                            autumn=dict(text='’97 정기 연고전 3승 1무 1패 압승!  고마워요 연세인'))), 'blue'),
 ]
 banners = []
 for s, spec, col in BANNERS:
@@ -748,7 +784,7 @@ LANDMARKS = [
     dict(id='eagle', name='독수리상', pos=[-52, -82], r=16, photo=['photos/eagle_2024.jpg'],
          title='독수리상', year='1997',
          text='연세의 상징 독수리. 높은 기둥 위에서 날개를 편 독수리는 지금도 같은 자리에서 백양로를 내려다본다.'),
-    dict(id='library', name='중앙도서관', pos=[-58, -40], r=22, photo=['photos/library_1997.jpg', 'photos/library_reading_1997.jpg'],
+    dict(id='library', name='중앙도서관', pos=[-58, -40], r=22, photo=['photos/library_1997.jpg', 'photos/library_reading_1997.jpg', 'photos/baekyangro_library_1995.jpg'],
          title='1997년 중앙도서관', year='1997',
          text='1984년 준공된 중앙도서관. 아치형 기둥이 늘어선 정면은 그 시절 연세인 모두의 배경이었다. 시험 기간이면 열람실 자리를 맡으려 새벽부터 줄을 섰다.'),
     dict(id='union', name='학생회관', pos=[0, -62], r=22, photo=['photos/union_1997.jpg'],
@@ -763,12 +799,25 @@ LANDMARKS = [
     dict(id='amphitheater', name='노천극장', pos=[150, 150], r=30, photo=['photos/amphitheater_1997.jpg', 'photos/amphitheater_1999.jpg'],
          title='구 노천극장의 마지막 모습', year='1997.04',
          text='잔디 계단이 언덕을 따라 둥글게 둘러선 옛 노천극장. 1997년 4월 사진은 철거 전 마지막 모습이다. 아카라카와 응원제의 함성이 울리던 이 자리에는 1999년 5월 지금의 새 노천극장이 들어섰다.'),
-    dict(id='underwood', name='언더우드관', pos=[58, 215], r=30, photo=['photos/underwood_2023.jpg', 'photos/underwood_2024.jpg'],
+    dict(id='underwood', name='언더우드관', pos=[58, 215], r=30, photo=['photos/underwood_2023.jpg', 'photos/underwood_2024.jpg', 'photos/underwood_garden_2024.jpg'],
          title='언더우드관 · 스팀슨관 · 아펜젤러관', year='1920s',
          text='백양로 끝, 담쟁이로 덮인 석조 건물들. 언더우드관 앞 정원을 사이에 두고 스팀슨관과 아펜젤러관이 마주 선다. 연세의 역사가 시작된 곳.'),
     dict(id='events', name='게시판 · 그때 우리는', pos=[9, -36], r=9, photo=['photos/marathon_1997.jpg', 'photos/daedongje_1997.jpg', 'photos/yongo_1997.jpg', 'photos/cheer_1997.jpg', 'photos/yongo_banner_1997.jpg'],
          title='신촌 캠퍼스 1997 · 그때 우리는', year='1997',
          text='4월 마라톤대회, 5월 빗속의 대동제, 9월 정기 연고전 출정식과 응원제. 백양로는 늘 푸른 물결로 가득했다.'),
+    dict(id='yongjae', name='용재관', pos=[71.8, 136.0], r=18, photo=['photos/yongjae_1990s.jpg'],
+         title='용재관', year='1957 – 2013',
+         credit='사진: 동문 제공 (reference/용재관.jpg)',
+         text='연세대 초대 총장 용재(庸齋) 백낙준의 호를 딴 흰 건물. 1957년 도서관으로 지어졌고, 언더우드 동상 너머로 보이던 세로로 긴 계단탑이 상징이었다. 2013년 헐리고 그 자리에 경영관(2015)이 섰다. 경영관 한쪽의 「용재관 타워」가 옛 모습을 잇는다.'),
+    dict(id='daewoo', name='대우관', pos=[113.5, 453.8], r=26,
+         photo=['photos/daewoo_2017.jpg', 'photos/daewoo_2024.jpg', 'photos/daewoo_annex_2017.jpg'],
+         title='대우관과 상뜰', year='1996',
+         credit='사진: 연세대 상경대학 홈페이지 (blog.naver.com/maxx5335/221067910905 재인용) · 다음 카페 「훌리건 천국」 이호성 (2024)',
+         text='1996년 6월 문을 연 상경대학 · 경영대학의 새 집. 대우그룹 김우중 회장과 상경대 동문들의 기부로 지어져 대우관(김우중 기념관)이라 불렸다. 흰 석조의 고딕풍 건물로, 앞뜰의 소나무 정원 「상뜰」은 공강 시간마다 붐볐다. 정문에서 900m, 캠퍼스에서 가장 높고 깊숙한 곳.'),
+    dict(id='yeonhui', name='연희관', pos=[88.0, 343.0], r=20, photo=['photos/yeonhui_2024a.jpg', 'photos/yeonhui_2024b.jpg'],
+         title='연희관 가는 길', year='1956',
+         credit='사진: 다음 카페 「훌리건 천국」 이호성 (2024)',
+         text='1956년 과학관으로 지어져 1984년부터 연희관으로 불린 석조 건물. 담쟁이 덮인 벽과 회양목 정원 사이로, 대우관까지 이어지는 오르막길이 시작된다.'),
 ]
 STATUES = dict(
     eagle=dict(pos=[-52, -82], rot=math.radians(-14 + 90)),
@@ -788,6 +837,32 @@ Hn.astype(np.float32).tofile(os.path.join(ROOT, 'web/public/data/terrain_near.bi
 Hf = np.array(tf['rows_south_to_north'], dtype=np.float32)
 Hf = ndimage.gaussian_filter(Hf, 0.7).astype(np.float32)
 Hf.tofile(os.path.join(ROOT, 'web/public/data/terrain_far.bin'))
+# ---------------------------------------------------------------------------
+# Building name markers (bird's-eye pins, walk-mode labels, big map).  One per name, over its largest footprint.
+# MARKER_NAME: the name a 1997 student would use (or None: no marker, e.g. not built yet in 1997).
+# ---------------------------------------------------------------------------
+MARKER_NAME = {n: None for n in ('별동연구동', '영빈관', '영선실', '차량실', '행정동', '학생회관 별관', '광혜관')}
+EXTRA_MARKERS = [('청송대', 238.0, 284.0)]          # the wooded park east of 연희관 (OSM leisure=park)
+LANDMARK_NAMES = {l['name'] for l in LANDMARKS}
+groups = {}
+for b in buildings:
+    if not b['name'] or b['style'] == 'city':
+        continue
+    nm = MARKER_NAME.get(b['name'], b['name'])
+    if not nm or nm in LANDMARK_NAMES:
+        continue
+    poly = Polygon(b['footprint'])
+    g = groups.get(nm)
+    if g is None or poly.area > g[0]:
+        groups[nm] = (poly.area, poly, b)
+markers = []
+for nm, (area, poly, b) in groups.items():
+    c = poly.representative_point() if not poly.contains(poly.centroid) else poly.centroid
+    markers.append(dict(name=nm, pos=[round(c.x, 1), round(c.y, 1)], top=round(b['base'] + b['height'] + 1.0, 1)))
+for nm, x, y in EXTRA_MARKERS:
+    markers.append(dict(name=nm, pos=[x, y], top=round(ground_h(x, y) + 12, 1)))
+print('markers', len(markers))
+
 out = dict(
     origin=[LAT0, LON0],
     terrain=dict(near=dict(half=NEAR_HALF, step=NEAR_STEP, n=n_near, file='data/terrain_near.bin'),
@@ -798,7 +873,7 @@ out = dict(
                     gaps=[list(g) for g in GAPS], **ROAD),
     amphitheater={k: (round(v, 3) if isinstance(v, float) else v) for k, v in AMPH.items()},
     buildings=buildings, trees=trees, shrubs=shrubs, props=props, cars=cars, banners=banners,
-    paths=paths_out, landmarks=LANDMARKS, statues=STATUES, spawn=SPAWN,
+    paths=paths_out, landmarks=LANDMARKS, statues=STATUES, spawn=SPAWN, markers=markers,
 )
 for p in (os.path.join(ROOT, 'data/campus.json'), os.path.join(ROOT, 'web/public/data/campus.json')):
     json.dump(out, open(p, 'w'), ensure_ascii=False, separators=(',', ':'))

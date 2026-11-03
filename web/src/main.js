@@ -15,6 +15,8 @@ import { Cast, PEOPLE, STUDENTS, HEROES, portraits } from './characters.js';
 import { BirdsEye } from './birdseye.js';
 import { SunShadows } from './shadows.js';
 import { TouchControls } from './touch.js';
+import { setupNews } from './news.js';
+import { WalkLabels } from './labels.js';
 import { $, MOBILE, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
 const canvas = $('#view');
@@ -36,6 +38,7 @@ function seasonButtons(v) {
   document.querySelectorAll('[data-season]').forEach((b) => b.classList.toggle('on', b.dataset.season === v));
 }
 seasonButtons(season);
+setupNews();
 
 async function main() {
   total = 40;
@@ -216,7 +219,8 @@ async function main() {
   const S = campus.statues;
   colliders.addCircle(S.eagle.pos[0], S.eagle.pos[1], 3.3);                    // stepped platform of the eagle tower
   colliders.addCircle(S.underwood_statue.pos[0], S.underwood_statue.pos[1], 3.2);   // round steps under the statue
-  scene.add(makeBanners(campus.banners, lib, groundAt));
+  const banners = makeBanners(campus.banners, lib, groundAt);
+  scene.add(banners);
   scene.add(makeBoard(campus.landmarks.find((l) => l.id === 'events'), groundAt));
   // Quaternius CC0 people (blender/characters.py)
   const cast = new Cast();
@@ -286,6 +290,7 @@ async function main() {
     season = v;
     safeSet('y97-season', v);
     lib.setSeason(v);
+    banners.userData.setSeason(v);
     seasonButtons(v);
     $('#datestamp').textContent = SEASONS[v].date;
     bird.labels({ seasonLabel: SEASONS[v].short });
@@ -360,7 +365,7 @@ async function main() {
   const SEASON_ORDER = ['spring', 'summer', 'autumn'];
   const SEASON_KEYS = { Digit1: 'spring', Digit2: 'summer', Digit3: 'autumn' };
   const bird = new BirdsEye({
-    camera, dom: canvas, landmarks: campus.landmarks,
+    camera, dom: canvas, landmarks: campus.landmarks, markers: campus.markers || [],
     heightAt: (x, y) => hfNear.height(x, y),
     surfaceAt,
     pickGround: (nx, ny) => {
@@ -369,6 +374,7 @@ async function main() {
       return h ? [h.point.x, -h.point.z] : null;
     },
     onWalkHere: (x, y) => {
+      [x, y] = colliders.resolve(x, y, 0.6);        // a building's tag sits inside its footprint: step out to the wall
       const fromTitle = !started;
       leaveBird();
       if (fromTitle) startWalk(ui.placeName(x, y, false));
@@ -446,6 +452,7 @@ async function main() {
       else if (paused) resume(); else pause();
     }
   });
+  const walkLabels = new WalkLabels(campus.markers || [], camera, $('#blabels'));
   // HUD buttons (the only way in on a phone: no keys there)
   const touch = new TouchControls(player, canvas, $('#stick'));
   const tap = (sel, fn) => $(sel).addEventListener('click', (e) => { e.stopPropagation(); e.currentTarget.blur(); fn(); });
@@ -515,6 +522,7 @@ async function main() {
       }
     } else if (started) {
       ui.drawMinimap(player.x, player.y, player.yaw);
+      walkLabels.update(dt, player.x, player.y);
       if (!bird.active && tAcc - lastPlace > 0.25) {
         lastPlace = tAcc;
         const l = ui.nearestLandmark(player.x, player.y);
@@ -565,7 +573,7 @@ function makeBoard(l, groundAt) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const photos = (l.photo || []).map((p) => 'assets/' + p);
-  const posters = [['대동제', '#c0392b'], ['총학생회', '#1d3f9a'], ['동아리 신입회원 모집', '#2e7d32'], ['연고전 응원 연습', '#1d3f9a']];
+  const posters = [['대동제', '#c0392b'], ['총학생회', '#1d3f9a'], ['동아리 신입회원 모집', '#2e7d32'], ['아카라카 응원 연습', '#1d3f9a']];
   let i = 0;
   const rnd = mulberry(11);
   posters.forEach(([t, col], k) => {

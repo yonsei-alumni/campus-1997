@@ -66,7 +66,7 @@ for (const s of Object.values(SEASONS)) s.label = `1997년 ${s.short}`;
 // species -> available seasonal atlas suffixes
 const LEAF_VARIANTS = {
   ginkgo: ['spring', 'autumn'], zelkova: ['spring', 'autumn'], cherry: ['spring', 'autumn'],
-  maple: ['spring', 'autumn'], oak: ['spring', 'autumn'], pine: [], ivy: ['autumn'], boxwood: [],
+  maple: ['spring', 'autumn'], oak: ['spring', 'autumn'], pine: [], ivy: ['spring', 'autumn'], boxwood: [],
   azalea: ['summer'], azalea_red: [],
 };
 

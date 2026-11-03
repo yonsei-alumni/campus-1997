@@ -165,8 +165,17 @@ export class UI {
     this._bigView = { ox, oy, s };
     x.fillStyle = '#b5cf9a'; x.fillRect(0, 0, W, W);
     x.drawImage(this.mapCanvas, ox, oy, this.mapCanvas.width * s, this.mapCanvas.height * s);
-    x.font = 'bold 15px "Noto Sans KR", sans-serif';
     x.textAlign = 'center';
+    // other buildings: small grey names under the memory spots
+    x.font = 'bold 11px "Noto Sans KR", sans-serif';
+    x.lineWidth = 3; x.strokeStyle = 'rgba(255,253,246,.9)'; x.fillStyle = '#4a5260';
+    for (const m of this.c.markers || []) {
+      const [a, b] = this.toMap(m.pos[0], m.pos[1]);
+      const X = ox + a * s, Y = oy + b * s;
+      if (X < 0 || Y < 0 || X > W || Y > W) continue;
+      x.strokeText(m.name, X, Y + 4); x.fillText(m.name, X, Y + 4);
+    }
+    x.font = 'bold 15px "Noto Sans KR", sans-serif';
     for (const l of this.spots) {
       const [a, b] = this.toMap(l.pos[0], l.pos[1]);
       const X = ox + a * s, Y = oy + b * s;
@@ -236,7 +245,9 @@ export class UI {
     root.querySelector('.year').textContent = l.year;
     root.querySelector('h2').textContent = l.title;
     root.querySelector('p').textContent = l.text;
-    root.querySelector('.credit').hidden = !(l.photo && l.photo.length);
+    const credit = root.querySelector('.credit');
+    credit.textContent = l.credit || '사진출처: 연세대학교 기록관 · 연세동문회보 · 연세춘추 · 동문 제공';
+    credit.hidden = !(l.photo && l.photo.length);
     root.hidden = false;
     if (!this.collected.has(l.id)) {
       this.collected.add(l.id);

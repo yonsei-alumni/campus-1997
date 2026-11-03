@@ -138,6 +138,8 @@ def cluster_cell(kind, palette, rnd, flowers=None):
         x1, y1 = cx + math.cos(a) * L * 0.8, cy + math.sin(a) * L * 0.7
         d.line([(x0, y0), (x1, y1)], fill=twig_col, width=int(S * 0.008))
         tips.append((x0, y0, x1, y1))
+    if kind == 'ivy_bare':
+        return ivy_bare_cell(palette, rnd)
     if kind == 'pine':
         for (x0, y0, x1, y1) in tips * 3:
             for t in np.linspace(0.3, 1.0, 9):
@@ -153,16 +155,19 @@ def cluster_cell(kind, palette, rnd, flowers=None):
               'azalea': lambda r: shape_ovate(r, 0.0, 0.33)}
     size_rng = {'ginkgo': (0.055, 0.075), 'zelkova': (0.05, 0.075), 'cherry': (0.06, 0.085), 'maple': (0.06, 0.085),
                 'oak': (0.07, 0.095), 'ivy': (0.06, 0.09), 'boxwood': (0.022, 0.03), 'azalea': (0.04, 0.055)}[kind]
-    n = {'boxwood': 1500, 'azalea': 420, 'ivy': 160}.get(kind, 230)
+    n = {'boxwood': 1500, 'azalea': 420, 'ivy': 330}.get(kind, 230)
     for k in range(n):
-        # leaves concentrate in an ellipse (cluster), denser in the middle
-        r = (rnd.random() ** 0.6) * 0.45
+        # leaves concentrate in an ellipse (cluster), denser in the middle; ivy: a flatter mat filling the card
+        r = (rnd.random() ** (0.45 if kind == 'ivy' else 0.6)) * (0.47 if kind == 'ivy' else 0.45)
         a = rnd.uniform(0, 2 * math.pi)
         x = cx + math.cos(a) * r * S
         y = cy + math.sin(a) * r * S * 0.9
         if kind in ('boxwood',):
             x = rnd.uniform(0.02, 0.98) * S
             y = rnd.uniform(0.02, 0.98) * S
+        elif kind == 'ivy':           # a square mat of leaves: overlapping cards close up into a continuous cover
+            x = rnd.uniform(0.07, 0.93) * S
+            y = rnd.uniform(0.07, 0.93) * S
         ang = math.atan2(y - cy, x - cx) + math.pi / 2 + rnd.uniform(-0.8, 0.8)
         # top of cluster brighter (sky light), bottom darker
         shade = 1.08 - 0.3 * ((y / S) - 0.2)
@@ -183,6 +188,45 @@ def cluster_cell(kind, palette, rnd, flowers=None):
                 px, py = x + math.cos(pa) * sz * 0.55, y + math.sin(pa) * sz * 0.55
                 d.ellipse([px - sz * 0.45, py - sz * 0.45, px + sz * 0.45, py + sz * 0.45], fill=c + (255,))
             d.ellipse([x - sz * 0.18, y - sz * 0.18, x + sz * 0.18, y + sz * 0.18], fill=(230, 200, 90, 255))
+    return finish(img)
+
+
+def ivy_bare_cell(palette, rnd):
+    """담쟁이 in mid-April: a web of brown woody vines stuck to the wall, with the first small leaves
+    (bronze-red and yellow-green) just opening at the nodes."""
+    S = CELL * SS
+    img = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    nodes = []
+    for k in range(rnd.randint(5, 7)):
+        # a vine wanders up across the card, forking now and then
+        x, y = rnd.uniform(0.1, 0.9) * S, S * rnd.uniform(0.85, 1.0)
+        a = -math.pi / 2 + rnd.uniform(-0.6, 0.6)
+        w = S * rnd.uniform(0.010, 0.016)
+        for step in range(rnd.randint(14, 22)):
+            a += rnd.uniform(-0.45, 0.45)
+            a = -math.pi / 2 + max(-1.1, min(1.1, a + math.pi / 2))
+            L = S * rnd.uniform(0.03, 0.055)
+            nx, ny = x + math.cos(a) * L, y + math.sin(a) * L
+            c = jitter((92, 70, 50), rnd, 0.15)
+            d.line([(x, y), (nx, ny)], fill=c + (255,), width=max(2, int(w)))
+            if rnd.random() < 0.35:                     # side shoot
+                b = a + rnd.choice((-1, 1)) * rnd.uniform(0.7, 1.3)
+                L2 = S * rnd.uniform(0.04, 0.09)
+                d.line([(x, y), (x + math.cos(b) * L2, y + math.sin(b) * L2)], fill=c + (255,), width=max(2, int(w * 0.6)))
+                nodes.append((x + math.cos(b) * L2, y + math.sin(b) * L2))
+            nodes.append((nx, ny))
+            x, y = nx, ny
+            w *= 0.97
+            if not (0 <= x <= S and 0 <= y <= S):
+                break
+    for (x, y) in nodes:
+        if rnd.random() < 0.45:
+            continue
+        col = palette[rnd.randrange(len(palette))]
+        for m in range(rnd.randint(1, 3)):
+            draw_leaf(d, shape_ivy(rnd), x + rnd.uniform(-8, 8), y + rnd.uniform(-8, 8), rnd.uniform(0, 6.28),
+                      rnd.uniform(0.022, 0.042) * S, col, rnd, vein=False)
     return finish(img)
 
 
@@ -214,8 +258,11 @@ atlas('oak', 'oak', [(70, 105, 38), (82, 118, 42), (60, 92, 32)])
 atlas('oak_autumn', 'oak', [(150, 110, 50), (130, 90, 40), (165, 125, 55)])
 atlas('oak_spring', 'oak', [(105, 150, 55), (95, 140, 50)])
 atlas('pine', 'pine', [(40, 75, 35), (50, 88, 40), (34, 64, 30), (60, 95, 45)])
-atlas('ivy', 'ivy', [(48, 85, 30), (60, 98, 35), (40, 72, 26)])
-atlas('ivy_autumn', 'ivy', [(150, 40, 30), (170, 60, 30), (120, 40, 30)])
+# 담쟁이 (Boston ivy) on the stone halls: fresh glossy green in late May (underwood_2023.jpg), crimson / orange /
+# wine in late October with a few leaves still green-yellow, bare vines with the first leaves in mid-April
+atlas('ivy', 'ivy', [(54, 98, 30), (70, 116, 36), (44, 82, 26), (86, 130, 42)])
+atlas('ivy_autumn', 'ivy', [(165, 34, 30), (190, 58, 32), (128, 28, 40), (205, 96, 38), (150, 100, 40), (110, 30, 45)])
+atlas('ivy_spring', 'ivy_bare', [(150, 72, 48), (170, 96, 52), (128, 150, 58), (112, 136, 50)])
 atlas('boxwood', 'boxwood', [(45, 82, 32), (55, 95, 36), (38, 70, 28)])
 atlas('azalea', 'azalea', [(55, 90, 35), (65, 100, 40)], flowers=((225, 60, 150), 380, (0.045, 0.06)))
 atlas('azalea_summer', 'azalea', [(55, 90, 35), (65, 100, 40)])
@@ -238,7 +285,7 @@ def font(path, size, idx=1):
     return ImageFont.load_default()
 
 SIGNS = [('독수리다방', (180, 30, 30), (255, 240, 200)), ('연세문구', (20, 60, 150), (255, 255, 255)),
-         ('신촌서점', (30, 110, 60), (255, 255, 230)), ('만화방', (250, 200, 30), (40, 30, 20)),
+         ('서점', (30, 110, 60), (255, 255, 230)), ('만화방', (250, 200, 30), (40, 30, 20)),
          ('복사·제본', (255, 255, 255), (30, 60, 160)), ('호프 · 생맥주', (120, 30, 20), (255, 220, 120)),
          ('당구장', (20, 20, 20), (255, 80, 60)), ('분식 떡볶이', (230, 90, 30), (255, 255, 255)),
          ('레코드 · 테이프', (60, 20, 100), (255, 230, 120)), ('삐삐 · 시티폰', (0, 120, 170), (255, 255, 255)),

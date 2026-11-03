@@ -119,9 +119,11 @@ function bannerTexture(b) {
   return t;
 }
 
+// banners can carry per-season texts ({seasons: {autumn: {text, color}}}): group.userData.setSeason swaps them
 export function makeBanners(banners, lib, groundAt) {
   const group = new THREE.Group();
   group.name = 'banners';
+  const cloths = [];
   const poleMat = lib.get('metal_dark');
   const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 6.6, 8);
   for (const b of banners) {
@@ -142,7 +144,8 @@ export function makeBanners(banners, lib, groundAt) {
       pos.setZ(i, Math.sin(u * Math.PI * 3) * 0.04);
     }
     geo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({ map: bannerTexture(b), side: THREE.DoubleSide, roughness: 0.9 });
+    const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
+    cloths.push({ b, mat, key: null });
     const m = new THREE.Mesh(geo, mat);
     const mid = A.clone().add(B).multiplyScalar(0.5);
     m.position.set(mid.x, Math.max(A.y, B.y) + 5.6, mid.z);
@@ -150,6 +153,18 @@ export function makeBanners(banners, lib, groundAt) {
     m.castShadow = true;
     group.add(m);
   }
+  group.userData.setSeason = (season) => {
+    for (const c of cloths) {
+      const spec = { ...c.b, ...(c.b.seasons?.[season] || {}) };
+      const key = spec.text + spec.color;
+      if (key === c.key) continue;
+      c.key = key;
+      c.mat.map?.dispose();
+      c.mat.map = bannerTexture(spec);
+      c.mat.needsUpdate = true;
+    }
+  };
+  group.userData.setSeason(lib.season);
   return group;
 }
 

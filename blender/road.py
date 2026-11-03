@@ -1,4 +1,4 @@
-"""1997 백양로 (reference.pdf p.4-5 aerial photo): two-lane asphalt road without a median, raised boxwood
+"""1997 백양로 (reference/1997_백양로_항공사진.jpg aerial photo): two-lane asphalt road without a median, raised boxwood
 verges, wide paver sidewalks, an outer planting strip for the ginkgo row, lane paint, zebra crossings and the
 painted speed bump inside the gate."""
 import math

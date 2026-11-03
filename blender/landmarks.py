@@ -212,18 +212,18 @@ def union():
         npil = int(Le / 7.5)
         for k in range(npil + 1):
             s = 0.6 + k * (Le - 1.2) / npil
-            mb.box((P(s, 0)[0] - n.x * 1.0, P(s, 0)[1] - n.y * 1.0, g / 2 + 0.3), (0.9, 0.9, g - 0.3), 'concrete',
+            mb.box((P(s, 0)[0] - n.x * 1.0, P(s, 0)[1] - n.y * 1.0, g / 2 + 0.3), (0.9, 0.9, g - 0.3), 'stone_panel',
                    rotz=math.atan2(t.y, t.x), skip=('top', 'bottom'))
         # soffit of the overhang
-        mb.quad(P(0, g, 0), P(0, g, -2.0), P(Le, g, -2.0), P(Le, g, 0), 'concrete')
+        mb.quad(P(0, g, 0), P(0, g, -2.0), P(Le, g, -2.0), P(Le, g, 0), 'stone_panel')
         # upper floors: glass wall behind a precast concrete lattice
         flat_wall(mb, P, 0, Le, g, H, 'glass', d=-0.9)
         for f in range(nf):
             zf = g + f * fh
             # slab edge band
-            flat_wall(mb, P, 0, Le, zf, zf + 0.45, 'concrete')
-            mb.quad(P(0, zf + 0.45, 0), P(Le, zf + 0.45, 0), P(Le, zf + 0.45, -0.9), P(0, zf + 0.45, -0.9), 'concrete')
-            mb.quad(P(0, zf, -0.9), P(Le, zf, -0.9), P(Le, zf, 0), P(0, zf, 0), 'concrete')
+            flat_wall(mb, P, 0, Le, zf, zf + 0.45, 'stone_panel')
+            mb.quad(P(0, zf + 0.45, 0), P(Le, zf + 0.45, 0), P(Le, zf + 0.45, -0.9), P(0, zf + 0.45, -0.9), 'stone_panel')
+            mb.quad(P(0, zf, -0.9), P(Le, zf, -0.9), P(Le, zf, 0), P(0, zf, 0), 'stone_panel')
             npan = max(2, int(round(Le / 1.7)))
             pw = Le / npan
             za, zb = zf + 0.45, zf + fh
@@ -232,19 +232,28 @@ def union():
                 s0, s1 = k * pw, (k + 1) * pw
                 sm = (s0 + s1) / 2
                 # vertical fin
-                mb.quad(P(s0 - 0.07, za, 0), P(s0 + 0.07, za, 0), P(s0 + 0.07, zb, 0), P(s0 - 0.07, zb, 0), 'concrete_warm')
-                mb.quad(P(s0 + 0.07, za, 0), P(s0 + 0.07, za, -0.5), P(s0 + 0.07, zb, -0.5), P(s0 + 0.07, zb, 0), 'concrete')
-                mb.quad(P(s0 - 0.07, za, -0.5), P(s0 - 0.07, za, 0), P(s0 - 0.07, zb, 0), P(s0 - 0.07, zb, -0.5), 'concrete')
-                # two stacked chevrons (V) per panel -> the 학생회관 lattice
-                for (zt_, zb_) in ((zb, zm), (zm, za)):
-                    for (sa, sb) in ((s0 + 0.07, sm), (s1 - 0.07, sm)):
-                        th = 0.11
-                        mb.quad(P(sa, zt_ - th, 0), P(sb, zb_, 0), P(sb, zb_ + th * 1.6, 0), P(sa, zt_, 0), 'concrete_warm')
-                        mb.quad(P(sb, zb_, 0), P(sa, zt_ - th, 0), P(sa, zt_ - th, -0.45), P(sb, zb_, -0.45), 'concrete')
-        flat_wall(mb, P, 0, Le, H, H + 1.0, 'concrete')
-        mb.quad(P(0, H + 1.0, 0), P(Le, H + 1.0, 0), P(Le, H + 1.0, -0.9), P(0, H + 1.0, -0.9), 'concrete')
+                mb.quad(P(s0 - 0.07, za, 0), P(s0 + 0.07, za, 0), P(s0 + 0.07, zb, 0), P(s0 - 0.07, zb, 0), 'stone_white')
+                mb.quad(P(s0 + 0.07, za, 0), P(s0 + 0.07, za, -0.5), P(s0 + 0.07, zb, -0.5), P(s0 + 0.07, zb, 0), 'stone_panel')
+                mb.quad(P(s0 - 0.07, za, -0.5), P(s0 - 0.07, za, 0), P(s0 - 0.07, zb, 0), P(s0 - 0.07, zb, -0.5), 'stone_panel')
+                # the 학생회관 lattice (reference/1997_학생회관.jpg): from each fin two curved ribs spring up into a
+                # pointed arch over the window, and two short ribs curve down into an inverted arch at the sill
+                th = 0.1
+                for (z_spring, z_apex, nseg) in ((za + (zb - za) * 0.5, zb - 0.02, 5), (za + (zb - za) * 0.24, za + 0.02, 3)):
+                    for (sa, sgn) in ((s0 + 0.07, 1), (s1 - 0.07, -1)):
+                        half = sm - sa
+                        pts = []
+                        for q in range(nseg + 1):
+                            f_ = q / nseg
+                            # gothic rib: a circular arc cut at 60 deg, vertical at the fin, meeting its twin in a point
+                            th_ = f_ * math.pi / 3
+                            pts.append((sa + half * (1 - math.cos(th_)) / 0.5, z_spring + (z_apex - z_spring) * math.sin(th_) / math.sin(math.pi / 3)))
+                        for (p0, p1) in zip(pts, pts[1:]):
+                            mb.quad(P(p0[0], p0[1] - th, 0), P(p1[0], p1[1] - th, 0), P(p1[0], p1[1] + th, 0), P(p0[0], p0[1] + th, 0), 'stone_white')
+                            mb.quad(P(p1[0], p1[1] - th, 0), P(p0[0], p0[1] - th, 0), P(p0[0], p0[1] - th, -0.45), P(p1[0], p1[1] - th, -0.45), 'stone_panel')
+        flat_wall(mb, P, 0, Le, H, H + 1.0, 'stone_panel')
+        mb.quad(P(0, H + 1.0, 0), P(Le, H + 1.0, 0), P(Le, H + 1.0, -0.9), P(0, H + 1.0, -0.9), 'stone_panel')
     mb.face([(p[0], p[1], H + 0.2) for p in offset_poly(rect(L, W), -0.9)], 'roof_flat')
-    mb.box((L * 0.2, 2, H + 1.6), (8, 6, 3.0), 'concrete', mats={'top': 'roof_flat'})
+    mb.box((L * 0.2, 2, H + 1.6), (8, 6, 3.0), 'stone_panel', mats={'top': 'roof_flat'})
     # long vertical cloth banners (동아리 / 총학생회 현수막) on the front facade
     banners = []
     cols = ['banner_yellow', 'banner_red', 'banner_orange', 'banner_yellow']
@@ -261,7 +270,7 @@ def union():
 
 # ============================================================================= 백주년기념관
 def centennial():
-    """1997 aerial photo (reference.pdf p.4-5): a large stone drum rising out of a two-storey podium that fills
+    """1997 aerial photo (reference/1997_백양로_항공사진.jpg): a large stone drum rising out of a two-storey podium that fills
     the whole site, a deep dark portal in the podium facing 백양로, and a plain box (stage house) standing above
     the drum on its north side.  Light granite with incised horizontal courses."""
     b = bld(324328422)
@@ -325,18 +334,60 @@ def centennial():
 
 
 # ============================================================================= gothic stone halls
-def ivy_patch(iv, P, s0, s1, z0, z1, density, seedoff=0):
-    """Scatter ivy leaf cards on a wall rectangle, clustered with a low-freq noise mask."""
-    r = random.Random(int(s0 * 13 + z0 * 7 + seedoff))
-    area = (s1 - s0) * (z1 - z0)
+def win_holes(L, z0, nfl, fh, bay, ww=0.6, sill=0.9, head=0.6, s_start=0.0, s_end=None):
+    """Window openings of window_grid() with the same arguments, as (s0, s1, z0, z1) rectangles."""
+    s_end = L if s_end is None else s_end
+    nb = max(1, int(round((s_end - s_start) / bay)))
+    bw = (s_end - s_start) / nb
+    out = []
+    for f in range(nfl):
+        zf = z0 + f * fh
+        for k in range(nb):
+            w = bw * ww
+            w0 = s_start + k * bw + (bw - w) / 2
+            out.append((w0, w0 + w, zf + sill, zf + fh - head))
+    return out
+
+
+def ivy_patch(iv, P, s0, s1, z0, z1, density, seedoff=0, holes=(), top=None, cover=1.0):
+    """Boston ivy (담쟁이) on a wall rectangle, as leaf cards.
+
+    As in the photos of 언더우드관 (1990s - 2023): the vines climb from the foot of the wall in broad vertical
+    strands that merge into an almost continuous mat; each strand reaches its own height (most of them the
+    eaves), and the window openings stay clear (the leaves only lap over their edges).
+    holes: (s0, s1, z0, z1) openings to keep clear; top(s): wall top for gables; cover: 0..1 how much of the
+    wall the strands cover."""
+    r = random.Random(int(s0 * 13 + z0 * 7 + seedoff * 101))
+    H = z1 - z0
+    ph = r.uniform(0, 6.283)
+
+    def reach(s):      # how high the strand rooted at s has climbed (fraction of the wall)
+        return (0.62 + 0.55 * cover + 0.22 * math.sin(s * 0.23 + ph) + 0.12 * math.sin(s * 0.71 + 2 * ph)
+                + 0.08 * math.sin(s * 1.9 + ph))
+
+    def thick(s, z):   # gaps between strands, and thinner growth near the top of each strand
+        g = 0.5 + 0.5 * math.sin(s * 1.15 + ph + 0.6 * math.sin(z * 0.3 + s * 0.2))
+        return cover * (0.62 + 0.38 * g)
+
+    hl = [(a - 0.15, b + 0.15, c - 0.15, d + 0.1) for a, b, c, d in holes]
+    area = (s1 - s0) * H
     for k in range(int(area * density)):
         s = r.uniform(s0, s1)
-        z = z0 + (z1 - z0) * (r.random() ** 1.6)          # denser near the ground
-        m = 0.5 + 0.5 * math.sin(s * 0.35 + seedoff) * math.cos(z * 0.25 + s * 0.11)
-        if r.random() > m * 1.3:
+        z = z0 + H * (r.random() ** 0.85)                  # a little denser near the ground
+        zt = z1 if top is None else min(z1, top(s))
+        if z > zt:
             continue
-        sz = r.uniform(0.45, 0.85)
-        off = r.uniform(0.04, 0.22)
+        f = (z - z0) / H
+        rf = reach(s)
+        if f > rf:
+            continue
+        edge = 1.0 - max(0.0, (f - (rf - 0.18)) / 0.18)    # strand tips thin out
+        if r.random() > thick(s, z) * edge:
+            continue
+        if any(a < s < b and c < z < d for a, b, c, d in hl):
+            continue
+        sz = r.uniform(0.5, 0.95)
+        off = r.uniform(0.04, 0.2)
         a = r.uniform(0, 6.283)
         ca, sa = math.cos(a) * sz / 2, math.sin(a) * sz / 2
         cell = r.randrange(4)
@@ -347,7 +398,8 @@ def ivy_patch(iv, P, s0, s1, z0, z1, density, seedoff=0):
                 uvs=[(u0, v0), (u0 + .5, v0), (u0 + .5, v0 + .5), (u0, v0 + .5)])
 
 
-def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=True, fh=4.1):
+def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=True, fh=4.1, wall='stone_rubble',
+           dormers=True):
     cx, cy, L, W, ang, z0 = frame_for(b, front)
     mb = MeshBuilder('lm_' + name)
     iv = MeshBuilder('lm_' + name + '_ivy')
@@ -362,26 +414,28 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
         a, bb = body[i], body[(i + 1) % 4]
         P, Le, t, n = edge_P(a, bb)
         if Le < W + 0.1:          # gable ends
-            window_grid(mb, P, Le, plinth, floors, fh, 3.4, 'stone_rubble', ww=0.42, trim='stone_trim', mull=1)
-            flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, 'stone_rubble')
+            window_grid(mb, P, Le, plinth, floors, fh, 3.4, wall, ww=0.42, trim='stone_trim', mull=1)
+            flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
             # gable triangle + coping
             hz = Hw + (Le / 2) * pitch
-            mb.face([P(0, Hw), P(Le, Hw), P(Le / 2, hz)], 'stone_rubble')
+            mb.face([P(0, Hw), P(Le, Hw), P(Le / 2, hz)], wall)
             mb.quad(P(-0.2, Hw, 0.25), P(Le / 2, hz + 0.35, 0.25), P(Le / 2, hz + 0.35, -0.2), P(-0.2, Hw, -0.2), 'stone_trim')
             mb.quad(P(Le / 2, hz + 0.35, 0.25), P(Le + 0.2, Hw, 0.25), P(Le + 0.2, Hw, -0.2), P(Le / 2, hz + 0.35, -0.2), 'stone_trim')
             if ivy:
-                ivy_patch(iv, P, 0, Le, plinth * 0, Hw, 1.8 * ivy, i)
+                ivy_patch(iv, P, 0, Le, 0, hz - 0.4, 5.5, i, cover=ivy,
+                          holes=win_holes(Le, plinth, floors, fh, 3.4, ww=0.42),
+                          top=lambda s, Le=Le: Hw + (Le / 2 - abs(s - Le / 2)) * pitch - 0.4)
         else:
             front_side = (i == 0)
             if front_side:
                 tw = tower_w
                 s_t0, s_t1 = Le / 2 - tw / 2, Le / 2 + tw / 2
-                window_grid(mb, P, Le, plinth, floors, fh, 3.3, 'stone_rubble', ww=0.5, trim='stone_trim', mull=2, s_start=0, s_end=s_t0)
-                window_grid(mb, P, Le, plinth, floors, fh, 3.3, 'stone_rubble', ww=0.5, trim='stone_trim', mull=2, s_start=s_t1, s_end=Le)
-                flat_wall(mb, P, s_t0, s_t1, plinth, Hw, 'stone_rubble')
+                window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2, s_start=0, s_end=s_t0)
+                window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2, s_start=s_t1, s_end=Le)
+                flat_wall(mb, P, s_t0, s_t1, plinth, Hw, wall)
             else:
-                window_grid(mb, P, Le, plinth, floors, fh, 3.3, 'stone_rubble', ww=0.5, trim='stone_trim', mull=2)
-            flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, 'stone_rubble')
+                window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2)
+            flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
             # buttresses
             nbut = int(round(Le / 6.6))
             for k in range(1, nbut):
@@ -389,8 +443,11 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
                 if front_side and abs(s - Le / 2) < tower_w / 2 + 1:
                     continue
                 c = P(s, 0, 0.3)
-                mb.box((c[0], c[1], plinth + (Hw - plinth - 1.5) / 2), (0.7, 0.6, Hw - plinth - 1.5), 'stone_rubble',
+                mb.box((c[0], c[1], plinth + (Hw - plinth - 1.5) / 2), (0.7, 0.6, Hw - plinth - 1.5), wall,
                        rotz=math.atan2(t.y, t.x), mats={'top': 'stone_trim'})
+                if ivy:        # the vines climb the buttress fronts too
+                    ivy_patch(iv, lambda ss, zz, dd=0.0: P(ss, zz, dd + 0.6), s - 0.4, s + 0.4, 0, Hw - 1.2, 5.5,
+                              i * 3 + k * 17, cover=ivy)
             # parapet with battlements along the eaves
             nm = int(Le / 1.6)
             for k in range(nm):
@@ -398,7 +455,12 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
                     c = P((k + 0.5) * Le / nm, Hw + 0.45, 0.0)
                     mb.box(c, (Le / nm, 0.45, 0.9), 'stone_trim', rotz=math.atan2(t.y, t.x), skip=('bottom',))
             if ivy:
-                ivy_patch(iv, P, 0, Le, 0, Hw, 1.5 * ivy, i * 3)
+                if front_side:
+                    holes = (win_holes(Le, plinth, floors, fh, 3.3, ww=0.5, s_end=s_t0)
+                             + win_holes(Le, plinth, floors, fh, 3.3, ww=0.5, s_start=s_t1))
+                else:
+                    holes = win_holes(Le, plinth, floors, fh, 3.3, ww=0.5)
+                ivy_patch(iv, P, 0, Le, 0, Hw + 0.3, 5.5, i * 3, cover=ivy, holes=holes)
     # --- slate roof (gable along L)
     hz = Hw + (W / 2) * pitch
     A, B, C, D = (-L / 2, -W / 2 - 0.3, Hw - 0.3 * pitch), (L / 2, -W / 2 - 0.3, Hw - 0.3 * pitch), (L / 2, W / 2 + 0.3, Hw - 0.3 * pitch), (-L / 2, W / 2 + 0.3, Hw - 0.3 * pitch)
@@ -407,12 +469,12 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
     mb.face([C, D, R1, R2], 'roof_slate')
     mb.box((0, 0, hz + 0.1), (L, 0.35, 0.3), 'metal_dark')
     # dormers on the front roof slope
-    for k in range(-2, 3):
+    for k in (range(-2, 3) if dormers else ()):
         if k == 0:
             continue
         x = k * L / 6
         zb_ = Hw + 0.8
-        mb.box((x, -W / 4 + 0.4, zb_ + 1.0), (1.8, 1.6, 2.0), 'stone_rubble', mats={'front': 'glass'})
+        mb.box((x, -W / 4 + 0.4, zb_ + 1.0), (1.8, 1.6, 2.0), wall, mats={'front': 'glass'})
         mb.face([(x - 1.0, -W / 4 - 0.5, zb_ + 2.0), (x + 1.0, -W / 4 - 0.5, zb_ + 2.0), (x, -W / 4 - 0.5, zb_ + 3.0)], 'stone_trim')
         mb.face([(x - 1.0, -W / 4 - 0.5, zb_ + 2.0), (x, -W / 4 - 0.5, zb_ + 3.0), (x, -W / 4 + 1.2, zb_ + 3.0), (x - 1.0, -W / 4 + 1.2, zb_ + 2.0)][::-1], 'roof_slate')
         mb.face([(x + 1.0, -W / 4 - 0.5, zb_ + 2.0), (x + 1.0, -W / 4 + 1.2, zb_ + 2.0), (x, -W / 4 + 1.2, zb_ + 3.0), (x, -W / 4 - 0.5, zb_ + 3.0)][::-1], 'roof_slate')
@@ -424,23 +486,25 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
             proj = 1.6
             yb = -W / 2 - proj
             P, Le, t, n = edge_P((x0 - pw / 2, yb), (x0 + pw / 2, yb))
-            window_grid(mb, P, Le, plinth, floors, fh, 4.0, 'stone_rubble', ww=0.55, trim='stone_trim', mull=2)
-            flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, 'stone_rubble')
+            window_grid(mb, P, Le, plinth, floors, fh, 4.0, wall, ww=0.55, trim='stone_trim', mull=2)
+            flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
             ghz = Hw + pw / 2 * 1.1
-            mb.face([P(0, Hw), P(Le, Hw), P(Le / 2, ghz)], 'stone_rubble')
+            mb.face([P(0, Hw), P(Le, Hw), P(Le / 2, ghz)], wall)
             mb.quad(P(-0.2, Hw, 0.25), P(Le / 2, ghz + 0.35, 0.25), P(Le / 2, ghz + 0.35, -0.2), P(-0.2, Hw, -0.2), 'stone_trim')
             mb.quad(P(Le / 2, ghz + 0.35, 0.25), P(Le + 0.2, Hw, 0.25), P(Le + 0.2, Hw, -0.2), P(Le / 2, ghz + 0.35, -0.2), 'stone_trim')
             # sides of the projection
             for (sx, ex) in ((x0 - pw / 2, -1), (x0 + pw / 2, 1)):
                 pa, pb = ((sx, -W / 2), (sx, yb)) if ex < 0 else ((sx, yb), (sx, -W / 2))
                 P2, Le2, _, _ = edge_P(pa, pb)
-                flat_wall(mb, P2, 0, Le2, -4, Hw, 'stone_rubble')
+                flat_wall(mb, P2, 0, Le2, -4, Hw, wall)
             mb.prism(offset_poly([(x0 - pw / 2, yb), (x0 + pw / 2, yb), (x0 + pw / 2, -W / 2), (x0 - pw / 2, -W / 2)], 0.25), -4, plinth, 'stone_granite')
             # little gable roof over the projection
             mb.face([(x0 - pw / 2 - 0.3, yb - 0.3, Hw - 0.2), (x0, yb - 0.3, ghz), (x0, -W / 4, ghz), (x0 - pw / 2 - 0.3, -W / 4, Hw - 0.2)][::-1], 'roof_slate')
             mb.face([(x0 + pw / 2 + 0.3, yb - 0.3, Hw - 0.2), (x0 + pw / 2 + 0.3, -W / 4, Hw - 0.2), (x0, -W / 4, ghz), (x0, yb - 0.3, ghz)][::-1], 'roof_slate')
             if ivy:
-                ivy_patch(iv, P, 0, Le, 0, Hw, 2.2 * ivy, sgn * 7)
+                ivy_patch(iv, P, 0, Le, 0, ghz - 0.4, 5.5, sgn * 7, cover=ivy,
+                          holes=win_holes(Le, plinth, floors, fh, 4.0, ww=0.55),
+                          top=lambda s, Le=Le: Hw + (Le / 2 - abs(s - Le / 2)) * 1.1 - 0.4)
     # --- central tower
     tw = tower_w
     tproj = 3.0
@@ -456,10 +520,10 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
             ew = 3.2
             e0, e1 = Le / 2 - ew / 2, Le / 2 + ew / 2
             zs = plinth + 3.2
-            flat_wall(mb, P, 0, e0, -0.5, Ht, 'stone_rubble')
-            flat_wall(mb, P, e1, Le, -0.5, Ht, 'stone_rubble')
+            flat_wall(mb, P, 0, e0, -0.5, Ht, wall)
+            flat_wall(mb, P, e1, Le, -0.5, Ht, wall)
             arch_fill(mb, P, e0, e1, zs, zs + ew * 0.95, 1.2, 'stone_trim', 'pointed', 12)
-            flat_wall(mb, P, e0, e1, zs + ew * 0.95, Ht, 'stone_rubble')
+            flat_wall(mb, P, e0, e1, zs + ew * 0.95, Ht, wall)
             mb.quad(P(e0, -0.5, -1.2), P(e1, -0.5, -1.2), P(e1, zs + ew * 0.9, -1.2), P(e0, zs + ew * 0.9, -1.2), 'wood_dark')
             mb.quad(P(e0, -0.5, 0), P(e0, -0.5, -1.2), P(e0, zs, -1.2), P(e0, zs, 0), 'stone_trim')
             mb.quad(P(e1, -0.5, -1.2), P(e1, -0.5, 0), P(e1, zs, 0), P(e1, zs, -1.2), 'stone_trim')
@@ -471,7 +535,7 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
                 mb.quad(P(sm - 0.08, zw0, 0.06), P(sm + 0.08, zw0, 0.06), P(sm + 0.08, zw1, 0.06), P(sm - 0.08, zw1, 0.06), 'stone_trim')
             arch_fill(mb, P, w0, w1, zw1, zw1 + 2.2, 0.0001, 'stone_trim', 'pointed', 8)
         else:
-            flat_wall(mb, P, 0, Le, -0.5 if i != 2 else Hw, Ht, 'stone_rubble')
+            flat_wall(mb, P, 0, Le, -0.5 if i != 2 else Hw, Ht, wall)
         # belfry louvres
         bw0, bw1 = Le / 2 - 0.9, Le / 2 + 0.9
         mb.quad(P(bw0, Ht - 4.5, 0.03), P(bw1, Ht - 4.5, 0.03), P(bw1, Ht - 1.5, 0.03), P(bw0, Ht - 1.5, 0.03), 'metal_dark')
@@ -484,8 +548,11 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
             if k % 2 == 0:
                 c = P((k + 0.5) * Le / nm, Ht + 0.55, 0.05)
                 mb.box(c, (Le / nm, 0.55, 1.1), 'stone_trim', rotz=math.atan2(t.y, t.x), skip=('bottom',))
-        if ivy and i != 2:
-            ivy_patch(iv, P, 0, Le, 0, Hw * 0.8, 1.2 * ivy, 11 + i)
+        if ivy:
+            holes = [(bw0, bw1, Ht - 4.5, Ht - 0.4)]
+            if i == 0:
+                holes += [(e0 - 0.3, e1 + 0.3, -1.0, zs + ew * 0.95 + 0.3), (w0, w1, zw0, zw1 + 2.2)]
+            ivy_patch(iv, P, 0, Le, Hw if i == 2 else 0, Ht - 0.5, 5.5, 11 + i, cover=ivy * 0.95, holes=holes)
     mb.face([(p[0], p[1], Ht) for p in tower], 'roof_flat')
     # corner pinnacles
     for (px_, py_) in tower:
@@ -767,6 +834,129 @@ def amphitheater():
     return [mb]
 
 
+# ============================================================================= 대우관 (1984)
+def gable_hall(mb, u0, u1, v0, v1, floors, fh, wall, pitch=1.3, plinth=1.0, bay=3.3):
+    """A stone hall in the builder's local frame whose ridge runs along v, with steep gables on its two v ends
+    (the end pavilions of 대우관: their gables face the forecourt)."""
+    W = u1 - u0
+    Hw = plinth + floors * fh + 0.6
+    hz = Hw + W / 2 * pitch
+    body = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+    mb.prism(offset_poly(body, 0.25), -4, plinth, 'stone_granite')
+    for i in range(4):
+        P, Le, t, n = edge_P(body[i], body[(i + 1) % 4])
+        window_grid(mb, P, Le, plinth, floors, fh, bay, wall, ww=0.5, trim='stone_trim', mull=2)
+        flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
+        mb.quad(P(-0.1, Hw - 0.1, 0.2), P(Le + 0.1, Hw - 0.1, 0.2), P(Le + 0.1, Hw + 0.2, 0.2), P(-0.1, Hw + 0.2, 0.2), 'stone_trim')
+        if i in (0, 2):     # gable end: triangle, coping and a finial
+            mb.face([P(0, Hw), P(Le, Hw), P(Le / 2, hz)], wall)
+            mb.quad(P(-0.25, Hw, 0.3), P(Le / 2, hz + 0.4, 0.3), P(Le / 2, hz + 0.4, -0.2), P(-0.25, Hw, -0.2), 'stone_trim')
+            mb.quad(P(Le / 2, hz + 0.4, 0.3), P(Le + 0.25, Hw, 0.3), P(Le + 0.25, Hw, -0.2), P(Le / 2, hz + 0.4, -0.2), 'stone_trim')
+            c = P(Le / 2, hz + 0.9, 0.05)
+            mb.box(c, (0.7, 0.7, 1.2), 'stone_trim', rotz=math.atan2(t.y, t.x), skip=('bottom',))
+    uc = (u0 + u1) / 2
+    e = 0.35
+    A, B = (u0 - e, v0 - e, Hw - e * pitch), (u0 - e, v1 + e, Hw - e * pitch)
+    C, D = (u1 + e, v1 + e, Hw - e * pitch), (u1 + e, v0 - e, Hw - e * pitch)
+    R1, R2 = (uc, v0 - e, hz), (uc, v1 + e, hz)
+    mb.face([A, R1, R2, B], 'roof_slate')
+    mb.face([C, R2, R1, D], 'roof_slate')
+    mb.box((uc, (v0 + v1) / 2, hz + 0.1), (0.35, v1 - v0, 0.3), 'metal_dark')
+
+
+def daewoo():
+    """대우관 (1984): a six-storey hall in white stone, Collegiate Gothic like the old halls but pale
+    (reference/대우관_블로그_본관_정면_상뜰.jpg): an H plan whose end pavilions stand forward with tall gables
+    towards the round pine garden (상뜰), a long slate roof between them and a raised central entrance bay."""
+    b = bld(242897922)
+    fp = b['footprint']
+    a, bb = Vector(fp[3]), Vector(fp[4])                 # the recessed front between the pavilions
+    t = (bb - a).normalized()
+    nl = Vector((-t.y, t.x))                              # into the building (north); the front faces -nl
+    ang = math.atan2(t.y, t.x)
+    W = lambda u, v: tuple(a + t * u + nl * v)
+    centre = dict(b, footprint=[W(0.4, 0), W(46.7, 0), W(46.7, 14.8), W(0.4, 14.8)])
+    out = gothic('daewoo', centre, tuple(-nl), 6, tower_w=9.0, tower_extra=2.5, ivy=0, wings=False, fh=3.6,
+                 wall='stone_white')
+    mb = MeshBuilder('lm_daewoo_pavilions')
+    mb.xf = local_frame(a.x, a.y, ang, b['base'])
+    gable_hall(mb, -12.1, 0.0, -12.2, 24.5, 6, 3.6, 'stone_white')
+    gable_hall(mb, 47.1, 55.5, -10.9, 24.3, 6, 3.6, 'stone_white')
+    return out + [mb]
+
+
+def daewoo_annex():
+    """대우관 별관: the same pale stone Gothic, five storeys, end gables on the front."""
+    return gothic('daewoo_annex', bld(242897923), (-0.97, 0.24), 5, tower_w=7.0, tower_extra=1.5, ivy=0, wings=True,
+                  fh=3.6, wall='stone_white')
+
+
+# ============================================================================= 용재관 (demolished)
+def yongjae():
+    """용재관 as in reference/용재관.jpg: white painted concrete, a slender stair tower with vertical fins and paired
+    windows facing the end of 백양로, a three-storey wing with a dark hipped roof and a flat entrance canopy at the
+    foot of the tower, and a five-storey block with a roof penthouse behind.  Footprints: tools/build_campus.py."""
+    import generic
+    st = dict(generic.STYLE['white'])
+    fh = 3.6
+    rnd = random.Random(1997)
+    parts = {b['id']: b for b in CAMPUS['buildings'] if b['name'] == '용재관'}
+    out = []
+
+    def corners(b):
+        return [tuple(p) for p in b['footprint']]
+
+    # five-storey block: plain white walls, parapet, penthouse
+    blk = parts[990003]
+    mb = MeshBuilder('lm_yongjae_block')
+    poly, z0 = corners(blk), blk['base']
+    zt = z0 + 5 * fh
+    for i in range(4):
+        generic.wall_edge(mb, poly[i], poly[(i + 1) % 4], z0, zt + 0.9, 5, fh, st, rnd)
+    generic.parapet_and_roof(mb, poly, zt, st, rnd)
+    out.append(mb)
+
+    # three-storey wing with a dark hipped roof
+    wg = parts[990002]
+    mb = MeshBuilder('lm_yongjae_wing')
+    poly, z0 = corners(wg), wg['base']
+    zt = z0 + 3 * fh
+    for i in range(4):
+        generic.wall_edge(mb, poly[i], poly[(i + 1) % 4], z0, zt, 3, fh, st, rnd)
+    cx, cy, L, W, ang = min_area_rect(poly)
+    generic.hip_roof(mb, cx, cy, L, W, ang, zt, 'roof_slate', pitch=0.42, over=0.7)
+    # entrance canopy at the tower end of the front, on two slim posts, and the notice board under it
+    f = wg['frame']
+    (ox, oy), a = f['o'], f['ang']
+    c, s_ = math.cos(a), math.sin(a)
+    U = lambda u, v, z: (ox + u * c - v * s_, oy + u * s_ + v * c, z)
+    zc = z0 + 3.3
+    mb.box(U(9.5, 2.6, zc + 0.15), (11.0, 3.4, 0.3), 'plaster_white', rotz=a)
+    for u in (4.6, 14.4):
+        mb.box(U(u, 4.0, z0 + (zc - z0) / 2 - 1.0), (0.25, 0.25, zc - z0 + 2.0), 'plaster_white', rotz=a)
+    mb.box(U(11.0, 1.08, z0 + 1.6), (4.0, 0.12, 1.4), 'metal_green', rotz=a)
+    out.append(mb)
+
+    # the stair tower: seven storeys, three vertical fins on the front, paired windows, a blank crown
+    tw = parts[990001]
+    mb = MeshBuilder('lm_yongjae_tower')
+    poly, z0 = corners(tw), tw['base']
+    zt = z0 + 6 * fh
+    zc = zt + 3.2
+    tst = dict(st, bay=4.0, ww=0.5, sill=0.9, head=0.7)
+    for i in range(4):
+        generic.wall_edge(mb, poly[i], poly[(i + 1) % 4], z0, zc, 6, fh, tst, rnd)
+    generic.parapet_and_roof(mb, poly, zc - 0.6, st, rnd, clutter=False)
+    u0, u1, v0, v1 = tw['frame']['uv']
+    for u in (u0 + 0.15, (u0 + u1) / 2, u1 - 0.15):      # fins on the face towards 백양로 (v1)
+        mb.box(U(u, v1 + 0.18, z0 + 4.0 + (zc - z0 - 4.0) / 2), (0.3, 0.36, zc - z0 - 4.0), 'plaster_white', rotz=a)
+    for k in range(1, 6):                                  # thin slab lines between the floors of the front
+        mb.box(U((u0 + u1) / 2, v1 + 0.05, z0 + k * fh), (u1 - u0, 0.1, 0.12), 'plaster_white', rotz=a)
+    out.append(mb)
+    return out
+
+
 BUILDERS = {'library': library, 'union': union, 'centennial': centennial, 'underwood': underwood,
             'stimson': stimson, 'appenzeller': appenzeller, 'auditorium': auditorium, 'chapel': chapel,
-            'engineering': engineering, 'hanok': hanok}
+            'engineering': engineering, 'hanok': hanok, 'yongjae': yongjae, 'none': lambda: [],
+            'daewoo': daewoo, 'daewoo_annex': daewoo_annex}
