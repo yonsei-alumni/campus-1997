@@ -274,8 +274,8 @@ function playGesture(a, name) {
 export const CAR_COLORS = ['#eeeeea', '#f2f1ec', '#b9bdc3', '#a9aeb5', '#1b2333', '#2a2d33', '#6e1b1f', '#244a3a', '#1d3b30', '#3a3f45', '#b59a6a', '#2c4a78'];
 // sedan 쏘나타Ⅱ type, sedan2 프린스 type, hatch 프라이드 type, tico 티코 type, van 그레이스 type (blender/cars.py)
 const WEIGHTS = { sedan: 4, sedan2: 3, hatch: 3, tico: 2, taxi: 3, van: 2 };
-// driver's hips in the car frame (blender/cars.py driver_seat)
-const DRIVER = { sedan: [-0.05, 0.38], sedan2: [-0.03, 0.38], hatch: [-0.25, 0.36], tico: [-0.30, 0.31], taxi: [-0.05, 0.38], van: [0.92, 0.38] };
+// driver's hips in the car frame (blender/cars.py driver_seat, times CAR_SCALE 1.07)
+const DRIVER = { sedan: [-0.05, 0.40], sedan2: [-0.03, 0.40], hatch: [-0.27, 0.39], tico: [-0.32, 0.33], taxi: [-0.05, 0.40], van: [0.98, 0.40] };
 
 export class Traffic {
   constructor(scene, carGltfs, lanes, n = 12, cast = null, driverIds = [], rndSeed = 9) {
@@ -303,14 +303,16 @@ export class Traffic {
         driver = cast.make(driverIds[Math.floor(rnd() * driverIds.length)]);
         play(driver, 'sit', { fade: 0 });
         const [dx, dy] = DRIVER[kind];
-        // car frame: +X forward, Blender +Y (left, the driver's side) is three -Z; the seated hips sit ~0.29 above the feet
-        driver.holder.position.set(dx, 0.36, -dy);
+        // car frame: +X forward, Blender +Y (left, the driver's side) is three -Z; the 'sit' clip puts the hips 0.22 above
+        // the holder, so 0.30 seats them low (~0.52 m) as in a real car and keeps the head under the roof
+        driver.holder.position.set(dx, 0.30, -dy);
         driver.holder.rotation.y = Math.PI / 2;
         root.add(driver.holder);
       }
       scene.add(root);
       const lane = lanes[i % lanes.length];
-      const radius = 0.3;
+      // wheel radius from the model, so the tyres roll without slipping
+      const radius = wheels.length ? new THREE.Box3().setFromObject(wheels[0]).getSize(new THREE.Vector3()).y / 2 : 0.3;
       this.cars.push({ root, lane, s: (i / n) * lane.length * 2 % lane.length + rnd() * 20, speed: 8 + rnd() * 4,
         v: 8, len, wheels, brake, radius, driver, kind });
     }

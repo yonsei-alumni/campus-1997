@@ -21,7 +21,7 @@ that filled 1997 Seoul:
   van     — one-box passenger van (그레이스 type)
 """
 import math
-from mathutils import Vector
+from mathutils import Vector, Matrix
 from common import MeshBuilder
 
 
@@ -186,7 +186,12 @@ SPECS = {
 }
 SPECS['taxi'] = dict(SPECS['sedan'], taxi=True)
 
-# where the seated driver goes (car frame: x forward, y left), for web/src/life.js DRIVER
+# Everything is modelled at the real cars' sizes and exported CAR_SCALE larger: the game's people sit bolt upright
+# (a 1.73 m man's head would come through a real 1.41 m roof), so the cars grow a little instead.
+CAR_SCALE = 1.07
+
+
+# where the seated driver goes (car frame: x forward, y left; before CAR_SCALE), for web/src/life.js DRIVER
 def driver_seat(kind):
     sp = SPECS[kind]
     x = 0.92 if sp.get('van') else sp['pillars'][0][0] + 0.15
@@ -206,6 +211,7 @@ def build_car(kind):
     chrome_trim = sp['trim'] == 'chrome'
     trim_mat = 'chrome' if chrome_trim else 'trim_black'
     mb = MeshBuilder('car_' + kind)
+    mb.xf = Matrix.Scale(CAR_SCALE, 4)
 
     def z_bot(x):
         z = sp['sill']
@@ -494,8 +500,8 @@ def build_car(kind):
         for s in ((-1, 1) if i == 0 else (0,)):
             yy = s * 0.36 if W > 1.5 else s * 0.31
             wseat = seat_w if i == 0 else W - 0.42
-            mb.box((rx, yy, zf + 0.22), (0.48, wseat, 0.14), 'car_interior')
-            mb.box((rx - 0.24, yy, zf + 0.52), (0.12, wseat, 0.46), 'car_interior')
+            mb.box((rx, yy, zf + 0.02), (0.48, wseat, 0.14), 'car_interior')                 # low seats, as in a real car
+            mb.box((rx - 0.24, yy, zf + 0.37), (0.12, wseat, 0.58), 'car_interior')
     # steering wheel (left-hand drive, driver on +Y)
     swx = min(dx_ + 0.50, xd - 0.22)
     swy, swz = dy_, belt(swx) + 0.02
@@ -525,6 +531,7 @@ def make_wheel(name, c, r, w, side, style='steel'):
     pressed-steel rim with a small chrome centre cap. Built around the origin; the caller places the object at c
     (the axle), so the game can spin it about its local Y (glTF -Z) axis."""
     mb = MeshBuilder(name)
+    mb.xf = Matrix.Scale(CAR_SCALE, 4)
     seg = 22
     # lathe profile (radius, y) from inner edge, around the tyre, to the outer face
     hw = w / 2
@@ -580,5 +587,5 @@ def make_wheel(name, c, r, w, side, style='steel'):
     yi = -side * hw * 0.92
     pts = [ring(r * 0.66, yi, 2 * math.pi * k / seg) for k in range(seg)]
     mb.face(pts if side < 0 else pts[::-1], 'trim_black')
-    mb.wheel_pos = c
+    mb.wheel_pos = tuple(v * CAR_SCALE for v in c)
     return mb
