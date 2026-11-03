@@ -17,6 +17,7 @@ import { SunShadows } from './shadows.js';
 import { TouchControls } from './touch.js';
 import { setupNews } from './news.js';
 import { WalkLabels } from './labels.js';
+import { FountainWater } from './water/fountain.js';
 import { $, MOBILE, versioned, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
 const canvas = $('#view');
@@ -141,6 +142,8 @@ async function main() {
   scene.add(amphGroup);
   scene.add(mergeStatic(bld.scene, { name: 'buildings' }));
   scene.add(mergeStatic(lms.scene, { name: 'landmarks' }));
+  // 활천 water: Ultra Water FFT ripples, caustics and the jets' rings (src/water/fountain.js)
+  const fountainWater = campus.statues.fountain ? new FountainWater(renderer, scene, campus.statues.fountain, lib, sun, sunDir, { mobile: MOBILE }) : null;
   progress('건물을 정리하는 중…');
 
   const ray = new THREE.Raycaster();
@@ -519,6 +522,7 @@ async function main() {
     forest.update(focus);
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
     traffic.update(dt, started ? player : NOBODY);
+    fountainWater?.update(dt, camera);
     // the shadow frustum follows the view in texel-snapped steps; people and cars are redrawn into it every frame
     shadows.update(focus, bird.active ? focus.y : camera.position.y - 10, span);
     if (bird.active) {
@@ -563,7 +567,7 @@ async function main() {
       renderer.setAnimationLoop(frame);
     },
   };
-  window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows,
+  window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows, fountainWater,
     startWalk, enterBird, leaveBird, record };
 }
 

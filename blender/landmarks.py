@@ -1034,7 +1034,7 @@ def fountain():
         mb.face([(r * c0, r * s0, 0.5), (r * c1, r * s1, 0.5), ((r + 0.35) * c1, (r + 0.35) * s1, 0.5), ((r + 0.35) * c0, (r + 0.35) * s0, 0.5)], 'stone_granite')
         mb.face([(r * c1, r * s1, 0.0), (r * c0, r * s0, 0.0), (r * c0, r * s0, 0.5), (r * c1, r * s1, 0.5)], 'stone_granite')
     mb.cylinder((0, 0), r, -0.2, 0.0, 'concrete_dark', seg=40)                       # basin floor
-    mb.cylinder((0, 0), r, 0.37, 0.38, 'water', seg=40, cap_bot=False)              # water surface
+    # the water surface (level 0.375) is drawn live in the web app: web/src/water/fountain.js (Ultra Water)
     mb.cylinder((0, 0), 0.9, 0.3, 0.75, 'stone_granite', seg=20)                    # stepped pedestal
     mb.cylinder((0, 0), 0.5, 0.75, 1.25, 'stone_granite', seg=16)
     mb.cylinder((0, 0), 0.12, 1.25, 1.45, 'metal_dark', seg=10)

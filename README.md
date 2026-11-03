@@ -74,6 +74,9 @@ PC 브라우저에서 모바일 화면을 시험하려면 주소 끝에 `?touch`
   - 대우관 · 별관 (1996): 흰 석조 고딕, H자 평면의 앞으로 나온 양끝 박공 파빌리온 (`reference/대우관_*.jpg`)
   - 연희관 (1956): 가운데 높은 탑과 양끝 박공 날개의 석조 고딕, 창 사이 세로 담쟁이 (`reference/학교연혁_연희관.jpg`)
   - 활천 분수: 제1공학관 앞 둥근 화강석 수반과 가운데 물줄기, 둘레 아치형 물줄기 (사진이 없어 동문 기억과 나무위키 기록으로)
+    물은 [Ultra Water](https://github.com/Humpalumps/Ultra-Water)(MIT, `web/src/water/ultra-water/`)의 FFT 물결 시뮬레이션과 바닥 빛무늬를
+    분수 크기(64² 격자, 4.5 m ~ 19 cm 네 층, 산들바람)로 줄여 실시간으로 그립니다(`web/src/water/fountain.js`). 물줄기가 떨어지는 자리마다 동심원 물결과 거품이 일고,
+    하늘이 비치고 햇빛이 반짝이며, 굴절되어 일렁이는 콘크리트 바닥과 화강석 벽에는 테두리와 받침대의 그림자가 집니다. 분수가 화면에 보이고 70 m 안쪽일 때만 계산합니다.
   - 대강당 앞 농구장: 백양로와 대강당 진입로 사이, 지금의 금호아트홀(백양누리) 자리. 사진이 없어 표준 규격(28×15m, 1997년 FIBA 사다리꼴 제한구역)으로
   - 언더우드관 앞 정원(회양목 테두리 화단 넷, 다듬은 소나무와 토피어리, 벤치) · 연희관 앞 정원 · 대우관 상뜰(둥근 화단과 소나무)
   - 용재관 (1957 – 2013, 지금 경영관 자리): 흰 세로 계단탑, 모임지붕 3층 날개와 입구 캐노피, 5층 본관 (`reference/용재관.jpg`)
@@ -148,6 +151,7 @@ python3 tools/trailer/make_video.py /tmp/frames-dir trailer/campus1997_trailer.m
 - 텍스처 · HDRI · 일부 소품(공중전화, 벤치, 휴지통): [Poly Haven](https://polyhaven.com), CC0
 - 인물과 애니메이션: Quaternius [Ultimate Modular Men](https://quaternius.com/packs/ultimatemodularmen.html) · [Ultimate Modular Women](https://quaternius.com/packs/ultimatemodularwomen.html), CC0 (빌드 스크립트는 sim-office의 `tools/office-characters.py`를 고쳐 씀)
 - 글꼴: Noto Sans KR, Jua, Do Hyeon (SIL OFL)
+- 분수 물결 · 빛무늬: [Ultra Water](https://github.com/Humpalumps/Ultra-Water)의 `OceanSim` · `Caustics` · `fullscreen`을 고쳐 씀, MIT (`web/src/water/ultra-water/LICENSE`)
 - 동상 모델링 참고(배포하지 않음): Wikimedia Commons의 언더우드 동상 사진(Rickinasia, CC BY-SA 4.0 등), 연세대 상징물 소개 페이지,
   연세춘추 「'버추얼 캠퍼스', 우리대학교 네 번째 교정 출범」(2024)
 - 1997년 사진: `reference/` (연세대학교 기록관 · 연세동문회보 · 연세춘추 · 동문 제공). 동문회 비영리 용도로만 쓰고, 재배포할 때는 원 출처의 허락을 받아야 합니다.
