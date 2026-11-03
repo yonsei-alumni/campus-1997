@@ -17,7 +17,7 @@ import { SunShadows } from './shadows.js';
 import { TouchControls } from './touch.js';
 import { setupNews } from './news.js';
 import { WalkLabels } from './labels.js';
-import { $, MOBILE, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
+import { $, MOBILE, versioned, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
 const canvas = $('#view');
 let season = safeGet('y97-season');
@@ -31,8 +31,8 @@ const progress = (label) => {
   $('#loadfill').style.width = `${Math.min(100, (loaded / total) * 100)}%`;
   if (label) $('#loadtext').textContent = label;
 };
-const json = (u) => fetch(u).then((r) => r.json());
-const bin = (u) => fetch(u).then((r) => r.arrayBuffer()).then((b) => new Float32Array(b));
+const json = (u) => fetch(versioned(u)).then((r) => r.json());
+const bin = (u) => fetch(versioned(u)).then((r) => r.arrayBuffer()).then((b) => new Float32Array(b));
 
 function seasonButtons(v) {
   document.querySelectorAll('[data-season]').forEach((b) => b.classList.toggle('on', b.dataset.season === v));
@@ -69,7 +69,7 @@ async function main() {
 
   // environment lighting from the CC0 Poly Haven HDRI (same sky as the backdrop)
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const hdr = await new RGBELoader().loadAsync('assets/hdri/env_1k.hdr');
+  const hdr = await new RGBELoader().loadAsync(versioned('assets/hdri/env_1k.hdr'));
   hdr.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = pmrem.fromEquirectangular(hdr).texture;
   scene.environmentIntensity = 0.75;
@@ -606,7 +606,7 @@ function makeBoard(l, groundAt) {
       x.restore();
       tex.needsUpdate = true;
     };
-    img.src = src;
+    img.src = versioned(src);
   });
   const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
   const board = new THREE.Mesh(new THREE.BoxGeometry(4.0, 2.25, 0.12), [mat, mat, mat, mat, mat, new THREE.MeshStandardMaterial({ color: '#5a4a3a' })]);

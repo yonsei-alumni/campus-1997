@@ -4,11 +4,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { mulberry, placeMatrix, countBy } from './util.js';
+import { mulberry, placeMatrix, countBy, versioned } from './util.js';
 
 const draco = new DRACOLoader().setDecoderPath('draco/');
 export const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
-export const loadGLB = (url) => new Promise((res, rej) => gltfLoader.load(url, res, undefined, rej));
+export const loadGLB = (url) => new Promise((res, rej) => gltfLoader.load(versioned(url), res, undefined, rej));
 
 // Our own GLBs carry material *names*; replace them with the shared library materials.
 export function bindMaterials(root, lib, keepUnknown = false) {

@@ -1,6 +1,6 @@
 // Shared PBR material library, built from data/materials.json (same file Blender uses).
 import * as THREE from 'three';
-import { MOBILE } from './util.js';
+import { MOBILE, versioned } from './util.js';
 
 const texLoader = new THREE.TextureLoader();
 const cache = new Map();
@@ -31,7 +31,7 @@ export function loadTex(url, { srgb = true, repeat = true, flipY = false, mobile
     let done;
     const pr = new Promise((r) => (done = r));
     pending.add(pr);
-    const t = texLoader.load(url, (tx) => {
+    const t = texLoader.load(versioned(url), (tx) => {
       if (MOBILE) { tx.image = shrinkImage(tx.image, mobileMax); tx.needsUpdate = true; }
       // clones share the image Source but keep their own version -> bump them once data exists
       for (const c of tx.userData.clones || []) c.needsUpdate = true;

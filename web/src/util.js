@@ -3,6 +3,10 @@ import * as THREE from 'three';
 
 export const $ = (s) => document.querySelector(s);
 
+// every asset URL carries the build number (vite.config.js), so a new deploy never mixes with cached old files
+export const BUILD = __BUILD__;
+export const versioned = (url) => (BUILD === 'dev' ? url : `${url}${url.includes('?') ? '&' : '?'}v=${BUILD}`);
+
 // Phones / tablets: no shadow maps, smaller textures, fewer people, touch controls and touch help texts.
 // ?touch in the URL forces it (testing the phone layout on a desktop browser).
 export const MOBILE = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);

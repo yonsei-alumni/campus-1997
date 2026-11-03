@@ -1,10 +1,10 @@
 // 새 소식: date-by-date release notes from data/releases.json, opened from the title card and the pause menu.
 // A red dot marks the buttons until the newest entry has been opened once (per browser).
-import { $, safeGet, safeSet } from './util.js';
+import { $, safeGet, safeSet, versioned } from './util.js';
 
 export async function setupNews(onOpen = () => {}, onClose = () => {}) {
   let notes = [];
-  try { notes = await fetch('data/releases.json').then((r) => r.json()); } catch { return; }
+  try { notes = await fetch(versioned('data/releases.json')).then((r) => r.json()); } catch { return; }
   if (!notes.length) return;
   const latest = notes[0].date;
   const dots = document.querySelectorAll('.newsbtn i');

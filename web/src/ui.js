@@ -1,6 +1,6 @@
 // HUD, minimap, campus map with teleport, memory cards and the stamp collection.
 import { pointInPoly } from './player.js';
-import { $, safeGet, safeSet } from './util.js';
+import { $, safeGet, safeSet, versioned } from './util.js';
 
 const FOOT = new Set(['footway', 'path', 'steps', 'pedestrian']);
 
@@ -237,7 +237,7 @@ export class UI {
       const f = document.createElement('figure');
       if (/_pano\./.test(src)) f.classList.add('wide');      // two-page spread joined into one panorama
       const img = document.createElement('img');
-      img.src = 'assets/' + src;
+      img.src = versioned('assets/' + src);
       img.alt = l.title;
       f.appendChild(img);
       ph.appendChild(f);

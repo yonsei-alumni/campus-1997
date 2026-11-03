@@ -2,7 +2,7 @@
 // and the sky dome.  World frame: X = east, Y = up, Z = -north.
 import * as THREE from 'three';
 import { loadTex, shrinkImage } from './materials.js';
-import { MOBILE, mulberry, placeMatrix } from './util.js';
+import { MOBILE, mulberry, placeMatrix, versioned } from './util.js';
 
 export class Heightfield {
   constructor(data, half, step, n) {
@@ -263,7 +263,7 @@ export function makeCity(hf, nearHalf, count = 1600) {
 }
 
 export function makeSky(skyMeta, fogColor) {
-  const tex = new THREE.TextureLoader().load('assets/hdri/sky_8k.jpg', (t) => {
+  const tex = new THREE.TextureLoader().load(versioned('assets/hdri/sky_8k.jpg'), (t) => {
     if (MOBILE) { t.image = shrinkImage(t.image, 4096); t.needsUpdate = true; }   // 8K sky: 90 MB on the GPU
   });
   tex.colorSpace = THREE.SRGBColorSpace;
