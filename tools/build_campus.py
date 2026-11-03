@@ -50,28 +50,28 @@ B = {
     371403811: ('lm:auditorium', 4, '대강당'),
     429249499: ('lm:chapel', 2, '루스채플'),
     205583531: ('lm:engineering', 5, '제1공학관'),
-    246156113: ('stone', 2, '핀슨관'),
+    246156113: ('stone', 3, '핀슨관'),
     429249496: ('lm:hanok', 1, '광혜원'),
     # engineering / science quarter
     1451926793: ('modern', 5, '제1공학관'), 1451926787: ('modern', 5, '제1공학관'),
     1451926794: ('modern', 4, '제1공학관'), 256932940: ('modern', 6, '제2공학관'),
     224955691: ('modern', 5, '제3공학관 (공사중)'), 324328471: ('white', 2, '별동연구동'),
-    222843398: ('white', 6, '과학관'), 468614722: ('modern', 5, '광복관'),
+    222843398: ('white', 6, '과학관'), 468614722: ('brick', 3, '광복관'),
     256933753: ('white', 5, '경영학교실단'),
-    421415366: ('gym', 2, '체육관'), 421415365: ('white', 3, '체육교육관'),
+    421415366: ('gym', 2, '체육관'), 421415365: ('white', 4, '체육교육관'),
     # humanities / north campus
-    246156112: ('modern', 5, '인문관'), 246156114: ('modern', 4, '인문관'),
-    246156119: ('white', 4, '제2인문관 (공사중)'), 245623759: ('stone', 4, '연희관'),
-    246156121: ('white', 4, ''), 246156123: ('modern', 6, '종합관'),
-    246156117: ('white', 4, '성암관'), 246156111: ('stone', 3, '교육관'),
-    245623193: ('white', 3, '생활과학관'), 413217834: ('white', 1, '논지당'),
+    246156112: ('modern', 6, '인문관'), 246156114: ('modern', 5, '인문관'),
+    246156119: ('white', 4, '제2인문관 (공사중)'), 245623759: ('lm:yeonhui', 4, '연희관'),
+    246156121: ('stone', 2, '연합신학대학원'), 246156123: ('modern', 6, '종합관'),
+    246156117: ('stone', 3, '성암관'), 246156111: ('stone', 3, '교육관'),
+    245623193: ('stone_pale', 4, '생활과학관'), 413217834: ('house', 1, '논지당'),
     242897922: ('lm:daewoo', 6, '대우관'), 242897923: ('lm:daewoo_annex', 5, '대우관 별관'),
     429077789: ('white', 4, '음악대학'), 429077790: ('white', 4, '음악대학'),
-    429079066: ('house', 2, '언더우드가 사택'), 472512289: ('house', 2, '알렌관'),
+    429079066: ('stone', 2, '언더우드가 사택'), 472512289: ('brick', 2, '알렌관'),
     472512292: ('white', 2, '어린이생활지도연구원'), 472965030: ('house', 2, '대학사택'),
     472987415: ('house', 2, '대학사택'), 472987419: ('house', 2, '대학사택'),
     472534641: ('house', 2, '영빈관'), 472534642: ('house', 2, '총장공관'),
-    472516998: ('white', 3, '국제학사'), 371403603: ('white', 4, '한국어학당'),
+    472516998: ('tile', 5, '국제학사'), 371403603: ('brick', 5, '한국어학당'),
     429077785: ('white', 1, '영선실'), 472516999: ('white', 1, '차량실'),
     722550503: ('white', 2, '행정동'),
     # medical quarter (old Severance)
@@ -84,9 +84,9 @@ B = {
     473014385: ('white', 4, '동문회관'), 429079067: ('white', 4, '재활병원'),
     324328481: ('modern', 7, '심장혈관병원'), 324328472: ('white', 5, '안·이비인후과병원'),
     # in 1997 too, missing before
-    246156110: ('stone', 2, '한경관'), 429249497: ('house', 1, '수경원 정자각'),
+    246156110: ('stone', 2, '한경관'), 429249497: ('house', 1, '수경원 정자각'), 1178743320: ('white', 3, '미우학사'),
 }
-FLOOR_H = {'modern': 3.8, 'white': 3.6, 'stone': 4.2, 'house': 3.4, 'gym': 6.5, 'city': 3.0}
+FLOOR_H = {'modern': 3.8, 'white': 3.6, 'stone': 4.2, 'house': 3.4, 'gym': 6.5, 'city': 3.0, 'brick': 3.6, 'tile': 3.4, 'stone_pale': 4.0}
 
 # ---------------------------------------------------------------------------
 # Terrain
@@ -178,6 +178,24 @@ for wv in ways.values():
             m = ndimage.binary_dilation(inside, iterations=2)
             soft = ndimage.gaussian_filter(m.astype(float), 1.2)
             Hn = Hn * (1 - soft) + float(Hn[inside].mean()) * soft
+
+# --- 대강당 앞 농구장 (1997): an outdoor court between 백양로 and the 대강당 driveway, where 금호아트홀 (under
+# 백양누리) was later built (namu.wiki 연세대학교/신촌캠퍼스).  No photo found: a standard 28 x 15 m court, long side
+# along 백양로.  Flatten the ground under it.
+COURT = dict(pos=[21.9, 2.5], rot=1.313, L=28.0, W=15.0)
+
+
+def court_poly(pad=0.0):
+    c_, s_ = math.cos(COURT['rot']), math.sin(COURT['rot'])
+    hl, hw = COURT['L'] / 2 + pad, COURT['W'] / 2 + pad
+    return Polygon([(COURT['pos'][0] + u * c_ - v * s_, COURT['pos'][1] + u * s_ + v * c_)
+                    for u, v in ((-hl, -hw), (hl, -hw), (hl, hw), (-hl, hw))])
+
+
+_inside = np.array([court_poly(1.5).contains(Point(x, y)) for x, y in pts]).reshape(X.shape)
+if _inside.any():
+    _soft = ndimage.gaussian_filter(ndimage.binary_dilation(_inside, iterations=1).astype(float), 1.0)
+    Hn = Hn * (1 - _soft) + float(Hn[_inside].mean()) * _soft
 
 # --- old 노천극장 (1997): bowl carved into the hillside east of the stage
 AMPH = dict(cx=160.0, cy=163.0, arena_rx=18.0, arena_ry=14.0, rows=15, row_d=1.6, row_h=0.45,
@@ -445,12 +463,51 @@ plazas = [
 for pz in plazas:
     draw_poly('pavers', pz)
 
-# Underwood garden (언더우드관 앞 정원): lawn with gravel cross paths
+# ---------------------------------------------------------------------------
+# Front gardens laid out from the photos (reference/학교연혁_언더우드관.jpg, 언더우드관_2024_*, 학교연혁_연희관.jpg,
+# 연희관_2024_*, 학교연혁_대우관.jpg, 대우관_*): each in a frame (u across, v towards the building)
+# ---------------------------------------------------------------------------
+def frame(ox, oy, ux, uy):
+    n_ = math.hypot(ux, uy)
+    ux, uy = ux / n_, uy / n_
+    return lambda u, v: (ox + u * ux - v * uy, oy + u * uy + v * ux)
+
+
+def frame_from(bid):
+    # the recessed front edge (footprint[3] -> [4]) of an H-plan hall; v points into the building
+    fp_ = next(b for b in buildings if b['id'] == bid)['footprint']
+    (ax, ay), (bx, by) = fp_[3], fp_[4]
+    return frame(ax, ay, bx - ax, by - ay)
+
+
+def fpoly(W, pts):
+    return Polygon([W(u, v) for u, v in pts])
+
+
+# 언더우드관 앞 정원: a formal parterre.  The axis runs from the Underwood statue to the hall's door; four lawn beds
+# edged with clipped boxwood carry clipped pines and topiary; a cross walk halfway.
+WU = frame(62.0, 213.0, 0.970, -0.243)
 garden = Polygon([(30, 190), (80, 177), (95, 236), (44, 250)])
 draw_poly('pavers', garden.buffer(1.5))
 draw_poly('pavers', garden.buffer(-3), 0)
-draw_line('dirt', [(37, 220), (88, 206)], 3.2)
-draw_line('dirt', [(55, 183), (70, 243)], 3.2)
+draw_line('pavers', [WU(0, -30), WU(0, 31)], 5.5)
+draw_line('dirt', [WU(-25, 2), WU(25, 2)], 3.0)
+# 연희관 앞: an axis walk from the door to a round stone planter, boxwood beds either side, big shade trees
+WY = frame_from(245623759)
+yeonhui_garden = fpoly(WY, [(-2, -2), (42, -2), (44, -34), (-4, -34)])
+draw_line('pavers', [WY(20, 0), WY(20, -34)], 4.0)
+draw_poly('pavers', Point(*WY(20, -13)).buffer(4.6))
+draw_line('dirt', [WY(-2, -24), WY(42, -24)], 2.6)
+# 대우관 상뜰: the round garden south of the hall, on the OSM footway ring (9 m across) with its radial walks:
+# a round bed in the middle, benches on the ring, pines on the lawns between the walks
+WD = frame_from(242897922)
+SANG = (106.8, 427.1)
+daewoo_garden = Point(*SANG).buffer(17)
+draw_poly('pavers', Point(*SANG).buffer(6.4))
+draw_poly('pavers', Point(*SANG).buffer(3.9), 0)
+draw_line('pavers', [WD(23.5, 0), SANG], 4.0)
+draw_poly('pavers', court_poly(1.0))
+GARDEN_ZONES = [garden, yeonhui_garden, daewoo_garden, court_poly(2.0)]
 
 # amphitheater arena (dirt), sports field (dirt), tree-root patches done in web shader
 draw_poly('dirt', Point(AMPH['cx'], AMPH['cy']).buffer(1).simplify(0))
@@ -622,7 +679,7 @@ for k in range(60000):
         continue
     if amph_poly is not None and Point(AMPH['cx'], AMPH['cy']).distance(pt) < R_OUT + 1:
         continue
-    if garden.contains(pt) or ISL.buffer(3).contains(pt) or EAST_LAWN.contains(pt) or lot_line.contains(pt):
+    if any(z.contains(pt) for z in GARDEN_ZONES) or ISL.buffer(3).contains(pt) or EAST_LAWN.contains(pt) or lot_line.contains(pt):
         continue
     sp = rng.choice(['pine', 'pine', 'oak', 'oak', 'zelkova']) if in_wood else rng.choice(species_campus)
     trees.append([sp, round(x, 2), round(y, 2), round(rng.uniform(0.8, 1.25), 2), round(rng.uniform(0, 6.28), 2)])
@@ -635,21 +692,70 @@ for a in np.linspace(0, 2 * math.pi, 26, endpoint=False):
     x, y = AMPH['cx'] + rr * math.cos(a), AMPH['cy'] + rr * math.sin(a)
     if not ball_buf.contains(Point(x, y)):
         trees.append(['pine', round(x, 2), round(y, 2), round(rng.uniform(1.0, 1.3), 2), round(rng.uniform(0, 6.28), 2)])
-# Underwood garden: clipped topiary rows + conical yews
-for i, (a, b_) in enumerate([((37, 220), (88, 206)), ((55, 183), (70, 243))]):
-    for t_ in np.linspace(0.08, 0.92, 9):
-        x = a[0] + (b_[0] - a[0]) * t_
-        y = a[1] + (b_[1] - a[1]) * t_
-        for off in (-3.2, 3.2):
-            dx, dy = b_[0] - a[0], b_[1] - a[1]
-            n_ = math.hypot(dx, dy)
-            px_, py_ = x - dy / n_ * off, y + dx / n_ * off
-            if Point(55.5, 187.5).distance(Point(px_, py_)) > 4.5:
-                shrubs.append(['topiary_cone' if (int(t_ * 10) % 2) else 'topiary_round', round(px_, 2), round(py_, 2), round(rng.uniform(1.1, 1.4), 2), 0])
-for k in range(70):
-    x, y = rng.uniform(32, 92), rng.uniform(180, 248)
-    if garden.buffer(-4).contains(Point(x, y)) and not blocked(x, y, 2.0) and Point(55.5, 187.5).distance(Point(x, y)) > 4.5:
-        shrubs.append(['hedge_blob', round(x, 2), round(y, 2), round(rng.uniform(0.8, 1.6), 2), round(rng.uniform(0, 6.28), 2)])
+def hedge_rect(W, u0, u1, v0, v1, gap=None, step=1.5):
+    """low clipped boxwood round a bed; gap=(edge index, centre, half width) leaves an opening"""
+    corners = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+    for e in range(4):
+        (ua, va), (ub, vb) = corners[e], corners[(e + 1) % 4]
+        L_ = math.hypot(ub - ua, vb - va)
+        (xa, ya), (xb, yb) = W(ua, va), W(ub, vb)
+        a_ = math.atan2(yb - ya, xb - xa)
+        for k in range(int(L_ / step) + 1):
+            f_ = min(1.0, (k + 0.5) * step / L_)
+            if gap and gap[0] == e and abs(f_ * L_ - gap[1]) < gap[2]:
+                continue
+            shrubs.append(['hedge_low', round(xa + (xb - xa) * f_, 2), round(ya + (yb - ya) * f_, 2), 1.0, round(a_, 3)])
+
+
+def plant(kind, W, u, v, sc, rot=0.0):
+    x, y = W(u, v)
+    (trees if kind in ('pine', 'zelkova', 'ginkgo', 'cherry', 'maple', 'oak') else shrubs).append(
+        [kind, round(x, 2), round(y, 2), round(sc, 2), round(rot, 3)])
+
+
+def axis_angle(W):
+    (x0, y0), (x1, y1) = W(0, 0), W(0, 1)
+    return math.atan2(y1 - y0, x1 - x0)
+
+
+# 언더우드관 앞 정원
+for su in (-1, 1):
+    for (v0, v1) in ((-23.0, -0.5), (4.5, 25.0)):
+        u0, u1 = sorted((su * 4.5, su * 22.5))
+        hedge_rect(WU, u0, u1, v0, v1)
+        uc, vc = (u0 + u1) / 2, (v0 + v1) / 2
+        plant('pine', WU, uc, vc, 0.55, rng.uniform(0, 6.28))                      # the clipped pine in each bed
+        for du in (-5.5, 5.5):
+            for dv in (-6.5, 6.5):
+                plant('topiary_round', WU, uc + du, vc + dv, 1.25)
+        for (cu, cv) in ((u0 + 1.4, v0 + 1.4), (u1 - 1.4, v0 + 1.4), (u0 + 1.4, v1 - 1.4), (u1 - 1.4, v1 - 1.4)):
+            plant('topiary_cone', WU, cu, cv, 1.1)
+# tall trees standing round the parterre's edge
+for (u, v) in ((-27, -20), (-28, 8), (-27, 26), (27, -22), (28, 6), (27, 27)):
+    plant('zelkova', WU, u, v, 1.15, rng.uniform(0, 6.28))
+# 연희관 앞 정원
+hedge_rect(WY, 3.0, 15.5, -28.0, -5.0)
+hedge_rect(WY, 24.5, 37.0, -28.0, -5.0)
+for uc in (9.25, 30.75):
+    for vv in (-9.0, -16.5, -24.0):
+        plant('topiary_round', WY, uc, vv, 1.3)
+for k in range(8):                                                        # round planter on the axis
+    a_ = 2 * math.pi * k / 8
+    plant('topiary_round', WY, 20 + 2.6 * math.cos(a_), -13 + 2.6 * math.sin(a_), 0.85)
+plant('bush', WY, 20, -13, 1.2)
+for (u, v) in ((-1.5, -31), (41.5, -31), (-9, -16), (49, -16), (12, -33), (28, -33)):
+    plant('zelkova', WY, u, v, 1.2, rng.uniform(0, 6.28))
+# 대우관 상뜰
+ang_d = axis_angle(WD)
+trees.append(['pine', SANG[0], SANG[1], 0.7, 0.4])
+for k in range(9):
+    a_ = 2 * math.pi * k / 9
+    x_, y_ = SANG[0] + 2.9 * math.cos(a_), SANG[1] + 2.9 * math.sin(a_)
+    shrubs.append(['topiary_round', round(x_, 2), round(y_, 2), 0.8, 0])
+for k in range(8):
+    a_ = 2 * math.pi * k / 8 + math.pi / 8
+    x_, y_ = SANG[0] + 11.5 * math.cos(a_), SANG[1] + 11.5 * math.sin(a_)
+    trees.append(['pine', round(x_, 2), round(y_, 2), round(rng.uniform(0.75, 0.95), 2), round(rng.uniform(0, 6.28), 2)])
 # shrubs around building aprons
 for b, bp in zip(buildings, bpolys):
     if b['style'] == 'city':
@@ -658,7 +764,7 @@ for b, bp in zip(buildings, bpolys):
     nshr = int(ring.length / 7)
     for k in range(nshr):
         p = ring.interpolate(rng.uniform(0, ring.length))
-        if not blocked(p.x, p.y, 1.2) and not ball.contains(p) and rng.random() < 0.55:
+        if not blocked(p.x, p.y, 1.2) and not ball.contains(p) and not any(z.contains(p) for z in GARDEN_ZONES) and rng.random() < 0.55:
             shrubs.append(['bush', round(p.x, 2), round(p.y, 2), round(rng.uniform(0.7, 1.3), 2), round(rng.uniform(0, 6.28), 2)])
 print('trees', len(trees), 'shrubs', len(shrubs))
 
@@ -718,9 +824,29 @@ def P(name, x, y, rot=0.0):
 # payphones & benches near student hubs
 for (x, y, r) in [(-2, -70, 1.3), (0, -76, 1.3), (-44, -60, -0.25), (-46, -54, -0.25), (-92, -408, 0.0), (-88, -409, 0.0), (36, -112, 2.9)]:
     P('payphone', x, y, r)
-for (x, y, r) in [(-50, -25, -1.82), (-47, -14, -1.82), (-58, -60, -1.82), (40, 205, 0.3), (85, 196, 2.9), (62, 248, 3.4),
+for (x, y, r) in [(-50, -25, -1.82), (-47, -14, -1.82), (-58, -60, -1.82),
                   (-20, 35, 1.3), (6, 60, -1.82), (110, 160, 1.3), (-36, -140, -1.82), (-46, -180, -1.82)]:
     P('bench', x, y, r)
+# garden benches, long side along the walk, seat towards it (BENCH_FACE: which way the bench model looks)
+BENCH_FACE = math.pi
+
+
+def bench_along(W, u, v, face_u):
+    (x, y) = W(u, v)
+    a_ = axis_angle(W) - math.pi / 2 + (0 if face_u < 0 else math.pi) + BENCH_FACE
+    P('bench', x, y, a_)
+
+
+for v in (-17.0, -6.0, 10.0, 20.0):                 # 언더우드관: along the axis, both sides
+    bench_along(WU, -3.6, v, 1)
+    bench_along(WU, 3.6, v, -1)
+for v in (-20.0, -26.5):                            # 연희관: along the axis walk
+    bench_along(WY, 17.6, v, 1)
+    bench_along(WY, 22.4, v, -1)
+for k in range(6):                                  # 대우관 상뜰: round the court, facing the middle
+    a_ = 2 * math.pi * k / 6 + math.pi / 6
+    x_, y_ = SANG[0] + 5.6 * math.cos(a_), SANG[1] + 5.6 * math.sin(a_)
+    P('bench', x_, y_, a_ + math.pi / 2 + BENCH_FACE)
 for (x, y) in [(-48, -40), (-4, -64), (45, 200), (-94, -404), (-44, -175)]:
     P('trashcan', x, y, 0)
 # double-globe lamps around the library forecourt (1997 library photo) and at the tip of the 화단섬
@@ -821,7 +947,8 @@ LANDMARKS = [
 ]
 STATUES = dict(
     eagle=dict(pos=[-52, -82], rot=math.radians(-14 + 90)),
-    underwood_statue=dict(pos=[55.5, 187.5], rot=math.radians(-14)),     # courtyard entrance, facing down the campus axis
+    underwood_statue=dict(pos=[55.5, 187.5], rot=math.radians(-14)),
+    court=dict(pos=COURT['pos'], rot=COURT['rot'], L=COURT['L'], W=COURT['W']),     # courtyard entrance, facing down the campus axis
     gate=dict(pos=[-108, -424], rot=math.radians(-14)),
 )
 for v in STATUES.values():
@@ -842,7 +969,7 @@ Hf.tofile(os.path.join(ROOT, 'web/public/data/terrain_far.bin'))
 # MARKER_NAME: the name a 1997 student would use (or None: no marker, e.g. not built yet in 1997).
 # ---------------------------------------------------------------------------
 MARKER_NAME = {n: None for n in ('별동연구동', '영빈관', '영선실', '차량실', '행정동', '학생회관 별관', '광혜관')}
-EXTRA_MARKERS = [('청송대', 238.0, 284.0)]          # the wooded park east of 연희관 (OSM leisure=park)
+EXTRA_MARKERS = [('청송대', 238.0, 284.0), ('농구장', 21.9, 2.5)]          # the wooded park east of 연희관 (OSM leisure=park)
 LANDMARK_NAMES = {l['name'] for l in LANDMARKS}
 groups = {}
 for b in buildings:

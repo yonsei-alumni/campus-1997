@@ -11,9 +11,14 @@ STYLE = {
     'stone':  dict(wall='stone_rubble', alt='stone_rubble', glass='glass', frame='frame_white', bay=3.0, ww=0.42, sill=0.9, head=0.7, band=False, depth=0.32, mull=1, trim='stone_trim'),
     'house':  dict(wall='plaster_cream', alt='brick_red', glass='glass', frame='frame_white', bay=3.0, ww=0.45, sill=0.95, head=0.65, band=False, depth=0.18, mull=1),
     'gym':    dict(wall='concrete', alt='concrete', glass='glass', frame='frame_dark', bay=4.5, ww=0.8, sill=4.6, head=0.4, band=False, depth=0.2, mull=3),
+    # 1997 halls from the university's building photos (yonsei.ac.kr/sc/349): red brick (광복관 · 알렌관 ·
+    # 언어연구교육원), tan tile (국제학사), pale stone with a slate roof (빌링슬리관)
+    'brick':  dict(wall='brick_red', alt='concrete', glass='glass', frame='frame_white', bay=3.0, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.22, mull=1, trim='stone_trim'),
+    'tile':   dict(wall='tile_facade', alt='concrete', glass='glass', frame='frame_silver', bay=3.2, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.2, mull=1),
+    'stone_pale': dict(wall='stone_white', alt='stone_white', glass='glass', frame='frame_dark', bay=3.0, ww=0.45, sill=0.9, head=0.7, band=False, depth=0.3, mull=1, trim='stone_trim'),
     'city':   dict(wall='brick_red', alt='plaster_cream', glass='glass', frame='frame_silver', bay=3.0, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.15, mull=1),
 }
-FH = {'modern': 3.8, 'white': 3.6, 'stone': 4.2, 'house': 3.4, 'gym': 6.5, 'city': 3.0}
+FH = {'modern': 3.8, 'white': 3.6, 'stone': 4.2, 'house': 3.4, 'gym': 6.5, 'city': 3.0, 'brick': 3.6, 'tile': 3.4, 'stone_pale': 4.0}
 
 
 def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground_floor_shop=False):
@@ -141,6 +146,19 @@ def hip_roof(mb, cx, cy, L, W, ang, zt, mat, pitch=0.6, over=0.5, fascia='frame_
         mb.quad(p, q, (q[0], q[1], q[2] - 0.25), (p[0], p[1], p[2] - 0.25), fascia)
 
 
+def barrel_roof(mb, cx, cy, L, W, ang, zt, rise=0.22, seg=12):
+    """체육관 (1960): a reinforced-concrete arched (barrel-vaulted) roof spanning the short side, with arched end walls."""
+    c, s = math.cos(ang), math.sin(ang)
+    P = lambda x, y, z: (cx + x * c - y * s, cy + x * s + y * c, z)
+    h = W * rise
+    prof = [(-W / 2 + W * k / seg, zt + h * math.sin(math.pi * k / seg)) for k in range(seg + 1)]
+    for (y0, z0), (y1, z1) in zip(prof, prof[1:]):
+        mb.quad(P(-L / 2 - 0.4, y0, z0), P(-L / 2 - 0.4, y1, z1), P(L / 2 + 0.4, y1, z1), P(L / 2 + 0.4, y0, z0), 'metal')
+    for x in (-L / 2, L / 2):           # arched gable ends
+        for (y0, z0), (y1, z1) in zip(prof, prof[1:]):
+            mb.quad(P(x, y0, zt), P(x, y1, zt), P(x, y1, z1), P(x, y0, z0), 'concrete')
+
+
 def build_generic(b, rnd):
     style = b['style']
     st = dict(STYLE[style])
@@ -156,7 +174,7 @@ def build_generic(b, rnd):
         st['frame'] = 'frame_silver'
     elif style == 'white' and rnd.random() < 0.3:
         st['wall'] = 'plaster_cream'
-    pitched = style in ('stone', 'house')
+    pitched = style in ('stone', 'house', 'stone_pale')
     if pitched or style == 'gym':
         cx, cy, L, W, ang = min_area_rect(poly)
         c, s = math.cos(ang), math.sin(ang)
@@ -169,10 +187,10 @@ def build_generic(b, rnd):
         wall_edge(mb, poly[i], poly[(i + 1) % len(poly)], z0, zt if pitched else zt + 0.9, nf, fh, st, rnd,
                   ground_floor_shop=shop)
     if pitched:
-        hip_roof(mb, cx, cy, L, W, ang, zt, 'roof_slate' if style == 'stone' else rnd.choice(['roof_slate', 'roof_giwa']),
-                 pitch=0.75 if style == 'stone' else 0.55)
+        hip_roof(mb, cx, cy, L, W, ang, zt, rnd.choice(['roof_slate', 'roof_giwa']) if style == 'house' else 'roof_slate',
+                 pitch=0.55 if style == 'house' else 0.75)
     elif style == 'gym':
-        hip_roof(mb, cx, cy, L, W, ang, zt, 'metal', pitch=0.18, over=0.6, fascia='frame_dark')
+        barrel_roof(mb, cx, cy, L, W, ang, zt)
     else:
         roof = 'roof_green' if (style == 'city' and rnd.random() < 0.6) else 'roof_flat'
         parapet_and_roof(mb, poly, zt, st, rnd, roof_mat=roof, clutter=style != 'city')

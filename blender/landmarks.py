@@ -835,7 +835,7 @@ def amphitheater():
 
 
 # ============================================================================= 대우관 (1984)
-def gable_hall(mb, u0, u1, v0, v1, floors, fh, wall, pitch=1.3, plinth=1.0, bay=3.3):
+def gable_hall(mb, u0, u1, v0, v1, floors, fh, wall, pitch=1.3, plinth=1.0, bay=3.3, iv=None, ivy=0.0, seed=0):
     """A stone hall in the builder's local frame whose ridge runs along v, with steep gables on its two v ends
     (the end pavilions of 대우관: their gables face the forecourt)."""
     W = u1 - u0
@@ -847,6 +847,11 @@ def gable_hall(mb, u0, u1, v0, v1, floors, fh, wall, pitch=1.3, plinth=1.0, bay=
         P, Le, t, n = edge_P(body[i], body[(i + 1) % 4])
         window_grid(mb, P, Le, plinth, floors, fh, bay, wall, ww=0.5, trim='stone_trim', mull=2)
         flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
+        if iv is not None and ivy:
+            gable = i in (0, 2)
+            ivy_patch(iv, P, 0, Le, 0, (hz - 0.4) if gable else Hw + 0.3, 5.5, seed + i * 5, cover=ivy,
+                      holes=win_holes(Le, plinth, floors, fh, bay, ww=0.5),
+                      top=(lambda s_, Le=Le: Hw + (Le / 2 - abs(s_ - Le / 2)) * pitch - 0.4) if gable else None)
         mb.quad(P(-0.1, Hw - 0.1, 0.2), P(Le + 0.1, Hw - 0.1, 0.2), P(Le + 0.1, Hw + 0.2, 0.2), P(-0.1, Hw + 0.2, 0.2), 'stone_trim')
         if i in (0, 2):     # gable end: triangle, coping and a finial
             mb.face([P(0, Hw), P(Le, Hw), P(Le / 2, hz)], wall)
@@ -885,10 +890,95 @@ def daewoo():
     return out + [mb]
 
 
+def yeonhui():
+    """연희관 (1956): a stone Gothic hall, H plan like 대우관 but in the dark rubble of the old halls, with a central
+    tower and ivy over the walls (yonsei.ac.kr building history photo, reference/연희관_*.jpg)."""
+    b = bld(245623759)
+    fp = b['footprint']
+    a, bb = Vector(fp[3]), Vector(fp[4])
+    t = (bb - a).normalized()
+    nl = Vector((-t.y, t.x))
+    ang = math.atan2(t.y, t.x)
+    W = lambda u, v: tuple(a + t * u + nl * v)
+    centre = dict(b, footprint=[W(0.4, 0), W(39.9, 0), W(39.9, 14.2), W(0.4, 14.2)])
+    out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.0, tower_extra=9.5, ivy=0.5, wings=False, fh=3.9)
+    mb = MeshBuilder('lm_yeonhui_pavilions')
+    iv = MeshBuilder('lm_yeonhui_pavilions_ivy')
+    mb.xf = iv.xf = local_frame(a.x, a.y, ang, b['base'])
+    gable_hall(mb, -14.0, 0.0, -7.9, 28.8, 4, 3.9, 'stone_rubble', iv=iv, ivy=0.5, seed=3)
+    gable_hall(mb, 40.3, 52.0, -6.7, 30.1, 4, 3.9, 'stone_rubble', iv=iv, ivy=0.5, seed=9)
+    return out + [mb, iv]
+
+
 def daewoo_annex():
     """대우관 별관: the same pale stone Gothic, five storeys, end gables on the front."""
     return gothic('daewoo_annex', bld(242897923), (-0.97, 0.24), 5, tower_w=7.0, tower_extra=1.5, ivy=0, wings=True,
                   fh=3.6, wall='stone_white')
+
+
+# ============================================================================= 대강당 앞 농구장
+def basketball_court():
+    """The 1997 outdoor basketball court in front of the 대강당 (later the site of 금호아트홀): a 28 x 15 m concrete
+    slab with painted lines (FIBA rules of the time: trapezoid lanes, 6.25 m three-point arc) and two hoops on
+    steel posts behind the baselines.  No photo found, so a plain standard court."""
+    C = CAMPUS.get('statues', {}).get('court')
+    if not C:
+        return []
+    L, W = C['L'], C['W']
+    mb = MeshBuilder('lm_court')
+    mb.xf = local_frame(C['pos'][0], C['pos'][1], C['rot'], C['h'])
+    z = 0.06
+    # slab with a skirt so it sits cleanly on the flattened ground
+    mb.box((0, 0, z / 2 - 0.25), (L + 2.0, W + 2.0, z + 0.5), 'asphalt', skip=('bottom',))
+    lw = 0.05
+
+    def line(x0, y0, x1, y1):
+        dx, dy = x1 - x0, y1 - y0
+        n = math.hypot(dx, dy) or 1
+        ox, oy = -dy / n * lw / 2, dx / n * lw / 2
+        mb.face([(x0 + ox, y0 + oy, z + 0.012), (x0 - ox, y0 - oy, z + 0.012), (x1 - ox, y1 - oy, z + 0.012), (x1 + ox, y1 + oy, z + 0.012)], 'paint_white')
+
+    def arc(cx, cy, r, a0, a1, seg=24):
+        pts = [(cx + r * math.cos(a0 + (a1 - a0) * k / seg), cy + r * math.sin(a0 + (a1 - a0) * k / seg)) for k in range(seg + 1)]
+        for p, q in zip(pts, pts[1:]):
+            line(p[0], p[1], q[0], q[1])
+
+    hl, hw = L / 2, W / 2
+    for (x0, y0, x1, y1) in ((-hl, -hw, hl, -hw), (hl, -hw, hl, hw), (hl, hw, -hl, hw), (-hl, hw, -hl, -hw), (0, -hw, 0, hw)):
+        line(x0, y0, x1, y1)
+    arc(0, 0, 1.8, 0, 2 * math.pi, 32)
+    for sg in (-1, 1):
+        bx = sg * hl                               # baseline
+        ft = bx - sg * 5.8                         # free-throw line
+        # trapezoid lane: 6.0 m wide at the baseline, 3.6 m at the free-throw line
+        line(bx, -3.0, ft, -1.8); line(bx, 3.0, ft, 1.8); line(ft, -1.8, ft, 1.8)
+        arc(ft, 0, 1.8, -math.pi / 2, math.pi / 2, 16) if sg < 0 else arc(ft, 0, 1.8, math.pi / 2, 3 * math.pi / 2, 16)
+        # three-point line: 6.25 m arc round the basket (1.575 m in from the baseline)
+        hx = bx - sg * 1.575
+        a = math.asin(min(1.0, (hw - 0.9) / 6.25))
+        if sg < 0:
+            arc(hx, 0, 6.25, -a, a, 28)
+        else:
+            arc(hx, 0, 6.25, math.pi - a, math.pi + a, 28)
+        for yy in (-1, 1):                        # the straight bits down to the baseline
+            ex = hx + (-sg) * 6.25 * math.cos(a)
+            line(bx, yy * 6.25 * math.sin(a), ex, yy * 6.25 * math.sin(a))
+        # hoop: post 1 m behind the baseline, arm out to the backboard 1.2 m inside it, rim at 3.05 m
+        px = bx + sg * 1.0
+        mb.cylinder((px, 0), 0.09, z, 3.6, 'metal_dark', seg=10)
+        mb.box((px - sg * 1.1, 0, 3.45), (2.2, 0.14, 0.14), 'metal_dark')
+        mb.box((bx - sg * 1.2 + sg * 0.03, 0, 3.4), (0.05, 1.8, 1.05), 'paint_white')
+        mb.box((bx - sg * 1.2 - sg * 0.002, 0, 3.25), (0.01, 0.59, 0.45), 'metal_dark', skip=('bottom', 'top'))
+        rc = bx - sg * 1.575
+        seg = 16
+        for k in range(seg):
+            a0, a1 = 2 * math.pi * k / seg, 2 * math.pi * (k + 1) / seg
+            r0, r1 = 0.225, 0.245
+            q = [(rc + r0 * math.cos(a0), r0 * math.sin(a0), 3.05), (rc + r0 * math.cos(a1), r0 * math.sin(a1), 3.05),
+                 (rc + r1 * math.cos(a1), r1 * math.sin(a1), 3.05), (rc + r1 * math.cos(a0), r1 * math.sin(a0), 3.05)]
+            mb.face(q, 'banner_orange')
+            mb.face(q[::-1], 'banner_orange')
+    return [mb]
 
 
 # ============================================================================= 용재관 (demolished)
@@ -959,4 +1049,4 @@ def yongjae():
 BUILDERS = {'library': library, 'union': union, 'centennial': centennial, 'underwood': underwood,
             'stimson': stimson, 'appenzeller': appenzeller, 'auditorium': auditorium, 'chapel': chapel,
             'engineering': engineering, 'hanok': hanok, 'yongjae': yongjae, 'none': lambda: [],
-            'daewoo': daewoo, 'daewoo_annex': daewoo_annex}
+            'daewoo': daewoo, 'daewoo_annex': daewoo_annex, 'yeonhui': yeonhui}

@@ -219,6 +219,12 @@ async function main() {
   const S = campus.statues;
   colliders.addCircle(S.eagle.pos[0], S.eagle.pos[1], 3.3);                    // stepped platform of the eagle tower
   colliders.addCircle(S.underwood_statue.pos[0], S.underwood_statue.pos[1], 3.2);   // round steps under the statue
+  if (S.court) {                                                                     // the two hoop posts of the 대강당 court
+    for (const sg of [-1, 1]) {
+      const d = sg * (S.court.L / 2 + 1.0);
+      colliders.addCircle(S.court.pos[0] + Math.cos(S.court.rot) * d, S.court.pos[1] + Math.sin(S.court.rot) * d, 0.3);
+    }
+  }
   const banners = makeBanners(campus.banners, lib, groundAt);
   scene.add(banners);
   scene.add(makeBoard(campus.landmarks.find((l) => l.id === 'events'), groundAt));
