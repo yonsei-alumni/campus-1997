@@ -219,6 +219,7 @@ async function main() {
   const S = campus.statues;
   colliders.addCircle(S.eagle.pos[0], S.eagle.pos[1], 3.3);                    // stepped platform of the eagle tower
   colliders.addCircle(S.underwood_statue.pos[0], S.underwood_statue.pos[1], 3.2);   // round steps under the statue
+  if (S.fountain) colliders.addCircle(S.fountain.pos[0], S.fountain.pos[1], S.fountain.r + 0.4);   // 활천 basin
   if (S.court) {                                                                     // the two hoop posts of the 대강당 court
     for (const sg of [-1, 1]) {
       const d = sg * (S.court.L / 2 + 1.0);

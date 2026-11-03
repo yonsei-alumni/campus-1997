@@ -31,6 +31,16 @@ def arch_points(s0, s1, zs, kind='round', seg=10):
         for i in range(seg + 1):
             a = math.pi - math.pi * i / seg
             pts.append((s0 + r + r * math.cos(a), zs + r * math.sin(a)))
+    elif kind == 'segment':   # shallow segmental arch: rise a quarter of the span
+        w = s1 - s0
+        rise = w * 0.16
+        r = (w * w / 4 + rise * rise) / (2 * rise)
+        a0 = math.asin((w / 2) / r)
+        for i in range(seg + 1):
+            a = -a0 + 2 * a0 * i / seg
+            pts.append((s0 + w / 2 + r * math.sin(a), zs + r * math.cos(a) - (r - rise)))
+        pts.sort(key=lambda p: p[0])
+        return pts
     else:   # pointed (equilateral gothic)
         r = w
         half = seg // 2
@@ -119,69 +129,82 @@ def window_grid(mb, P, L, z0, nfl, fh, bay, mat_wall, ww=0.6, sill=0.9, head=0.6
 
 # ============================================================================= 중앙도서관
 def library():
+    """중앙도서관 (1979) as in reference/1997_중앙도서관.jpg and 1995_백양로와_중앙도서관.jpg: tall slender piers of pale
+    stone panels from the plinth to a deep attic band, each bay closed at the top by a shallow segmental arch;
+    deep in the bays, rows of windows between bronze-tan spandrel panels; panel joints over piers and attic."""
     b = bld(163525865)
     cx, cy, L, W, ang, z0 = frame_for(b, (1.0, -0.25))
     mb = MeshBuilder('lm_library')
     mb.xf = local_frame(cx, cy, ang, z0)
     H = 23.0                     # top of attic
-    spring, attic0 = 15.8, 19.4
+    spring, attic0 = 16.6, 18.8
     inset = 2.4
+    fh, nf, g0 = 3.6, 5, 0.9
     # plinth
-    mb.prism(offset_poly(rect(L, W), 0.6), -4, 0.9, 'stone_granite', 'stone_granite')
-    # glass core with floor spandrels
+    mb.prism(offset_poly(rect(L, W), 0.6), -4, g0, 'stone_granite', 'stone_granite')
+    # recessed wall in the bays: per floor a bronze spandrel band, then glazing split by slim mullions
     core = rect(L - 2 * inset, W - 2 * inset)
     for i in range(4):
         a, bb = core[i], core[(i + 1) % 4]
         P, Le, t, n = edge_P(a, bb)
-        for f in range(5):
-            zf = 0.9 + f * 3.8
-            flat_wall(mb, P, 0, Le, zf, zf + 0.9, 'concrete_dark')
-            flat_wall(mb, P, 0, Le, zf + 0.9, zf + 3.8, 'glass_green', d=-0.15)
-            mb.quad(P(0, zf + 0.9, 0), P(Le, zf + 0.9, 0), P(Le, zf + 0.9, -0.15), P(0, zf + 0.9, -0.15), 'concrete_dark')
-            for k in range(int(Le / 1.55)):
-                s = (k + 0.5) * Le / int(Le / 1.55)
-                mb.quad(P(s - 0.05, zf + 0.9, -0.1), P(s + 0.05, zf + 0.9, -0.1), P(s + 0.05, zf + 3.8, -0.1), P(s - 0.05, zf + 3.8, -0.1), 'frame_dark')
-        flat_wall(mb, P, 0, Le, 0.9 + 5 * 3.8, attic0, 'concrete_dark')
-    # colonnade screen
-    pier = 1.1
-    depth = 1.9
+        flat_wall(mb, P, 0, Le, g0, g0 + 3.4, 'glass', d=-0.3)                 # ground floor: dark glazing, set back
+        for k in range(int(Le / 2.0)):
+            s = (k + 0.5) * Le / int(Le / 2.0)
+            mb.quad(P(s - 0.06, g0, -0.25), P(s + 0.06, g0, -0.25), P(s + 0.06, g0 + 3.4, -0.25), P(s - 0.06, g0 + 3.4, -0.25), 'frame_dark')
+        for f in range(1, nf):
+            zf = g0 + 3.4 + (f - 1) * fh
+            flat_wall(mb, P, 0, Le, zf, zf + 1.35, 'panel_bronze')
+            flat_wall(mb, P, 0, Le, zf + 1.35, zf + fh, 'glass', d=-0.12)
+            mb.quad(P(0, zf + 1.35, 0), P(Le, zf + 1.35, 0), P(Le, zf + 1.35, -0.12), P(0, zf + 1.35, -0.12), 'panel_bronze')
+            for k in range(int(Le / 1.4)):
+                s = (k + 0.5) * Le / int(Le / 1.4)
+                mb.quad(P(s - 0.05, zf + 1.35, -0.08), P(s + 0.05, zf + 1.35, -0.08), P(s + 0.05, zf + fh, -0.08), P(s - 0.05, zf + fh, -0.08), 'frame_dark')
+        flat_wall(mb, P, 0, Le, g0 + 3.4 + (nf - 1) * fh, attic0 + 0.4, 'panel_bronze')
+    # pier screen
+    pier = 1.25
+    depth = 2.0
     outer = rect(L, W)
+
+    def joint(P, s0, s1, z):          # a recessed horizontal panel joint
+        mb.quad(P(s0, z, 0.015), P(s1, z, 0.015), P(s1, z + 0.05, 0.015), P(s0, z + 0.05, 0.015), 'concrete_dark')
+
     for i in range(4):
         a, bb = outer[i], outer[(i + 1) % 4]
         P, Le, t, n = edge_P(a, bb)
-        nb = int(round(Le / 6.3))
+        nb = max(1, int(round(Le / 5.4)))
         bw = (Le - pier) / nb
         for k in range(nb + 1):
             s = k * bw
-            pw = pier * (1.6 if k in (0, nb) else 1.0)
+            pw = pier * (1.7 if k in (0, nb) else 1.0)
             s0, s1 = (s, s + pw) if k < nb else (Le - pw, Le)
             if k == 0:
                 s1 = pw
-            # pier box (front, sides)
-            mb.quad(P(s0, 0.9, 0), P(s1, 0.9, 0), P(s1, attic0, 0), P(s0, attic0, 0), 'stone_panel')
-            mb.quad(P(s1, 0.9, 0), P(s1, 0.9, -depth), P(s1, attic0, -depth), P(s1, attic0, 0), 'stone_panel')
-            mb.quad(P(s0, 0.9, -depth), P(s0, 0.9, 0), P(s0, attic0, 0), P(s0, attic0, -depth), 'stone_panel')
-            mb.quad(P(s0, 0.9, -depth), P(s1, 0.9, -depth), P(s1, attic0, -depth), P(s0, attic0, -depth), 'stone_panel')
+            mb.quad(P(s0, g0, 0), P(s1, g0, 0), P(s1, attic0, 0), P(s0, attic0, 0), 'stone_panel')
+            mb.quad(P(s1, g0, 0), P(s1, g0, -depth), P(s1, attic0, -depth), P(s1, attic0, 0), 'stone_panel')
+            mb.quad(P(s0, g0, -depth), P(s0, g0, 0), P(s0, attic0, 0), P(s0, attic0, -depth), 'stone_panel')
+            for zz in [g0 + 1.8 * q for q in range(1, int((attic0 - g0) / 1.8))]:
+                joint(P, s0, s1, zz)
             if k < nb:
                 a0 = s1
-                a1 = (k + 1) * bw if k + 1 < nb else Le - pier * 1.6
-                arch_fill(mb, P, a0, a1, spring, attic0, depth, 'stone_panel', 'round', 12)
-        # attic band with thin cornice
+                a1 = (k + 1) * bw if k + 1 < nb else Le - pier * 1.7
+                arch_fill(mb, P, a0, a1, spring, attic0, depth, 'stone_panel', 'segment', 10)
+        # deep attic band of square panels
         flat_wall(mb, P, 0, Le, attic0, H, 'stone_panel')
         mb.quad(P(0, H, 0), P(Le, H, 0), P(Le, H, -depth), P(0, H, -depth), 'stone_panel')
         mb.quad(P(0, attic0, 0), P(0, attic0, -depth), P(Le, attic0, -depth), P(Le, attic0, 0), 'stone_panel')
-        # horizontal groove lines on attic
-        for zz in (attic0 + 1.2, attic0 + 2.4):
-            mb.quad(P(0, zz, 0.06), P(Le, zz, 0.06), P(Le, zz + 0.12, 0.06), P(0, zz + 0.12, 0.06), 'concrete')
-        # attic inner face / parapet
+        for zz in (attic0 + 1.4, attic0 + 2.8):
+            joint(P, 0, Le, zz)
+        npn = max(1, int(round(Le / 2.1)))
+        for q in range(1, npn):
+            sq = q * Le / npn
+            mb.quad(P(sq - 0.025, attic0, 0.015), P(sq + 0.025, attic0, 0.015), P(sq + 0.025, H, 0.015), P(sq - 0.025, H, 0.015), 'concrete_dark')
         flat_wall(mb, P, 0, Le, H - 1.2, H, 'concrete', d=-depth)
     mb.face([(p[0], p[1], H - 1.2) for p in offset_poly(rect(L, W), -depth)], 'roof_flat')
-    # rooftop plant room
-    mb.box((0, 4, H + 0.3), (16, 9, 3.0), 'concrete', mats={'top': 'roof_flat'})
-    # entrance: canopy + steps on the front (local -y) side, centred
-    mb.box((0, -W / 2 - 2.0, 4.6), (14, 5.0, 0.5), 'stone_panel')
+    # rooftop plant room (seen over the attic in the 1995 photo)
+    mb.box((0, 4, H + 0.3), (16, 9, 3.0), 'stone_panel', mats={'top': 'roof_flat'})
+    # entrance: steps up to the recessed ground floor on the 백양로 (local -y) side
     for k in range(4):
-        mb.box((0, -W / 2 - 1.0 - k * 0.45, 0.9 - (k + 1) * 0.22 + 0.11), (16, 1.0 + k * 0.9, 0.22), 'stone_granite')
+        mb.box((0, -W / 2 - 1.0 - k * 0.45, g0 - (k + 1) * 0.22 + 0.11), (16, 1.0 + k * 0.9, 0.22), 'stone_granite')
     return [mb]
 
 
@@ -835,7 +858,7 @@ def amphitheater():
 
 
 # ============================================================================= 대우관 (1984)
-def gable_hall(mb, u0, u1, v0, v1, floors, fh, wall, pitch=1.3, plinth=1.0, bay=3.3, iv=None, ivy=0.0, seed=0):
+def gable_hall(mb, u0, u1, v0, v1, floors, fh, wall, pitch=1.3, plinth=1.0, bay=3.3, iv=None, ivy=0.0, seed=0, gothic_trim=False):
     """A stone hall in the builder's local frame whose ridge runs along v, with steep gables on its two v ends
     (the end pavilions of 대우관: their gables face the forecourt)."""
     W = u1 - u0
@@ -847,6 +870,17 @@ def gable_hall(mb, u0, u1, v0, v1, floors, fh, wall, pitch=1.3, plinth=1.0, bay=
         P, Le, t, n = edge_P(body[i], body[(i + 1) % 4])
         window_grid(mb, P, Le, plinth, floors, fh, bay, wall, ww=0.5, trim='stone_trim', mull=2)
         flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
+        if gothic_trim and i in (1, 3):
+            # as on the old stone halls (언더우드관): buttresses up the long sides and a battlemented parapet
+            nbut = int(round(Le / 6.6))
+            for k in range(1, nbut):
+                c = P(k * Le / nbut, 0, 0.3)
+                mb.box((c[0], c[1], plinth + (Hw - plinth - 1.5) / 2), (0.7, 0.6, Hw - plinth - 1.5), wall,
+                       rotz=math.atan2(t.y, t.x), mats={'top': 'stone_trim'})
+            nm = int(Le / 1.6)
+            for k in range(0, nm, 2):
+                c = P((k + 0.5) * Le / nm, Hw + 0.45, 0.0)
+                mb.box(c, (Le / nm, 0.45, 0.9), 'stone_trim', rotz=math.atan2(t.y, t.x), skip=('bottom',))
         if iv is not None and ivy:
             gable = i in (0, 2)
             ivy_patch(iv, P, 0, Le, 0, (hz - 0.4) if gable else Hw + 0.3, 5.5, seed + i * 5, cover=ivy,
@@ -901,12 +935,12 @@ def yeonhui():
     ang = math.atan2(t.y, t.x)
     W = lambda u, v: tuple(a + t * u + nl * v)
     centre = dict(b, footprint=[W(0.4, 0), W(39.9, 0), W(39.9, 14.2), W(0.4, 14.2)])
-    out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.0, tower_extra=9.5, ivy=0.5, wings=False, fh=3.9)
+    out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.5, tower_extra=9.5, ivy=0.85, wings=False, fh=4.1)
     mb = MeshBuilder('lm_yeonhui_pavilions')
     iv = MeshBuilder('lm_yeonhui_pavilions_ivy')
     mb.xf = iv.xf = local_frame(a.x, a.y, ang, b['base'])
-    gable_hall(mb, -14.0, 0.0, -7.9, 28.8, 4, 3.9, 'stone_rubble', iv=iv, ivy=0.5, seed=3)
-    gable_hall(mb, 40.3, 52.0, -6.7, 30.1, 4, 3.9, 'stone_rubble', iv=iv, ivy=0.5, seed=9)
+    gable_hall(mb, -14.0, 0.0, -7.9, 28.8, 4, 4.1, 'stone_rubble', pitch=1.1, plinth=1.3, iv=iv, ivy=0.85, seed=3, gothic_trim=True)
+    gable_hall(mb, 40.3, 52.0, -6.7, 30.1, 4, 4.1, 'stone_rubble', pitch=1.1, plinth=1.3, iv=iv, ivy=0.85, seed=9, gothic_trim=True)
     return out + [mb, iv]
 
 
@@ -979,6 +1013,46 @@ def basketball_court():
             mb.face(q, 'banner_orange')
             mb.face(q[::-1], 'banner_orange')
     return [mb]
+
+
+# ============================================================================= 활천 분수 (제1공학관 앞)
+def fountain():
+    """활천 (活泉, 'living spring'), the engineering college's fountain before 제1공학관: a round basin with a
+    granite rim, water, a stepped central pedestal and a white jet.  No photo found, so a plain campus fountain."""
+    F = CAMPUS.get('statues', {}).get('fountain')
+    if not F:
+        return []
+    r = F['r']
+    mb = MeshBuilder('lm_fountain')
+    mb.xf = local_frame(F['pos'][0], F['pos'][1], 0.0, F['h'])
+    # rim: a granite ring (outer and inner walls, flat top) round the water
+    mb.cylinder((0, 0), r + 0.35, -0.6, 0.5, 'stone_granite', seg=40, cap_top=False)
+    seg = 40
+    for k in range(seg):
+        a0, a1 = 2 * math.pi * k / seg, 2 * math.pi * (k + 1) / seg
+        c0, s0, c1, s1 = math.cos(a0), math.sin(a0), math.cos(a1), math.sin(a1)
+        mb.face([(r * c0, r * s0, 0.5), (r * c1, r * s1, 0.5), ((r + 0.35) * c1, (r + 0.35) * s1, 0.5), ((r + 0.35) * c0, (r + 0.35) * s0, 0.5)], 'stone_granite')
+        mb.face([(r * c1, r * s1, 0.0), (r * c0, r * s0, 0.0), (r * c0, r * s0, 0.5), (r * c1, r * s1, 0.5)], 'stone_granite')
+    mb.cylinder((0, 0), r, -0.2, 0.0, 'concrete_dark', seg=40)                       # basin floor
+    mb.cylinder((0, 0), r, 0.37, 0.38, 'water', seg=40, cap_bot=False)              # water surface
+    mb.cylinder((0, 0), 0.9, 0.3, 0.75, 'stone_granite', seg=20)                    # stepped pedestal
+    mb.cylinder((0, 0), 0.5, 0.75, 1.25, 'stone_granite', seg=16)
+    mb.cylinder((0, 0), 0.12, 1.25, 1.45, 'metal_dark', seg=10)
+    sp = MeshBuilder('lm_fountain_spray')
+    sp.xf = mb.xf
+    sp.cylinder((0, 0), 0.22, 1.45, 4.4, 'water_spray', seg=12, r1=0.07)            # the central jet
+    sp.cylinder((0, 0), 1.5, 0.4, 1.45, 'water_spray', seg=24, r1=0.3, cap_top=False)   # water falling back
+    for k in range(8):                                                              # a ring of small arching jets
+        a = 2 * math.pi * k / 8
+        pts = [(r - 0.3 - (r - 1.4) * f, 0.42 + 1.6 * f * (1 - f) * 2.2) for f in [q / 6 for q in range(7)]]
+        for (r0, z0), (r1_, z1) in zip(pts, pts[1:]):
+            c, s_ = math.cos(a), math.sin(a)
+            n_ = (-s_ * 0.07, c * 0.07)
+            q = [(r0 * c - n_[0], r0 * s_ - n_[1], z0), (r1_ * c - n_[0], r1_ * s_ - n_[1], z1),
+                 (r1_ * c + n_[0], r1_ * s_ + n_[1], z1), (r0 * c + n_[0], r0 * s_ + n_[1], z0)]
+            sp.face(q, 'water_spray')
+            sp.face([(x, y, zz + 0.07) for x, y, zz in q], 'water_spray')
+    return [mb, sp]
 
 
 # ============================================================================= 용재관 (demolished)

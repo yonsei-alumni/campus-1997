@@ -183,6 +183,9 @@ for wv in ways.values():
 # 백양누리) was later built (namu.wiki 연세대학교/신촌캠퍼스).  No photo found: a standard 28 x 15 m court, long side
 # along 백양로.  Flatten the ground under it.
 COURT = dict(pos=[21.9, 2.5], rot=1.313, L=28.0, W=15.0)
+# --- 활천 (活泉) fountain in front of 제1공학관 (alumni memory; namu.wiki lists 활천대 among the landmarks moved for
+# 금호아트홀).  No photo found: a round granite basin with a central jet on the lawn before the hall's 백양로 front.
+FOUNTAIN = dict(pos=[-99.0, -255.0], r=4.2)
 
 
 def court_poly(pad=0.0):
@@ -507,7 +510,8 @@ draw_poly('pavers', Point(*SANG).buffer(6.4))
 draw_poly('pavers', Point(*SANG).buffer(3.9), 0)
 draw_line('pavers', [WD(23.5, 0), SANG], 4.0)
 draw_poly('pavers', court_poly(1.0))
-GARDEN_ZONES = [garden, yeonhui_garden, daewoo_garden, court_poly(2.0)]
+draw_poly('pavers', Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 2.2))
+GARDEN_ZONES = [garden, yeonhui_garden, daewoo_garden, court_poly(2.0), Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 4)]
 
 # amphitheater arena (dirt), sports field (dirt), tree-root patches done in web shader
 draw_poly('dirt', Point(AMPH['cx'], AMPH['cy']).buffer(1).simplify(0))
@@ -948,7 +952,8 @@ LANDMARKS = [
 STATUES = dict(
     eagle=dict(pos=[-52, -82], rot=math.radians(-14 + 90)),
     underwood_statue=dict(pos=[55.5, 187.5], rot=math.radians(-14)),
-    court=dict(pos=COURT['pos'], rot=COURT['rot'], L=COURT['L'], W=COURT['W']),     # courtyard entrance, facing down the campus axis
+    court=dict(pos=COURT['pos'], rot=COURT['rot'], L=COURT['L'], W=COURT['W']),
+    fountain=dict(pos=FOUNTAIN['pos'], r=FOUNTAIN['r'], rot=0.0),     # courtyard entrance, facing down the campus axis
     gate=dict(pos=[-108, -424], rot=math.radians(-14)),
 )
 for v in STATUES.values():
@@ -969,7 +974,7 @@ Hf.tofile(os.path.join(ROOT, 'web/public/data/terrain_far.bin'))
 # MARKER_NAME: the name a 1997 student would use (or None: no marker, e.g. not built yet in 1997).
 # ---------------------------------------------------------------------------
 MARKER_NAME = {n: None for n in ('별동연구동', '영빈관', '영선실', '차량실', '행정동', '학생회관 별관', '광혜관')}
-EXTRA_MARKERS = [('청송대', 238.0, 284.0), ('농구장', 21.9, 2.5)]          # the wooded park east of 연희관 (OSM leisure=park)
+EXTRA_MARKERS = [('청송대', 238.0, 284.0), ('농구장', 21.9, 2.5), ('활천 분수', -99.0, -255.0)]          # the wooded park east of 연희관 (OSM leisure=park)
 LANDMARK_NAMES = {l['name'] for l in LANDMARKS}
 groups = {}
 for b in buildings:

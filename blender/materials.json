@@ -780,5 +780,39 @@
   ],
   "sat": 0.25,
   "rough": 0.75
+ },
+ "panel_bronze": {
+  "color": [
+   0.42,
+   0.31,
+   0.2
+  ],
+  "rough": 0.45,
+  "metal": 0.35
+ },
+ "water": {
+  "color": [
+   0.1,
+   0.3,
+   0.42
+  ],
+  "rough": 0.02,
+  "metal": 0.6,
+  "opacity": 0.96
+ },
+ "water_spray": {
+  "color": [
+   0.95,
+   0.98,
+   1.0
+  ],
+  "rough": 0.25,
+  "opacity": 0.6,
+  "side": "double",
+  "emissive": [
+   0.25,
+   0.27,
+   0.3
+  ]
  }
 }
