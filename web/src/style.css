@@ -235,3 +235,10 @@ body.birds #stamps { display: none; }
   .intro-card { padding: 18px 20px; }
 }
 body.birds #stick { display: none; }
+
+/* release notes: screenshots and the link to the standalone page */
+#news .shot { margin: 10px 0 0; }
+#news .shot img { display: block; width: 100%; border-radius: 8px; border: 1px solid rgba(0,0,0,.12); }
+#news .shot figcaption { font-size: 12px; opacity: .7; margin: 4px 2px 8px; }
+#news .newslink { margin: 10px 0 0; font-size: 13px; text-align: center; }
+#news .newslink a { color: inherit; opacity: .75; }

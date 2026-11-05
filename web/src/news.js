@@ -21,7 +21,18 @@ export async function setupNews(onOpen = () => {}, onClose = () => {}) {
     h.append(d, n.title || '');
     const ul = document.createElement('ul');
     for (const it of n.items) { const li = document.createElement('li'); li.textContent = it; ul.appendChild(li); }
+    sec.id = n.date;
     sec.append(h, ul);
+    for (const im of n.images || []) {
+      const fig = document.createElement('figure');
+      fig.className = 'shot';
+      const img = document.createElement('img');
+      img.src = versioned(im.src); img.alt = im.alt || ''; img.loading = 'lazy';
+      const cap = document.createElement('figcaption');
+      cap.textContent = im.alt || '';
+      fig.append(img, cap);
+      sec.appendChild(fig);
+    }
     list.appendChild(sec);
   }
   const close = () => { root.hidden = true; onClose(); };

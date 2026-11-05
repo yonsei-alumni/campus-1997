@@ -483,6 +483,10 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
            dormers=True, stairs=None):
     cx, cy, L, W, ang, z0 = frame_for(b, front)
     stairs = dict(dict(n=8, cheek=0.4, newel=False, lamps=False, width=None), **(stairs or {}))
+    # the floor stands on the ground in front of the door, not at the lowest corner of the footprint (the halls sit on
+    # slopes: 대우관 별관's front is ~3 m above that corner and would bury the whole flight)
+    d_foot = W / 2 + 3.0 + (2.0 if stairs['n'] > 6 else 1.4) + stairs['n'] * 0.36
+    z0 = max(z0, ground(cx + math.sin(ang) * d_foot, cy - math.cos(ang) * d_foot) + 0.15)
     mb = MeshBuilder('lm_' + name)
     iv = MeshBuilder('lm_' + name + '_ivy')
     mb.xf = iv.xf = local_frame(cx, cy, ang, z0)
@@ -651,6 +655,7 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
     if stairs['lamps']:
         for sg in (-1, 1):
             lamp_post(mb, sg * (sw / 2 + 2.2), y_foot - 0.6)
+    mb.z_base = z0
     return [mb, iv]
 
 
@@ -986,7 +991,7 @@ def daewoo():
     out = gothic('daewoo', centre, tuple(-nl), 6, tower_w=9.0, tower_extra=2.5, ivy=0, wings=False, fh=3.6,
                  wall='stone_white', stairs=dict(n=9, lamps=True))
     mb = MeshBuilder('lm_daewoo_pavilions')
-    mb.xf = local_frame(a.x, a.y, ang, b['base'])
+    mb.xf = local_frame(a.x, a.y, ang, out[0].z_base)
     gable_hall(mb, -12.1, 0.0, -12.2, 24.5, 6, 3.6, 'stone_white')
     gable_hall(mb, 47.1, 55.5, -10.9, 24.3, 6, 3.6, 'stone_white')
     return out + [mb]
@@ -1006,7 +1011,7 @@ def yeonhui():
     out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.5, tower_extra=9.5, ivy=0.85, wings=False, fh=4.1, stairs=dict(n=9, newel=True))
     mb = MeshBuilder('lm_yeonhui_pavilions')
     iv = MeshBuilder('lm_yeonhui_pavilions_ivy')
-    mb.xf = iv.xf = local_frame(a.x, a.y, ang, b['base'])
+    mb.xf = iv.xf = local_frame(a.x, a.y, ang, out[0].z_base)
     gable_hall(mb, -14.0, 0.0, -7.9, 28.8, 4, 4.1, 'stone_rubble', pitch=1.1, plinth=1.3, iv=iv, ivy=0.85, seed=3, gothic_trim=True)
     gable_hall(mb, 40.3, 52.0, -6.7, 30.1, 4, 4.1, 'stone_rubble', pitch=1.1, plinth=1.3, iv=iv, ivy=0.85, seed=9, gothic_trim=True)
     return out + [mb, iv]
