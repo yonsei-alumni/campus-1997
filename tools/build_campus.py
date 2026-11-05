@@ -263,8 +263,8 @@ def footprint(wv):
 
 # --- level aprons in front of the old halls.  The 5 m terrain grid smooths the hillsides behind 스팀슨관, 아펜젤러관
 # and 연희관 down across their fronts, so the ground fell 2-4 m within a few metres of the doors and the entrance flights
-# grew to 16-20 risers.  The photos (Wikimedia Commons "Stimson Front.jpg", "Appenzeller Front.jpg", 2016) show
-# 8-9 risers up from a level walk: each front gets a level apron at the height of the ground along its wall,
+# grew to 16-20 risers.  The photos (reference/스팀슨관_정면_2016.jpg, 아펜젤러관_정면_2016.jpg) show 8-9 risers up
+# from a level walk: each front gets a level apron at the height of the ground along its wall,
 # blending back into the slope beyond.
 FORECOURTS = [  # OSM way, outward front direction (None: the recess edge footprint[3] -> [4] of an H plan), depth
     (246156118, (1.0, -0.27), 11.0),      # 스팀슨관

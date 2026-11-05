@@ -565,9 +565,9 @@ def bar(mb, P, sa, za, sb, zb, w, d0, d1, mat, ends=False):
 
 
 # glazing of the old halls' front doors, from the photos: 언더우드관 a pair of leaves of small square panes under a
-# glazed transom (Commons "Underwood Hall Front.jpg", 2016; reference/언더우드관_2024_여름_정원.jpg), 스팀슨관 and
-# 아펜젤러관 dark leaves glazed above a solid lower panel (Commons "Stimson Front.jpg", "Appenzeller Front.jpg"),
-# 연희관 four glazed leaves under a transom of upright panes (Commons "Yonsei University Yeonhui Hall 2023-11-01.jpg"),
+# glazed transom (reference/언더우드관_정면_2016.jpg, 언더우드관_2024_여름_정원.jpg), 스팀슨관 and 아펜젤러관 dark leaves
+# glazed above a solid lower panel (reference/스팀슨관_정면_2016.jpg, 아펜젤러관_정면_2016.jpg), 연희관 four glazed
+# leaves under a transom of upright panes (reference/연희관_정면_2023.jpg),
 # 대우관 plain dark-framed glass (reference/대우관_정면_전경.jpg).  All black-painted steel, none of them wooden.
 DOOR_STYLES = {
     #          leaves, panes across x up per leaf (0 = one pane), solid lower panel, members, transom panes
@@ -671,7 +671,8 @@ def pedestal(mb, x, y, top, gnd, wall, w=0.64):
 
 def hall_steps(mb, y_face, zl, wu, gfn, wall='stone_rubble', mat='stone_step', rec=0.9, porch=1.3, tread=0.35,
                maxrise=0.16, wl=None, cheeks=True, lamps=False, zone_hw=0.0):
-    """The entrance steps of the old stone halls, as in the 2016 Commons photos of 언더우드관, 스팀슨관 and 아펜젤러관:
+    """The entrance steps of the old stone halls, as in reference/언더우드관_정면_2016.jpg, 스팀슨관_정면_2016.jpg and
+    아펜젤러관_정면_2016.jpg:
     a porch from the door out past the arch, then granite treads of ~15 cm risers and 35 cm goings; flights of nine
     risers or more break at a landing, the lower flight a little wider.  Low rubble side walls with a pale coping
     follow the flights and end in square capped posts at the porch, at the landing and at the foot.
