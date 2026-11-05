@@ -13,6 +13,7 @@
 | ![가을 + 필름](docs/screenshots/05_autumn_film.jpg) | ![추억 카드](docs/screenshots/06_memory_card.jpg) |
 | ![대우관 별관 입구 계단](docs/screenshots/13_annex_entrance.jpg) | ![10월 연고전 응원 현수막](docs/screenshots/14_autumn_banners.jpg) |
 | ![학생회관 4·19 마라톤 추억 카드](docs/screenshots/15_marathon_card.jpg) | ![중앙도서관과 학생회관](docs/screenshots/02_library_union.jpg) |
+| ![학생회관 앞 공중전화 부스](docs/screenshots/16_payphone_booths.jpg) | ![농구 슛](docs/screenshots/17_basketball.jpg) |
 
 **바로 해 보기: http://yonsei-1997.benelog.net/** (GitHub Pages, `main`에 올리면 `.github/workflows/pages.yml`이 다시 배포)
 
@@ -80,7 +81,7 @@ PC 브라우저에서 모바일 화면을 시험하려면 주소 끝에 `?touch`
     물은 [Ultra Water](https://github.com/Humpalumps/Ultra-Water)(MIT, `web/src/water/ultra-water/`)의 FFT 물결 시뮬레이션과 바닥 빛무늬를
     분수 크기(64² 격자, 4.5 m ~ 19 cm 네 층, 산들바람)로 줄여 실시간으로 그립니다(`web/src/water/fountain.js`). 물줄기가 떨어지는 자리마다 동심원 물결과 거품이 일고,
     하늘이 비치고 햇빛이 반짝이며, 굴절되어 일렁이는 콘크리트 바닥과 화강석 벽에는 테두리와 받침대의 그림자가 집니다. 분수가 화면에 보이고 70 m 안쪽일 때만 계산합니다.
-  - 대강당 앞 농구장: 백양로와 대강당 진입로 사이, 지금의 금호아트홀(백양누리) 자리. 사진이 없어 표준 규격(28×15m, 1997년 FIBA 사다리꼴 제한구역)으로
+  - 대강당 앞 농구장 (림 · 그물 · 백보드와 줍어서 슛할 수 있는 농구공, `web/src/hoops.js`): 백양로와 대강당 진입로 사이, 지금의 금호아트홀(백양누리) 자리. 사진이 없어 표준 규격(28×15m, 1997년 FIBA 사다리꼴 제한구역)으로
   - 언더우드관 앞 정원(회양목 테두리 화단 넷, 다듬은 소나무와 토피어리, 벤치) · 연희관 앞 정원 · 대우관 상뜰(둥근 화단과 소나무)
   - 용재관 (1957 – 2013, 지금 경영관 자리): 흰 세로 계단탑, 모임지붕 3층 날개와 입구 캐노피, 5층 본관 (`reference/용재관.jpg`)
   - 대강당, 루스채플, 제1공학관(잡석 마감 측벽), 광혜원(팔작지붕 한옥), 옛 노천극장(잔디 계단식 객석)

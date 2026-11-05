@@ -134,6 +134,7 @@ def library():
     deep in the bays, rows of windows between bronze-tan spandrel panels; panel joints over piers and attic."""
     b = bld(163525865)
     cx, cy, L, W, ang, z0 = frame_for(b, (1.0, -0.25))
+    z0 = lift_base(z0, cx, cy, ang, W / 2 + 2.5, 0.9, 0.6)
     mb = MeshBuilder('lm_library')
     mb.xf = local_frame(cx, cy, ang, z0)
     H = 23.0                     # top of attic
@@ -203,7 +204,7 @@ def library():
     # rooftop plant room (seen over the attic in the 1995 photo)
     mb.box((0, 4, H + 0.3), (16, 9, 3.0), 'stone_panel', mats={'top': 'roof_flat'})
     # entrance: steps up to the recessed ground floor on the 백양로 (local -y) side
-    stair_flight(mb, 0, -W / 2, 17.0, g0, n=6, landing=1.6, tread=0.45, flare=1.5, cheek=0.0, rail=False)
+    stair_flight(mb, 0, -W / 2, 17.0, g0, n=6, landing=1.6, tread=0.45, flare=1.5, cheek=0.0, rail=False, gfn=local_ground(mb))
     return [mb]
 
 
@@ -420,14 +421,49 @@ def ivy_patch(iv, P, s0, s1, z0, z1, density, seedoff=0, holes=(), top=None, cov
                 uvs=[(u0, v0), (u0 + .5, v0), (u0 + .5, v0 + .5), (u0, v0 + .5)])
 
 
+WALK_FACES = []       # world-space quads (4 points each): the smoothed surface of every flight, exported as the invisible
+                      # 'walk_stairs' mesh the walker is raycast against (web/src/main.js)
+
+
+def local_ground(mb):
+    """Terrain height in a builder's local frame (relative to its z origin): ground_local(lx, ly)."""
+    def g(lx, ly):
+        w = mb.xf @ Vector((lx, ly, 0.0))
+        return ground(w.x, w.y) - mb.xf.translation.z
+    return g
+
+
+def lift_base(z0, cx, cy, ang, d, zl, rise):
+    """Raise a building's floor so the landing zl stands `rise` m above the ground d m in front of its wall."""
+    g = ground(cx + math.sin(ang) * d, cy - math.cos(ang) * d)
+    return max(z0, g - zl + rise)
+
+
+def walk_mesh():
+    mb = MeshBuilder('walk_stairs')
+    for q in WALK_FACES:
+        mb.face(q, 'concrete')
+        mb.face(q[::-1], 'concrete')
+    WALK_FACES.clear()
+    return mb
+
+
 def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8, tread=0.36, flare=0.35,
-                 cheek=0.0, cheek_mat=None, newel=False, rail=False, ground=-1.2, zbot=-0.15):
+                 cheek=0.0, cheek_mat=None, newel=False, rail=False, ground=-1.2, zbot=-0.15, gfn=None, maxrise=0.18):
     """A straight entrance flight in a builder's local frame, going down towards -y from the wall at y_face.
     zl: top of the landing in front of the door; n risers (rise = (zl - ground_level) / n, ground_level ~ -0.15);
     each tread is a solid block down to `ground`, the lowest ones a little wider (flare) like the real granite steps.
     cheek: thickness of the low sloped side walls (0 = none); newel: a squared post with a cap at the foot of each;
     rail: slim metal handrails along the flight."""
     cheek_mat = cheek_mat or mat
+    if gfn is not None:
+        # as many risers as the ground in front needs: the foot of the flight stands on the terrain
+        for n in range(2, 19):
+            zbot = gfn(x, y_face - landing - n * tread) - 0.04
+            if (zl - zbot) / n <= maxrise:
+                break
+        zbot = min(zbot, zl - 0.2)
+        ground = min(ground, zbot - 1.0)
     rise = (zl - zbot) / n
     mb.box((x, y_face - landing / 2 + 0.6, (zl + ground) / 2), (width, landing + 1.2, zl - ground), mat,
            mats={'top': mat})                                               # landing, running into the recess
@@ -437,6 +473,12 @@ def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8
         w = width + 2 * flare * (k / n)
         mb.box((x, y1 - tread / 2 + 0.02, (top + ground) / 2), (w, tread + 0.04, top - ground), mat)
     y_foot = y_face - landing - n * tread
+    # walkable surface: the landing and one smooth ramp through the middle of the treads
+    hw = width / 2
+    W_ = lambda lx, ly, lz: tuple(mb.xf @ Vector((lx, ly, lz)))
+    WALK_FACES.append([W_(x - hw, y_face + 0.3, zl), W_(x + hw, y_face + 0.3, zl), W_(x + hw, y_face - landing, zl), W_(x - hw, y_face - landing, zl)])
+    hf_ = hw + flare
+    WALK_FACES.append([W_(x - hw, y_face - landing, zl), W_(x + hw, y_face - landing, zl), W_(x + hf_, y_foot, zbot), W_(x - hf_, y_foot, zbot)])
     if cheek:
         for sg in (-1, 1):
             xo = x + sg * (width / 2 + flare * 0.6 + cheek / 2)
@@ -479,7 +521,7 @@ def lamp_post(mb, x, y, h=3.6, globe='plaster_white'):
     mb.cylinder((x, y), 0.22, h + 0.5, h + 0.6, 'metal_dark', seg=10)
 
 
-def flat_portal(mb, W, plinth, fh, wall, bw=7.4):
+def flat_portal(mb, W, plinth, fh, wall, bw=7.4, gfn=None):
     """대우관 별관's front door (reference/대우관_별관_정면_현관.jpg): a squared, slightly projecting central bay
     in pale stone, a rectangular glass double door deep in a recess under a flat lintel carrying a round medallion,
     stepped pilasters, red diamond tiles beside it, rusticated blocks on the wall corners, and two flights of steps with
@@ -532,7 +574,7 @@ def flat_portal(mb, W, plinth, fh, wall, bw=7.4):
             c = (px + dxy[0], (yf + y1) / 2 + dxy[1])
             mb.cylinder(c, rr, zm + ph - 0.15, zm + ph + 0.35, 'shrub_green', seg=10, r1=rr * 0.9)
             mb.cylinder(c, rr * 0.85, zm + ph + 0.35, zm + ph + 0.62, 'shrub_green', seg=10, r1=rr * 0.5)
-    y2 = stair_flight(mb, 0, y1, 9.5, zm, n=5, landing=2.2, tread=0.36, flare=0.3, rail=True)
+    y2 = stair_flight(mb, 0, y1, 9.5, zm, n=5, landing=2.2, tread=0.36, flare=0.3, rail=True, gfn=gfn)
     for sg in (-1, 1):                                       # a round shrub at each side of the lower flight
         c = (sg * 6.4, y1 - 2.0)
         mb.cylinder(c, 1.0, -0.3, 0.7, 'shrub_green', seg=12, r1=1.05)
@@ -546,10 +588,7 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
     stairs = dict(dict(n=8, cheek=0.4, newel=False, lamps=False, width=None), **(stairs or {}))
     # the floor stands on the ground in front of the door, not at the lowest corner of the footprint (the halls sit on
     # slopes: 대우관 별관's front is ~3 m above that corner and would bury the whole flight)
-    d_foot = W / 2 + 3.0 + (2.0 if stairs['n'] > 6 else 1.4) + stairs['n'] * 0.36
-    if portal == 'flat':
-        d_foot = W / 2 + 1.3 + 1.2 + 4 * 0.38 + 2.2 + 5 * 0.36
-    z0 = max(z0, ground(cx + math.sin(ang) * d_foot, cy - math.cos(ang) * d_foot) + 0.15)
+    z0 = lift_base(z0, cx, cy, ang, W / 2 + (1.8 if portal == 'flat' else 3.3), 1.2, 1.3)
     mb = MeshBuilder('lm_' + name)
     iv = MeshBuilder('lm_' + name + '_ivy')
     mb.xf = iv.xf = local_frame(cx, cy, ang, z0)
@@ -658,7 +697,7 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
                           holes=win_holes(Le, plinth, floors, fh, 4.0, ww=0.55),
                           top=lambda s, Le=Le: Hw + (Le / 2 - abs(s - Le / 2)) * 1.1 - 0.4)
     if portal == 'flat':
-        flat_portal(mb, W, plinth, fh, wall, bw=tower_w + 0.4)
+        flat_portal(mb, W, plinth, fh, wall, bw=tower_w + 0.4, gfn=local_ground(mb))
         mb.z_base = z0
         return [mb, iv]
     # --- central tower
@@ -721,7 +760,7 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
     # entrance: a broad granite flight up to a landing at the plinth top (daewoo-hall-annex photo), low sloping cheek walls
     sw = stairs['width'] or tw * 0.72
     y_foot = stair_flight(mb, 0, ty0, sw, plinth - 0.1, n=stairs['n'], landing=2.0 if stairs['n'] > 6 else 1.4,
-                          cheek=stairs['cheek'], newel=stairs['newel'], cheek_mat='stone_granite')
+                          cheek=stairs['cheek'], newel=stairs['newel'], cheek_mat='stone_granite', gfn=local_ground(mb))
     if stairs['lamps']:
         for sg in (-1, 1):
             lamp_post(mb, sg * (sw / 2 + 2.2), y_foot - 0.6)
@@ -746,6 +785,7 @@ def auditorium():
     b = bld(371403811)
     cx, cy, L, W, ang, z0 = frame_for(b, (-1.0, 0.25))
     mb = MeshBuilder('lm_auditorium')
+    z0 = lift_base(z0, cx, cy, ang, W * 0.8 / 2 + 11.5, 0.5, 0.45)
     mb.xf = local_frame(cx, cy, ang, z0)
     L, W = L * 0.92, W * 0.8
     H = 17.0
@@ -788,7 +828,7 @@ def auditorium():
     for k in range(6):
         x = -L * 0.38 + k * L * 0.76 / 5
         mb.cylinder((x, ly - 6.0), 0.35, 0.5, 6.2, 'concrete', seg=10, cap_top=False)
-    stair_flight(mb, 0, ly - 6.8, L * 0.7, 0.5, n=5, landing=0.8, tread=0.5, flare=1.0, cheek=0.0, rail=False)
+    stair_flight(mb, 0, ly - 6.8, L * 0.7, 0.5, n=5, landing=0.8, tread=0.5, flare=1.0, cheek=0.0, rail=False, gfn=local_ground(mb))
     return [mb]
 
 
@@ -833,6 +873,7 @@ def chapel():
 def engineering():
     b = bld(205583531)
     cx, cy, L, W, ang, z0 = frame_for(b, (1.0, -0.25))
+    z0 = lift_base(z0, cx, cy, ang, max(W, 13) / 2 + 2.5, 0.4, 0.6)
     mb = MeshBuilder('lm_engineering')
     mb.xf = local_frame(cx, cy, ang, z0)
     W = max(W, 13)
@@ -863,7 +904,7 @@ def engineering():
     for x in (-4.5, 4.5):
         mb.cylinder((x, -W / 2 - 4.0), 0.22, 0.4, 3.8, 'concrete', seg=8, cap_top=False)
     # wide concrete flight with handrails under the canopy, glass double doors behind a landing
-    stair_flight(mb, 0, -W / 2, 8.0, 0.4, n=4, mat='stone_granite', landing=1.8, tread=0.4, flare=0.6, rail=True)
+    stair_flight(mb, 0, -W / 2, 8.0, 0.4, n=4, mat='stone_granite', landing=1.8, tread=0.4, flare=0.6, rail=True, gfn=local_ground(mb))
     mb.quad((-2.6, -W / 2 - 0.02, 0.4), (2.6, -W / 2 - 0.02, 0.4), (2.6, -W / 2 - 0.02, 3.4), (-2.6, -W / 2 - 0.02, 3.4), 'glass')
     mb.box((0, -W / 2 - 0.03, 3.5), (5.4, 0.08, 0.16), 'frame_dark')
     mb.box((0, -W / 2 - 0.03, 0.4 + 1.5), (0.1, 0.08, 3.0), 'frame_dark')
@@ -874,13 +915,13 @@ def engineering():
 def hanok():
     b = bld(429249496)
     cx, cy, L, W, ang, z0 = frame_for(b, (-1.0, 0.2))
+    z0 = lift_base(z0, cx, cy, ang, 8.4 / 2 + 2.4, 0.9, 0.6)
     mb = MeshBuilder('lm_hanok')
     mb.xf = local_frame(cx, cy, ang, z0)
     L, W = 15.0, 8.4
     plat = 0.9
     mb.prism(offset_poly(rect(L + 2.4, W + 2.4), 0), -3, plat, 'stone_granite', 'stone_granite')
-    for k in range(3):     # front steps
-        mb.box((0, -(W + 2.4) / 2 - 0.35 - k * 0.35, plat - (k + 1) * 0.3 + 0.15), (3.0, 0.7 + k * 0.0, 0.3), 'stone_granite')
+    stair_flight(mb, 0, -(W + 2.4) / 2, 3.0, plat, n=3, landing=0.3, tread=0.35, flare=0.25, gfn=local_ground(mb), maxrise=0.2)
     colh = 3.3
     nx, ny = 5, 3
     xs = [-L / 2 + L * i / nx for i in range(nx + 1)]
@@ -1147,14 +1188,33 @@ def basketball_court():
         mb.box((bx - sg * 1.2 + sg * 0.03, 0, 3.4), (0.05, 1.8, 1.05), 'paint_white')
         mb.box((bx - sg * 1.2 - sg * 0.002, 0, 3.25), (0.01, 0.59, 0.45), 'metal_dark', skip=('bottom', 'top'))
         rc = bx - sg * 1.575
-        seg = 16
+        # rim: an orange steel ring (18 straight pieces of 2 cm tube) 45 cm across at 3.05 m, bolted to the board by a bracket
+        seg, rr = 18, 0.225
         for k in range(seg):
-            a0, a1 = 2 * math.pi * k / seg, 2 * math.pi * (k + 1) / seg
-            r0, r1 = 0.225, 0.245
-            q = [(rc + r0 * math.cos(a0), r0 * math.sin(a0), 3.05), (rc + r0 * math.cos(a1), r0 * math.sin(a1), 3.05),
-                 (rc + r1 * math.cos(a1), r1 * math.sin(a1), 3.05), (rc + r1 * math.cos(a0), r1 * math.sin(a0), 3.05)]
-            mb.face(q, 'banner_orange')
-            mb.face(q[::-1], 'banner_orange')
+            a0 = 2 * math.pi * (k + 0.5) / seg
+            mb.box((rc + rr * math.cos(a0), rr * math.sin(a0), 3.05), (0.03, 2 * math.pi * rr / seg * 1.05, 0.03), 'banner_orange',
+                   rotz=a0)
+        bkx = bx - sg * 1.2
+        mb.box(((bkx + rc + sg * rr) / 2 if False else (bkx + (rc + sg * rr)) / 2, 0, 3.05), (abs(bkx - (rc + sg * rr)) + 0.02, 0.12, 0.03), 'banner_orange')
+        mb.box((bkx - sg * 0.02, 0, 3.05), (0.04, 0.45, 0.05), 'metal_dark')
+        # white net: 12 strings from the rim down to a narrower ring 40 cm below
+        for k in range(12):
+            a0 = 2 * math.pi * k / 12
+            a1 = a0 + math.pi / 12
+            top = (rc + rr * math.cos(a0), rr * math.sin(a0), 3.05)
+            bot = (rc + 0.13 * math.cos(a1), 0.13 * math.sin(a1), 2.65)
+            top2 = (rc + rr * math.cos(a0 + math.pi / 6), rr * math.sin(a0 + math.pi / 6), 3.05)
+            for (u, v) in ((top, bot), (top2, bot)):
+                dx, dy = -(v[1] - u[1]) * 0.0 + 0.007, 0.007
+                q = [(u[0] - dx, u[1] - dy, u[2]), (u[0] + dx, u[1] + dy, u[2]), (v[0] + dx, v[1] + dy, v[2]), (v[0] - dx, v[1] - dy, v[2])]
+                mb.face(q, 'paint_white')
+                mb.face(q[::-1], 'paint_white')
+        for zz, rn in ((2.9, 0.19), (2.77, 0.16)):          # cross-strings
+            pts = [(rc + rn * math.cos(2 * math.pi * k / 12), rn * math.sin(2 * math.pi * k / 12), zz) for k in range(13)]
+            for u, v in zip(pts, pts[1:]):
+                q = [(u[0], u[1], zz - 0.008), (v[0], v[1], zz - 0.008), (v[0], v[1], zz + 0.008), (u[0], u[1], zz + 0.008)]
+                mb.face(q, 'paint_white')
+                mb.face(q[::-1], 'paint_white')
     return [mb]
 
 

@@ -18,6 +18,7 @@ import { TouchControls } from './touch.js';
 import { setupNews } from './news.js';
 import { WalkLabels } from './labels.js';
 import { FountainWater } from './water/fountain.js';
+import { Basketball } from './hoops.js';
 import { $, MOBILE, versioned, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
 const canvas = $('#view');
@@ -123,11 +124,16 @@ async function main() {
   const walkables = [terrain];
   const amph = [];
   lms.scene.traverse((o) => { if (o.isMesh && /amphitheater/.test((o.parent && o.parent.name) + o.name)) amph.push(o); });
+  // the smoothed surface of every entrance flight (blender/landmarks.py walk_mesh): invisible, only walked on
+  const stairWalk = [];
+  lms.scene.updateMatrixWorld(true);
+  lms.scene.traverse((o) => { if (o.isMesh && /walk_stairs/.test(o.name + ((o.parent && o.parent.name) || ''))) stairWalk.push(o); });
+  for (const o of stairWalk) { o.material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }); o.removeFromParent(); }
   const roadMeshes = [];
   road.scene.traverse((o) => { if (o.isMesh) { o.receiveShadow = true; roadMeshes.push(o); } });
   scene.add(road.scene);
   road.scene.updateMatrixWorld(true);
-  for (const m of [...roadMeshes, ...amph]) walkables.push(m);
+  for (const m of [...roadMeshes, ...amph, ...stairWalk]) walkables.push(m);
   for (const m of walkables) m.geometry.computeBoundsTree();
 
   const amphGroup = new THREE.Group();
@@ -190,7 +196,7 @@ async function main() {
     const byKind = {};
     for (const pr of campus.props) (byKind[pr[0]] ||= []).push(pr);
     const rnd = mulberry(5);
-    const COLLIDE = { lamp_double: 0.25, lamp_arm: 0.25, flag_white: 0.12, planter: 0.5, stone_marker: 1.0, sign_board: 0.9 };
+    const COLLIDE = { lamp_double: 0.25, lamp_arm: 0.25, flag_white: 0.12, planter: 0.5, stone_marker: 1.0, sign_board: 0.9, payphone: 0.62 };
     for (const [kind, list] of Object.entries(byKind)) {
       const src = P[kind];
       if (!src) continue;
@@ -273,6 +279,7 @@ async function main() {
     onTeleport: (x, y) => { if (bird.active) leaveBird(); player.teleport(x, y); forest.update(camera.position, true); resume(); },
     onClose: () => resume(),
   });
+  const ball = S.court ? new Basketball({ scene, player, ui, court: S.court, hf: hfNear, mobile: MOBILE }) : null;   // 대강당 앞 농구장
   // hero picker on the title card (portraits rendered from the real models)
   const pics = portraits(cast, HEROES);
   const pickEl = $('#hero-pick');
@@ -345,6 +352,7 @@ async function main() {
   $('#opt-hq').addEventListener('change', (e) => { post.setHQ(e.target.checked); sun.shadow.mapSize.set(e.target.checked ? 4096 : 2048, e.target.checked ? 4096 : 2048); sun.shadow.map?.dispose(); sun.shadow.map = null; shadows.invalidate(); });
   const openNearby = () => {
     if (ui.memoryOpen) { ui.closeMemory(); return; }
+    if (ball && !bird.active && ball.action()) { ui.setPrompt(ball.prompt()); return; }
     const l = ui.nearestLandmark(player.x, player.y);
     if (l) { player.enabled = false; ui.openMemory(l); }
   };
@@ -453,6 +461,7 @@ async function main() {
     if (!started) return;
     if (e.code === 'KeyB' && !ui.memoryOpen) { enterBird(); return; }
     if (e.code === 'KeyE' || e.code === 'Enter') openNearby();
+    else if (e.code === 'Space' && ball?.held && !bird.active && player.enabled) ball.action();
     else if (e.code === 'KeyM') toggleMap();
     else if (e.code === 'KeyF') toggleFilm();
     else if (SEASON_KEYS[e.code]) setSeason(SEASON_KEYS[e.code]);
@@ -523,6 +532,7 @@ async function main() {
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
     traffic.update(dt, started ? player : NOBODY);
     fountainWater?.update(dt, camera);
+    ball?.update(dt, tAcc, started && !bird.active);
     // the shadow frustum follows the view in texel-snapped steps; people and cars are redrawn into it every frame
     shadows.update(focus, bird.active ? focus.y : camera.position.y - 10, span);
     if (bird.active) {
@@ -538,7 +548,8 @@ async function main() {
         lastPlace = tAcc;
         const l = ui.nearestLandmark(player.x, player.y);
         ui.setPlace(ui.placeName(player.x, player.y, onRoad(player.x, player.y)));
-        ui.setPrompt(l && !ui.memoryOpen ? `${l.name} · ${MOBILE ? '눌러서 ' : ''}그때의 추억 보기` : null);
+        const bp = ball?.prompt();
+        ui.setPrompt(bp ? bp : l && !ui.memoryOpen ? `${l.name} · ${MOBILE ? '눌러서 ' : ''}그때의 추억 보기` : null);
       }
     }
     post.draw(tAcc);
@@ -568,7 +579,7 @@ async function main() {
     },
   };
   window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows, fountainWater,
-    startWalk, enterBird, leaveBird, record };
+    startWalk, enterBird, leaveBird, record, ball };
 }
 
 // 게시판 with the 1997 photos pinned up (the "그때 우리는" memory spot)

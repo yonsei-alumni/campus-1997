@@ -832,9 +832,18 @@ for s, spec, col in BANNERS:
 def P(name, x, y, rot=0.0):
     props.append([name, round(x, 2), round(y, 2), round(rot, 3)])
 
-# payphones & benches near student hubs
-for (x, y, r) in [(-2, -70, 1.3), (0, -76, 1.3), (-44, -60, -0.25), (-46, -54, -0.25), (-92, -408, 0.0), (-88, -409, 0.0), (36, -112, 2.9)]:
-    P('payphone', x, y, r)
+# 공중전화 부스: a bank of three along the 백양로 side of 학생회관 (동문 기억: 학생회관 앞에 있었다), fronts towards the road
+_ub = next(b for b in buildings if b['name'] == '학생회관')
+_f = _ub['footprint']
+_a, _b = np.array(_f[2]), np.array(_f[0])           # the long west face: (18.46, -89.86) -> (34.0, -30.25)
+_u = (_b - _a) / np.linalg.norm(_b - _a)
+_n = np.array([-_u[1], _u[0]])
+if _n[0] > 0:
+    _n = -_n                                         # outwards = towards 백양로 (west)
+_c = (_a + _b) / 2 + _n * 3.0
+for k in (-1, 0, 1):
+    _p = _c + _u * 1.2 * k
+    P('payphone', float(_p[0]), float(_p[1]), math.atan2(_n[1], _n[0]))
 for (x, y, r) in [(-50, -25, -1.82), (-47, -14, -1.82), (-58, -60, -1.82),
                   (-20, 35, 1.3), (6, 60, -1.82), (110, 160, 1.3), (-36, -140, -1.82), (-46, -180, -1.82)]:
     P('bench', x, y, r)

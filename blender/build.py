@@ -64,6 +64,7 @@ if want('landmarks'):
             ob.matrix_world = M @ ob.matrix_world
             ob.name = key + '_' + ob.name
             objs.append(ob)
+    objs.append(landmarks.walk_mesh().build())
     stats['landmarks'] = tri_count(objs)
     export_glb(objs, os.path.join(OUT, 'campus_landmarks.glb'))
 
@@ -137,12 +138,25 @@ if want('polyhaven'):
         # normalise scale: payphone source is authored in cm
         bb = [o.matrix_world @ Vector(c) for o in objs for c in o.bound_box]
         hgt = max(v.z for v in bb) - min(v.z for v in bb)
-        target = {'payphone': 2.05, 'bench': None, 'trashcan': None}[name]
+        target = {'payphone': None, 'bench': None, 'trashcan': None}[name]
         if target and hgt > 0:
             s = target / hgt
             for o in objs:
                 o.scale = (o.scale[0] * s, o.scale[1] * s, o.scale[2] * s)
             bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        if name == 'payphone':
+            # the phone at its real size (74 cm) hung on the back wall of a booth (95 x 95 cm, 2.2 m)
+            bb = [o.matrix_world @ Vector(c) for o in objs for c in o.bound_box]
+            cx_ = (max(v.x for v in bb) + min(v.x for v in bb)) / 2
+            for o in objs:
+                o.location = (o.location.x - cx_, o.location.y - max(v.y for v in bb) + 0.46, o.location.z - min(v.z for v in bb) + 0.92)
+            bpy.ops.object.select_all(action='DESELECT')
+            for o in objs:
+                o.select_set(True)
+            bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
+            booth = props.payphone_booth().build()
+            objs.append(booth)
+            booth.select_set(True)
         for img in bpy.data.images:
             if img.size[0] > 512:
                 img.scale(512, 512)

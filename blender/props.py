@@ -56,6 +56,31 @@ def flag_white():
     return mb
 
 
+# ----------------------------------------------------------------------------- 공중전화 부스
+def payphone_booth():
+    """공중전화 부스 as on a 1990s campus: 95 x 95 cm, 2.2 m high, a grey steel frame with clear panels on three sides,
+    an open front, a lit sign on the roof and a shelf under the phone (the phone itself, Poly Haven's Korean payphone,
+    is added in build.py).  The front faces -Y."""
+    mb = MeshBuilder('payphone_booth')
+    w = d = 0.95
+    h = 2.2
+    mb.box((0, 0, 0.04), (w + 0.1, d + 0.1, 0.08), 'concrete')                         # base slab
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            mb.box((sx * (w / 2 - 0.03), sy * (d / 2 - 0.03), h / 2), (0.06, 0.06, h), 'frame_silver')
+    for sx in (-1, 1):                                                                 # clear side panels, mid rail
+        mb.box((sx * (w / 2 - 0.03), 0, 1.2), (0.03, d - 0.1, 1.9), 'glass')
+        mb.box((sx * (w / 2 - 0.03), 0, 1.0), (0.05, d - 0.06, 0.05), 'frame_silver')
+    mb.box((0, d / 2 - 0.03, 1.2), (w - 0.1, 0.03, 1.9), 'glass')                      # back panel: lower half solid
+    mb.box((0, d / 2 - 0.03, 0.55), (w - 0.06, 0.05, 0.9), 'plastic_grey')
+    mb.box((0, -d / 2 + 0.03, 2.05), (w - 0.06, 0.06, 0.2), 'frame_silver')            # front head rail
+    mb.box((0, 0, h + 0.05), (w + 0.12, d + 0.12, 0.1), 'frame_silver')                # roof
+    mb.box((0, -d / 2 - 0.02, h + 0.27), (w * 0.9, 0.12, 0.34), 'light_white')         # lit sign
+    mb.box((0, -d / 2 - 0.09, h + 0.27), (w * 0.9 - 0.12, 0.02, 0.2), 'sign_blue')
+    mb.box((0, d / 2 - 0.2, 0.86), (0.5, 0.3, 0.04), 'metal')                          # shelf under the phone
+    return mb
+
+
 # ----------------------------------------------------------------------------- 원형 화분 (white round planters at the gate)
 def planter():
     mb = MeshBuilder('planter')
