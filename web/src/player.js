@@ -14,6 +14,7 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 const RADIUS = 0.32, STEP = 0.55;
+const WALL_RAY_H = [0.65, 1.3];       // above the feet
 export const WALK = 2.4, RUN = 6.2, TURN = 2.3;
 
 // numeric grid-cell key (no string building in the per-frame lookups); unique for |i|, |j| < 32768
@@ -122,6 +123,10 @@ export class Player {
     this.movers = [];
     this.ray = new THREE.Raycaster();
     this.ray.firstHitOnly = true;
+    this.walls = [];                  // static building / landmark meshes (with BVHs): columns, porches, stair walls the footprints miss
+    this.wray = new THREE.Raycaster();
+    this.wray.firstHitOnly = true;
+    this._wo = new THREE.Vector3(); this._wd = new THREE.Vector3(); this._wn = new THREE.Vector3();
     this.down = new THREE.Vector3(0, -1, 0);
     this._from = new THREE.Vector3();
     this._want = new THREE.Vector3(); this._head = new THREE.Vector3(); this._q = new THREE.Vector3(); this._look = new THREE.Vector3();
@@ -173,6 +178,37 @@ export class Player {
     this.cam.orbit = 0;
   }
 
+  // push the walker out of the walls of the real meshes: rays round a circle at knee and chest height, so columns,
+  // porches and the side walls of stairs block like the footprints do (the stair treads themselves are below the knee ray)
+  pushFromWalls(x, y, z) {
+    const R = RADIUS + 0.05, o = this._wo, d = this._wd, n = this._wn, ray = this.wray;
+    ray.far = R;
+    // only the meshes within reach (their world bounding spheres are cached on first use)
+    if (!this._wsph) {
+      this._wsph = this.walls.map((m) => { m.updateWorldMatrix(true, false); if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); return m.geometry.boundingSphere.clone().applyMatrix4(m.matrixWorld); });
+    }
+    const near = this._wnear || (this._wnear = []);
+    near.length = 0;
+    for (let i = 0; i < this.walls.length; i++) {
+      const sp = this._wsph[i], dx = sp.center.x - x, dz = sp.center.z - z, dy = sp.center.y - y;
+      if (dx * dx + dy * dy + dz * dz < (sp.radius + 1) * (sp.radius + 1)) near.push(this.walls[i]);
+    }
+    if (!near.length) return [x, z];
+    for (const h of WALL_RAY_H) {
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4;
+        d.set(Math.cos(a), 0, Math.sin(a));
+        ray.set(o.set(x, y + h, z), d);
+        const hit = ray.intersectObjects(near, false)[0];
+        if (!hit || hit.distance >= R) continue;
+        n.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
+        if (Math.abs(n.y) > 0.6) continue;         // floors and slopes are the ground's business
+        x -= d.x * (R - hit.distance); z -= d.z * (R - hit.distance);
+      }
+    }
+    return [x, z];
+  }
+
   groundAt(x, z, from = null) {
     const top = from ?? this.pos.y + STEP;
     this.ray.set(this._from.set(x, top, z), this.down);
@@ -218,6 +254,7 @@ export class Player {
     if (this.speed) {
       const [cx, cy] = this.col.resolve(nx, -nz, RADIUS, this.movers);
       nx = cx; nz = -cy;
+      if (this.walls.length) { const [wx, wz] = this.pushFromWalls(nx, this.pos.y, nz); nx = wx; nz = wz; }
     }
     // ground: step up curbs and terraces, fall down slopes
     this.vy -= 14 * dt;

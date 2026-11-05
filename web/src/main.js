@@ -225,6 +225,15 @@ async function main() {
     for (const k in carKits) { carKits[k].commit(); carKits[k].addTo(scene); }
   }
   for (const t of campus.trees) colliders.addCircle(t[1], t[2], 0.35 * t[3]);
+  // clipped shrubs: round boxwood, cones, bushes and azaleas are as wide as a person; low hedges are three overlapping circles
+  for (const [k, x, y, sc, rot] of campus.shrubs) {
+    if (k === 'hedge_low') {
+      const c = Math.cos(rot), s = Math.sin(rot);
+      colliders.addCircle(x, y, 0.42 * sc);
+      colliders.addCircle(x + c * 0.55 * sc, y + s * 0.55 * sc, 0.42 * sc);
+      colliders.addCircle(x - c * 0.55 * sc, y - s * 0.55 * sc, 0.42 * sc);
+    } else colliders.addCircle(x, y, (k === 'topiary_cone' ? 0.6 : k === 'azalea_red' ? 0.62 : 0.72) * sc);
+  }
   const S = campus.statues;
   colliders.addCircle(S.eagle.pos[0], S.eagle.pos[1], 3.3);                    // stepped platform of the eagle tower
   colliders.addCircle(S.underwood_statue.pos[0], S.underwood_statue.pos[1], 3.2);   // round steps under the statue
@@ -273,6 +282,9 @@ async function main() {
   scene.add(hero.holder);
   shadows.addDynamic(hero.holder);
   const player = new Player(camera, canvas, colliders, walkables, hfNear, hero);
+  for (const name of ['buildings', 'landmarks']) {      // walls for the walker: BVHs built once, shared with the bird's-eye roof picking
+    scene.getObjectByName(name)?.traverse((o) => { if (o.isMesh) { if (!o.geometry.boundsTree) o.geometry.computeBoundsTree(); player.walls.push(o); } });
+  }
   player.teleport(campus.spawn.pos[0], campus.spawn.pos[1], campus.spawn.yaw);
   const post = new Post(renderer, scene, camera);
   const ui = new UI(campus, {
@@ -373,7 +385,7 @@ async function main() {
     if (!roofs) {
       roofs = [...walkables];
       for (const name of ['buildings', 'landmarks']) {
-        scene.getObjectByName(name)?.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundsTree(); roofs.push(o); } });
+        scene.getObjectByName(name)?.traverse((o) => { if (o.isMesh) { if (!o.geometry.boundsTree) o.geometry.computeBoundsTree(); roofs.push(o); } });
       }
     }
     downRay.set(from.set(x, 900, -y), DOWN);
