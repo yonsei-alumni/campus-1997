@@ -203,8 +203,7 @@ def library():
     # rooftop plant room (seen over the attic in the 1995 photo)
     mb.box((0, 4, H + 0.3), (16, 9, 3.0), 'stone_panel', mats={'top': 'roof_flat'})
     # entrance: steps up to the recessed ground floor on the 백양로 (local -y) side
-    for k in range(4):
-        mb.box((0, -W / 2 - 1.0 - k * 0.45, g0 - (k + 1) * 0.22 + 0.11), (16, 1.0 + k * 0.9, 0.22), 'stone_granite')
+    stair_flight(mb, 0, -W / 2, 17.0, g0, n=6, landing=1.6, tread=0.45, flare=1.5, cheek=0.0, rail=False)
     return [mb]
 
 
@@ -421,9 +420,69 @@ def ivy_patch(iv, P, s0, s1, z0, z1, density, seedoff=0, holes=(), top=None, cov
                 uvs=[(u0, v0), (u0 + .5, v0), (u0 + .5, v0 + .5), (u0, v0 + .5)])
 
 
+def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8, tread=0.36, flare=0.35,
+                 cheek=0.0, cheek_mat=None, newel=False, rail=False, ground=-1.2):
+    """A straight entrance flight in a builder's local frame, going down towards -y from the wall at y_face.
+    zl: top of the landing in front of the door; n risers (rise = (zl - ground_level) / n, ground_level ~ -0.15);
+    each tread is a solid block down to `ground`, the lowest ones a little wider (flare) like the real granite steps.
+    cheek: thickness of the low sloped side walls (0 = none); newel: a squared post with a cap at the foot of each;
+    rail: slim metal handrails along the flight."""
+    cheek_mat = cheek_mat or mat
+    rise = (zl + 0.15) / n
+    mb.box((x, y_face - landing / 2 + 0.6, (zl + ground) / 2), (width, landing + 1.2, zl - ground), mat,
+           mats={'top': mat})                                               # landing, running into the recess
+    for k in range(1, n + 1):
+        top = zl - k * rise
+        y1 = y_face - landing - (k - 1) * tread
+        w = width + 2 * flare * (k / n)
+        mb.box((x, y1 - tread / 2 + 0.02, (top + ground) / 2), (w, tread + 0.04, top - ground), mat)
+    y_foot = y_face - landing - n * tread
+    if cheek:
+        for sg in (-1, 1):
+            xo = x + sg * (width / 2 + flare * 0.6 + cheek / 2)
+            hz0, hz1 = zl + 0.55, -0.15 + 0.35
+            # sloped coping wall: a wedge from the landing down to the foot of the flight
+            ya, yb = y_face + 0.4, y_foot - 0.1
+            xa, xb = xo - cheek / 2, xo + cheek / 2
+            pts = lambda yy, zz, xx: (xx, yy, zz)
+            for (x0, x1) in ((xa, xb),):
+                mb.quad((x0, yb, ground), (x0, ya, ground), (x0, ya, hz0), (x0, yb, hz1), cheek_mat) if sg < 0 else \
+                    mb.quad((x1, ya, ground), (x1, yb, ground), (x1, yb, hz1), (x1, ya, hz0), cheek_mat)
+            mb.quad((xa, yb, hz1), (xb, yb, hz1), (xb, ya, hz0), (xa, ya, hz0), cheek_mat)       # sloping top
+            mb.quad((xa, yb, ground), (xa, yb, hz1), (xb, yb, hz1), (xb, yb, ground), cheek_mat)  # foot end
+            mb.quad((xb, ya, ground), (xb, ya, hz0), (xa, ya, hz0), (xa, ya, ground), cheek_mat)  # wall end
+            if newel:
+                mb.box((xo, yb + 0.1, hz1 + 0.35), (cheek + 0.2, cheek + 0.2, 0.9), cheek_mat)
+                mb.box((xo, yb + 0.1, hz1 + 0.85), (cheek + 0.35, cheek + 0.35, 0.18), 'stone_trim')
+    if rail:
+        for sg in (-1, 1):
+            xr = x + sg * (width / 2 + 0.05)
+            yb, ya = y_foot + 0.2, y_face - landing + 0.3
+            hb, ha = -0.15 + 0.95, zl + 0.95
+            nr = 12
+            for j in range(nr):
+                t0, t1 = j / nr, (j + 1) / nr
+                mb.quad((xr - 0.025, yb + (ya - yb) * t0, hb + (ha - hb) * t0), (xr + 0.025, yb + (ya - yb) * t0, hb + (ha - hb) * t0),
+                        (xr + 0.025, yb + (ya - yb) * t1, hb + (ha - hb) * t1), (xr - 0.025, yb + (ya - yb) * t1, hb + (ha - hb) * t1), 'metal_dark')
+            for yy in (yb, ya):
+                zz = hb + (ha - hb) * ((yy - yb) / (ya - yb))
+                mb.box((xr, yy, zz - 0.45), (0.06, 0.06, 0.9), 'metal_dark')
+    return y_foot
+
+
+def lamp_post(mb, x, y, h=3.6, globe='plaster_white'):
+    """A cast-iron post with a white globe lamp, like those beside the 대우관 별관 steps."""
+    mb.cylinder((x, y), 0.09, -0.6, h, 'metal_dark', seg=8, cap_top=False)
+    mb.cylinder((x, y), 0.17, -0.6, 0.3, 'metal_dark', seg=8, cap_top=False)
+    mb.cylinder((x, y), 0.2, h, h + 0.22, globe, seg=12, r1=0.3)
+    mb.cylinder((x, y), 0.3, h + 0.22, h + 0.5, globe, seg=12, r1=0.2)
+    mb.cylinder((x, y), 0.22, h + 0.5, h + 0.6, 'metal_dark', seg=10)
+
+
 def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=True, fh=4.1, wall='stone_rubble',
-           dormers=True):
+           dormers=True, stairs=None):
     cx, cy, L, W, ang, z0 = frame_for(b, front)
+    stairs = dict(dict(n=8, cheek=0.4, newel=False, lamps=False, width=None), **(stairs or {}))
     mb = MeshBuilder('lm_' + name)
     iv = MeshBuilder('lm_' + name + '_ivy')
     mb.xf = iv.xf = local_frame(cx, cy, ang, z0)
@@ -547,9 +606,10 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
             flat_wall(mb, P, e1, Le, -0.5, Ht, wall)
             arch_fill(mb, P, e0, e1, zs, zs + ew * 0.95, 1.2, 'stone_trim', 'pointed', 12)
             flat_wall(mb, P, e0, e1, zs + ew * 0.95, Ht, wall)
-            mb.quad(P(e0, -0.5, -1.2), P(e1, -0.5, -1.2), P(e1, zs + ew * 0.9, -1.2), P(e0, zs + ew * 0.9, -1.2), 'wood_dark')
-            mb.quad(P(e0, -0.5, 0), P(e0, -0.5, -1.2), P(e0, zs, -1.2), P(e0, zs, 0), 'stone_trim')
-            mb.quad(P(e1, -0.5, -1.2), P(e1, -0.5, 0), P(e1, zs, 0), P(e1, zs, -1.2), 'stone_trim')
+            zd = plinth - 0.1
+            mb.quad(P(e0, zd, -1.2), P(e1, zd, -1.2), P(e1, zs + ew * 0.9, -1.2), P(e0, zs + ew * 0.9, -1.2), 'wood_dark')
+            mb.quad(P(e0, zd, 0), P(e0, zd, -1.2), P(e0, zs, -1.2), P(e0, zs, 0), 'stone_trim')
+            mb.quad(P(e1, zd, -1.2), P(e1, zd, 0), P(e1, zs, 0), P(e1, zs, -1.2), 'stone_trim')
             # tall tracery window above the door
             w0, w1 = Le / 2 - 1.1, Le / 2 + 1.1
             zw0, zw1 = zs + ew + 1.0, Hw - 1.0
@@ -584,22 +644,26 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
         mb.face([(px_ + .45, py_ - .45, Ht + 1.8), (px_ + .45, py_ + .45, Ht + 1.8), (px_, py_, Ht + 3.2)], 'stone_trim')
         mb.face([(px_ + .45, py_ + .45, Ht + 1.8), (px_ - .45, py_ + .45, Ht + 1.8), (px_, py_, Ht + 3.2)], 'stone_trim')
         mb.face([(px_ - .45, py_ + .45, Ht + 1.8), (px_ - .45, py_ - .45, Ht + 1.8), (px_, py_, Ht + 3.2)], 'stone_trim')
-    # entrance steps
-    for k in range(5):
-        mb.box((0, ty0 - 0.6 - k * 0.4, 0.15 + (4 - k) * 0.25 - 1.0), (5.0 + k * 0.6, 1.2 + k * 0.8, 0.25), 'stone_granite')
+    # entrance: a broad granite flight up to a landing at the plinth top (daewoo-hall-annex photo), low sloping cheek walls
+    sw = stairs['width'] or tw * 0.72
+    y_foot = stair_flight(mb, 0, ty0, sw, plinth - 0.1, n=stairs['n'], landing=2.0 if stairs['n'] > 6 else 1.4,
+                          cheek=stairs['cheek'], newel=stairs['newel'], cheek_mat='stone_granite')
+    if stairs['lamps']:
+        for sg in (-1, 1):
+            lamp_post(mb, sg * (sw / 2 + 2.2), y_foot - 0.6)
     return [mb, iv]
 
 
 def underwood():
-    return gothic('underwood', bld(246156115), (0.27, -1.0), 3, tower_w=9.0, tower_extra=9.5, ivy=1.0)
+    return gothic('underwood', bld(246156115), (0.27, -1.0), 3, tower_w=9.0, tower_extra=9.5, ivy=1.0, stairs=dict(n=9, newel=True))
 
 
 def stimson():
-    return gothic('stimson', bld(246156118), (1.0, -0.27), 2, tower_w=6.5, tower_extra=6.0, ivy=0.8, wings=False)
+    return gothic('stimson', bld(246156118), (1.0, -0.27), 2, tower_w=6.5, tower_extra=6.0, ivy=0.8, wings=False, stairs=dict(n=6, newel=True))
 
 
 def appenzeller():
-    return gothic('appenzeller', bld(246156116), (-1.0, 0.27), 3, tower_w=7.0, tower_extra=6.5, ivy=1.1, wings=False)
+    return gothic('appenzeller', bld(246156116), (-1.0, 0.27), 3, tower_w=7.0, tower_extra=6.5, ivy=1.1, wings=False, stairs=dict(n=7, newel=True))
 
 
 # ============================================================================= 대강당
@@ -649,8 +713,7 @@ def auditorium():
     for k in range(6):
         x = -L * 0.38 + k * L * 0.76 / 5
         mb.cylinder((x, ly - 6.0), 0.35, 0.5, 6.2, 'concrete', seg=10, cap_top=False)
-    for k in range(4):
-        mb.box((0, ly - 7.5 - k * 0.45, 0.5 - (k + 1) * 0.2 + 0.1), (L * 0.75, 1.2, 0.2), 'stone_granite')
+    stair_flight(mb, 0, ly - 6.8, L * 0.7, 0.5, n=5, landing=0.8, tread=0.5, flare=1.0, cheek=0.0, rail=False)
     return [mb]
 
 
@@ -724,6 +787,11 @@ def engineering():
     mb.box((0, -W / 2 - 2.2, 4.0), (10, 4.4, 0.45), 'concrete')
     for x in (-4.5, 4.5):
         mb.cylinder((x, -W / 2 - 4.0), 0.22, 0.4, 3.8, 'concrete', seg=8, cap_top=False)
+    # wide concrete flight with handrails under the canopy, glass double doors behind a landing
+    stair_flight(mb, 0, -W / 2, 8.0, 0.4, n=4, mat='stone_granite', landing=1.8, tread=0.4, flare=0.6, rail=True)
+    mb.quad((-2.6, -W / 2 - 0.02, 0.4), (2.6, -W / 2 - 0.02, 0.4), (2.6, -W / 2 - 0.02, 3.4), (-2.6, -W / 2 - 0.02, 3.4), 'glass')
+    mb.box((0, -W / 2 - 0.03, 3.5), (5.4, 0.08, 0.16), 'frame_dark')
+    mb.box((0, -W / 2 - 0.03, 0.4 + 1.5), (0.1, 0.08, 3.0), 'frame_dark')
     return [mb, mbw]
 
 
@@ -916,7 +984,7 @@ def daewoo():
     W = lambda u, v: tuple(a + t * u + nl * v)
     centre = dict(b, footprint=[W(0.4, 0), W(46.7, 0), W(46.7, 14.8), W(0.4, 14.8)])
     out = gothic('daewoo', centre, tuple(-nl), 6, tower_w=9.0, tower_extra=2.5, ivy=0, wings=False, fh=3.6,
-                 wall='stone_white')
+                 wall='stone_white', stairs=dict(n=9, lamps=True))
     mb = MeshBuilder('lm_daewoo_pavilions')
     mb.xf = local_frame(a.x, a.y, ang, b['base'])
     gable_hall(mb, -12.1, 0.0, -12.2, 24.5, 6, 3.6, 'stone_white')
@@ -935,7 +1003,7 @@ def yeonhui():
     ang = math.atan2(t.y, t.x)
     W = lambda u, v: tuple(a + t * u + nl * v)
     centre = dict(b, footprint=[W(0.4, 0), W(39.9, 0), W(39.9, 14.2), W(0.4, 14.2)])
-    out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.5, tower_extra=9.5, ivy=0.85, wings=False, fh=4.1)
+    out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.5, tower_extra=9.5, ivy=0.85, wings=False, fh=4.1, stairs=dict(n=9, newel=True))
     mb = MeshBuilder('lm_yeonhui_pavilions')
     iv = MeshBuilder('lm_yeonhui_pavilions_ivy')
     mb.xf = iv.xf = local_frame(a.x, a.y, ang, b['base'])
@@ -947,7 +1015,7 @@ def yeonhui():
 def daewoo_annex():
     """대우관 별관: the same pale stone Gothic, five storeys, end gables on the front."""
     return gothic('daewoo_annex', bld(242897923), (-0.97, 0.24), 5, tower_w=7.0, tower_extra=1.5, ivy=0, wings=True,
-                  fh=3.6, wall='stone_white')
+                  fh=3.6, wall='stone_white', stairs=dict(n=10, lamps=True, cheek=0.0))
 
 
 # ============================================================================= 대강당 앞 농구장
