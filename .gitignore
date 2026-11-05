@@ -4,6 +4,5 @@ web/dist/
 assets_src/
 data/raw/pdf_images/
 previews/
-reference/
 __pycache__/
 trailer/*.mp4
