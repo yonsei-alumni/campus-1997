@@ -2,9 +2,17 @@
 // The rims, backboards and nets are in the court model (blender/landmarks.py basketball_court); this file only knows
 // where they are: court-local x = ±(L/2 - 1.575) is the rim, ±(L/2 - 1.2) the backboard, rim height 3.05 m.
 import * as THREE from 'three';
+import { ArmPose } from './armpose.js';
 
 const R = 0.12, G = 9.8;
 const RIM_R = 0.235, RIM_H = 3.05;
+// the shot, in seconds: gather (ball dips to the waist, knees would bend), rise (ball goes up past the face with a hop),
+// release over the head, follow through, arms come down
+const T_GATHER = 0.3, T_RELEASE = 0.7, T_END = 1.25;
+const HOLD = new THREE.Vector3(0, 1.2, 0.34);               // ball held at the chest, in the walker's own frame (+Z = forward)
+const LOW = new THREE.Vector3(0, 0.98, 0.3);
+const HIGH = new THREE.Vector3(0, 2.18, 0.26);
+const ease = (u) => u * u * (3 - 2 * u);
 
 function ballTexture() {
   const c = document.createElement('canvas');
@@ -52,6 +60,11 @@ export class Basketball {
     this.scored = false;
     this.idle = 0;
     this.mesh.position.copy(this.pos);
+    this.pose = new ArmPose(player.actor);
+    this.armW = 0;                    // how much the arms follow the pose instead of the walk/idle clip
+    this.t = 0;                       // time into a shot
+    this.shot = null;                 // {hoop} while the shot is being taken
+    this.carry = new THREE.Vector3();
   }
 
   toWorld(lx, ly) {
@@ -64,7 +77,7 @@ export class Basketball {
     return [dx * this.cos + dy * this.sin, -dx * this.sin + dy * this.cos];
   }
 
-  get held() { return this.state === 'held'; }
+  get held() { return this.state === 'held' && !this.shot; }
 
   near() {
     const p = this.player.pos;
@@ -74,6 +87,7 @@ export class Basketball {
   // text for the E prompt (null = nothing to offer)
   prompt() {
     const k = this.mobile ? '눌러서 ' : '';
+    if (this.shot) return null;
     if (this.state === 'held') return this.nearestHoop(16) ? `${k}슛!` : `${k}공 던지기 · 골대에 가까이 가 보세요`;
     if (this.near()) return `${k}농구공 줍기`;
     return null;
@@ -91,6 +105,7 @@ export class Basketball {
 
   // E / tap on the prompt: pick up, or shoot. Returns true when it did something.
   action() {
+    if (this.shot) return true;
     if (this.state === 'held') { this.shoot(); return true; }
     if (this.near()) {
       this.state = 'held';
@@ -100,15 +115,25 @@ export class Basketball {
     return false;
   }
 
+  // E: turn to the basket and start the shot (the ball leaves the hands at T_RELEASE, see release())
   shoot() {
     const pl = this.player, p = pl.pos;
     const hoop = this.nearestHoop(16);
+    if (hoop) pl.heading = Math.atan2(hoop.rim.x - p.x, hoop.rim.z - p.z);     // turn to face the basket
+    this.shot = { hoop };
+    this.t = 0;
+    this.idle = 0;
+    pl.enabled = false;                                                        // stand still while shooting
+  }
+
+  release() {
+    const { hoop } = this.shot;
+    const pl = this.player, p = pl.pos;
     const fwd = new THREE.Vector3(Math.sin(pl.heading), 0, Math.cos(pl.heading));
-    const from = new THREE.Vector3(p.x, p.y + 1.95, p.z).addScaledVector(fwd, 0.3);
+    const from = this.pos.clone();
     let v;
     if (hoop) {
       const d = Math.hypot(hoop.rim.x - from.x, hoop.rim.z - from.z);
-      pl.heading = Math.atan2(hoop.rim.x - p.x, hoop.rim.z - p.z);     // turn to face the basket
       const err = 0.025 + 0.008 * d;                                    // longer shots miss more
       const to = hoop.rim.clone();
       to.x += (Math.random() - 0.5) * 2 * err; to.z += (Math.random() - 0.5) * 2 * err;
@@ -121,29 +146,67 @@ export class Basketball {
       v = fwd.clone().multiplyScalar(5).setY(5.5);
       this.shotFrom = 0;
     }
-    this.pos.copy(from);
     this.vel.copy(v);
     this.state = 'flying';
-    this.idle = 0;
     this.hoopShot = !!hoop;
+    this.lastRelease = from;
+  }
+
+  // ball and arms while it is held / being shot; returns the hop height in metres
+  carryAndPose(dt) {
+    const pl = this.player, holder = pl.actor.holder;
+    holder.updateMatrixWorld(true);
+    let local = HOLD, hop = 0, spread = 0.115, follow = 0;
+    if (this.shot) {
+      if (!this.freeze) this.t += dt;      // (freeze: for stepping through the shot while testing)
+      const t = this.t;
+      if (t < T_GATHER) local = HOLD.clone().lerp(LOW, ease(t / T_GATHER));
+      else if (t < T_RELEASE) local = LOW.clone().lerp(HIGH, ease((t - T_GATHER) / (T_RELEASE - T_GATHER)));
+      else local = HIGH;
+      hop = t > 0.35 && t < 0.95 ? 0.13 * Math.sin(Math.PI * (t - 0.35) / 0.6) : 0;
+      if (t >= T_RELEASE && this.state === 'held') this.release();
+      if (t >= T_RELEASE) follow = Math.min(1, (t - T_RELEASE) / 0.3);
+      if (t > T_RELEASE) spread = 0.115 - 0.05 * follow;
+    }
+    if (this.state === 'held') {
+      this.carry.copy(local);
+      holder.localToWorld(this.pos.copy(this.carry));
+      this.pos.y += hop;
+      this.mesh.position.copy(this.pos);
+      this.mesh.rotation.y = pl.heading;
+    }
+    // arms: hands on the ball's two sides; after release they follow through forward and a little down
+    const side = new THREE.Vector3(1, 0, 0).applyQuaternion(holder.quaternion);
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(holder.quaternion);
+    const c = this.state === 'held' ? this.pos : (this.lastRelease || this.pos).clone();
+    if (follow) { c.addScaledVector(fwd, 0.22 * ease(follow)); c.y += 0.04 - 0.1 * ease(follow); }
+    // which bone is the left arm: the side it sits on, in the walker's frame
+    const pr = this.pose;
+    if (!this.shot && this.state !== 'held' && this._tg) { pr.apply(this._tg, this._hn, this.armW, 0); return; }   // arms coming down
+    const posL = new THREE.Vector3(); pr.arms[0].up.getWorldPosition(posL);
+    const sL = Math.sign(holder.worldToLocal(posL.clone()).x) || 1;
+    const targets = [c.clone().addScaledVector(side, sL * spread), c.clone().addScaledVector(side, -sL * spread)];
+    const hints = [new THREE.Vector3(0, -1, -0.15).addScaledVector(side, sL * 0.9), new THREE.Vector3(0, -1, -0.15).addScaledVector(side, -sL * 0.9)];
+    // the hands are anchored to the ball, not the other way round: shift targets when the ball is out of reach
+    this._tg = targets; this._hn = hints;
+    pr.apply(targets, hints, this.armW, hop);
   }
 
   update(dt, tAcc, active) {
     this.mesh.visible = true;
     const pl = this.player;
-    if (this.state === 'held') {
-      // dribbling at the right hand while standing, held at the chest while walking quickly
-      const p = pl.pos, h = pl.heading;
-      const fx = Math.sin(h), fz = Math.cos(h), rx = Math.cos(h), rz = -Math.sin(h);
-      const moving = Math.abs(pl.speed) > 0.6;
-      const gy = this.hf.height(p.x + fx * 0.4, -(p.z + fz * 0.4)) ;
-      const ph = Math.abs(Math.cos(tAcc * (moving ? 7 : 5.2) * 1.0));
-      const up = moving ? 0.0 : 1;
-      this.pos.set(p.x + fx * 0.45 + rx * 0.3, Math.max(gy, p.y) + R + 0.1 + ph * 0.75 * up + (moving ? 0.9 : 0), p.z + fz * 0.45 + rz * 0.3);
-      this.mesh.position.copy(this.pos);
-      this.mesh.rotation.x += dt * 4;
-      return;
+    if (this.pose.actor !== pl.actor) this.pose.setActor(pl.actor);
+    // the arms ease in when the ball is picked up and out again after the shot
+    const wantArms = this.state === 'held' || (this.shot && this.t < T_END) ? 1 : 0;
+    this.armW += (wantArms - this.armW) * Math.min(1, dt * (wantArms ? 9 : 5));
+    if (this.armW < 0.01 && !wantArms) this.armW = 0;
+    if (this.state === 'held' || this.shot || this.armW > 0) this.carryAndPose(dt);
+    if (this.shot && this.t >= T_END) {                // shot finished: the walker may move again
+      this.shot = null;
+      const open = this.ui.memoryOpen || this.ui.mapOpen || !document.getElementById('pause').hidden;
+      if (!open) pl.enabled = true;
     }
+    if (this.state === 'held') return;
     if (!active) { this.mesh.position.copy(this.pos); return; }
     const sub = Math.ceil(dt / 0.01);
     for (let i = 0; i < sub; i++) this.step(dt / sub);
