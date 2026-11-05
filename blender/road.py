@@ -157,12 +157,19 @@ def build():
             fb = at(c - side * 4.5)
             o0, o1 = (0.0, e_lane) if side > 0 else (-e_lane, 0.0)
             quad_at(fb, o0, o1, -0.2, 0.2, 'paint_white')
-    # painted speed bump near the gate: alternating yellow / white blocks across the road (1997 photo)
+    def hump(f, o0, o1, mat, half=0.9, flat=0.5, rise=0.09):
+        # a real raised bump: flat top with sloping sides (a 9 cm rise over 1.8 m), stripes painted on it
+        s, p, t, n, h = f
+        P = lambda o, d, z: (lambda q: (q.x, q.y, h + z))(p + n * o + t * d)
+        prof = [(-half, 0.012), (-flat, rise), (flat, rise), (half, 0.012)]
+        for (d0, z0), (d1, z1) in zip(prof, prof[1:]):
+            marks.face([P(o0, d0, z0), P(o0, d1, z1), P(o1, d1, z1), P(o1, d0, z0)], mat)
+    # speed bump near the gate, raised, with alternating yellow / white blocks across the road (1997 photo)
     if bump is not None:
         f = at(bump)
         o, k = -e_lane, 0
         while o < e_lane - 0.01:
-            quad_at(f, o, min(e_lane, o + 0.9), -0.9, 0.9, 'paint_yellow' if k % 2 else 'paint_white')
+            hump(f, o, min(e_lane, o + 0.9), 'paint_yellow' if k % 2 else 'paint_white')
             o += 0.9
             k += 1
         # ◇ "crossing ahead" diamonds and lane arrows beyond the bump

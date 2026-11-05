@@ -151,7 +151,7 @@ def prof_h(s):
 
 
 # zebra crossings (arc length): 백주년기념관, 학생회관-중앙도서관, 대강당, 삼거리.  Near the gate the 1997 photo
-# shows a yellow/white hatched speed bump (paint only) instead.  The carriageway itself stays clear of objects.
+# shows a yellow/white hatched speed bump (raised, striped) instead.  The carriageway itself stays clear of objects.
 CROSS = [round(s_at(-55, -200), 1), round(s_at(-20, -62), 1), round(s_at(5, 40), 1), round(L - 30, 1)]
 BUMP_S = 64.0
 
@@ -319,6 +319,8 @@ for wv in ways.values():
         continue
     hs = [ground_h(x, y) for x, y in poly.exterior.coords]
     lv = rng.choice([2, 2, 2, 3, 3, 4]) if poly.area < 400 else rng.choice([3, 4, 5])
+    if -110 < c.x < 40 and -420 < c.y < -100:
+        continue        # shops east of the gate / by the eagle: the 1997 aerial photo shows lawn and car parks there
     buildings.append(dict(id=wv['id'], name='', style='city', levels=lv, height=round(lv * 3.0 + 0.8, 2),
                           base=round(min(hs), 2), top_ground=round(max(hs), 2),
                           footprint=[[round(x, 2), round(y, 2)] for x, y in list(poly.exterior.coords)[:-1]]))
@@ -447,8 +449,9 @@ def along_raw(s, off):
 
 # shaded car park on the lawn south-west of 백주년기념관 (red car under the trees in the 1997 photo)
 LOT_E = [along_raw(s, -(ROAD_HALF + 8.5)) for s in np.arange(150, 196, 3.2)]
-draw_line('asphalt', [(x, y) for x, y, _ in LOT_E], 7.0)
-draw_line('asphalt', [along_raw(150, -(ROAD_HALF + 1))[:2], LOT_E[0][:2]], 5.0)
+# 1997 photo: no car park beside the road here; the cars stand in a row on the dry lawn in front of 백주년기념관
+LOT_C = [(x, -267.0 + (x + 62) * 0.06, 0.0) for x in np.arange(-64, -28, 4.6)]
+draw_line('asphalt', [(x, y) for x, y, _ in LOT_C], 7.0)
 # 백양로 itself is real geometry (Blender) – paint asphalt below so seams never show grass
 draw_line('asphalt', bys, 2 * E_CURB)
 draw_line('pavers', bys, 2 * ROAD_HALF)
@@ -646,6 +649,25 @@ for k in range(6000):
     trees.append([rng.choice(['zelkova', 'zelkova', 'pine', 'pine', 'cherry', 'maple']), round(x, 2), round(y, 2),
                   round(rng.uniform(0.85, 1.2), 2), round(rng.uniform(0, 6.28), 2)])
 
+# 1997 photo: the east lawn is mostly open dry grass with a few big trees by 백주년기념관 and the car park; thin the planting
+# (a separate RNG so the rest of the campus keeps its layout)
+rng2 = random.Random(1997 + 7)
+n0 = len(trees) - len(east_pts)
+east_keep = []
+for t_ in trees[n0:]:
+    if -72 < t_[1] < -26 and -356 < t_[2] < -288:
+        continue
+    if t_[2] < -300 and rng2.random() < 0.55:
+        continue
+    if -272 < t_[2] < -258 and -70 < t_[1] < -24:
+        continue        # keep the car row clear
+    east_keep.append(t_)
+trees[n0:] = east_keep
+# big zelkova / pine / red maple between the gate island and the south end of 제1공학관 (left of the road in the photo)
+for sp, x, y, sc in (('zelkova', -104, -318, 1.25), ('zelkova', -113, -313, 1.2), ('pine', -121, -316, 1.15),
+                     ('zelkova', -127, -309, 1.1), ('maple', -118, -307, 0.95), ('zelkova', -99, -304, 1.15)):
+    trees.append([sp, x, y, sc, round(rng2.uniform(0, 6.28), 2)])
+
 # campus scatter (Poisson-ish)
 species_campus = ['zelkova'] * 5 + ['pine'] * 3 + ['cherry'] * 1 + ['ginkgo'] * 1 + ['maple'] * 1
 placed = [(t[1], t[2]) for t in trees]
@@ -803,6 +825,9 @@ BANNERS = [
     (46, dict(text='창립 7주년 기념 세미나 및 학부모 초빙 행사', sub='연세대학교 사회환경건축공학부 도시공학전공', marks=['경', '축']), 'white'),
     (92, dict(text='기술고등고시 설명회', sub='분야: 기계, 전기, 화공, 환경, 토목, 건축, 전산, 통신기술'), 'white_yellow'),
     (138, dict(text='설계공동연구소 10주년 기념식 및 초청강연회'), 'white'),
+    # 사진 속 먼 쪽 두 장(글자는 읽히지 않음)은 연고전 현수막이 걸리는 가을에는 겹치므로 뺀다
+    (192, dict(text='’97 학술제 안내  —  학과별 발표회 및 초청강연', hide='autumn'), 'white'),
+    (272, dict(text='신입생 환영 학과 설명회  —  연세대학교 총학생회', hide='autumn'), 'white'),
     # 연고전 응원 현수막: 신촌 상점들이 걸어 준 푸른 현수막이 줄지어 걸리는 건 가을(연고제)뿐이다.
     # 글귀는 reference/1997_제2백양로_파란물결_연고전현수막_연세춘추.jpg 에서 읽은 것.
     (160, dict(text='연고전이 그대를 기다린다  —  주색가무를 갖춘자여!', sub='다복주전 · 연세대학교 응원단', only='autumn'), 'blue'),
@@ -895,8 +920,15 @@ for (a, b_, n) in lots:
 for line in (LOT_W, LOT_E):
     for (x, y, a) in line:
         if rng.random() < 0.8 and not ball.buffer(1.5).contains(Point(x, y)):
-            cars.append([rng.choice(['sedan', 'sedan', 'hatch', 'taxi']), round(x, 2), round(y, 2),
-                         round(a + math.pi / 2 + rng.uniform(-.05, .05), 3), rng.randrange(8)])
+            car = [rng.choice(['sedan', 'sedan', 'hatch', 'taxi']), round(x, 2), round(y, 2),
+                   round(a + math.pi / 2 + rng.uniform(-.05, .05), 3), rng.randrange(8)]
+            if line is not LOT_E:
+                cars.append(car)
+rng3 = random.Random(1997 + 11)
+for (x, y, a) in LOT_C:          # a red sedan among them, as in the photo
+    if rng3.random() < 0.85:
+        cars.append([rng3.choice(['sedan', 'sedan', 'hatch', 'taxi']), round(x, 2), round(y, 2),
+                     round(math.pi / 2 + rng3.uniform(-.06, .06), 3), rng3.randrange(8)])
 # motorbikes in front of the south end of 제1공학관
 for k in range(16):
     t_ = k / 15

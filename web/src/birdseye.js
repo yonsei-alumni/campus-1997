@@ -149,13 +149,27 @@ export class BirdsEye {
     this.goal.y += (-px * s + py * c) * k;
   }
 
+  // leave the fixed photo view: carry on from the same spot as an ordinary orbit view
+  release() {
+    const k = this.fixed;
+    if (!k) return;
+    this.fixed = null;
+    const dx = k.tx - k.x, dy = k.ty - k.y, hor = Math.hypot(dx, dy);
+    const v = { x: k.tx, y: k.ty, dist: clamp(Math.hypot(hor, k.h - k.th), ...DIST), yaw: Math.atan2(dx, dy), pitch: clamp(Math.atan2(k.h - k.th, hor), ...PITCH), lift: 0 };
+    Object.assign(this.cur, v);
+    Object.assign(this.goal, v);
+    this.fovGoal = this.baseFov;
+  }
+
   stopAuto() {
+    this.release();
     if (this.auto) { this.auto = false; this.labels(); }
   }
 
   // bar buttons and their keys
   do(what) {
     const g = this.goal;
+    if (what !== 'photo' && what !== 'back') this.release();
     if (what === 'back') { this.onAction('back'); return; }
     if (what === 'auto') this.auto = !this.auto;
     else if (what === 'season' || what === 'film') this.onAction(what);
@@ -170,10 +184,12 @@ export class BirdsEye {
     } else if (what === 'overview') {    // the whole campus from high above
       Object.assign(g, { x: -20, y: -40, dist: 900, pitch: 1.0, lift: 0 });
       this.fovGoal = this.baseFov;
-    } else if (what === 'photo') {       // the 1997 aerial photo's viewpoint: just above 제1공학관's north end, along 백양로 to 언더우드관
-      Object.assign(g, { x: -10, y: 29, dist: 300, yaw: 0.235, pitch: 0.07, lift: -20 });
-      this.fovGoal = 54;
-      this.stopAuto();
+    } else if (what === 'photo') {       // the 1997 aerial photo (reference/1997_백양로_항공사진.jpg): a long lens from south of the gate,
+      this.stopAuto();                   // over the 7주년 banner, up 백양로 to 언더우드관 (any other control returns to the orbit view)
+      this.fixed = { x: -118, y: -556, h: 68, tx: 26, ty: 60, th: 42 };
+      this.fovGoal = 14;
+      this.camera.fov = 14;
+      this.camera.updateProjectionMatrix();
     }
     this.labels();
   }
@@ -194,6 +210,7 @@ export class BirdsEye {
     this.keys.clear();
     this.pointers.clear();
     this.auto = true;
+    this.fixed = null;
     this.fovGoal = this.baseFov;
     if (player) {
       // start just above the walker and climb out
@@ -213,6 +230,7 @@ export class BirdsEye {
 
   exit() {
     this.active = false;
+    this.fixed = null;
     this.camera.fov = this.fovGoal = this.baseFov;
     this.camera.near = 0.1;
     this.camera.updateProjectionMatrix();
@@ -241,6 +259,22 @@ export class BirdsEye {
   }
 
   update(dt, player) {
+    if (this.fixed) {
+      if (this.keys.size || this.held) this.release();
+      else {
+        const f = this.fixed, c = this.camera;
+        c.position.set(f.x, f.h, -f.y);
+        c.lookAt(f.tx, f.th, -f.ty);
+        if (Math.abs(c.fov - this.fovGoal) > 0.01) { c.fov = this.fovGoal; }
+        if (c.near !== 1) c.near = 1;
+        c.updateProjectionMatrix();
+        c.updateMatrixWorld();
+        this.focus.set((f.x + f.tx) / 2, 40, -(f.y + f.ty) / 2);
+        if (this.player) { this.player.x = player.x; this.player.y = player.y; }
+        this._pins();
+        return;
+      }
+    }
     const g = this.goal, k = this.keys, h = this.held;
     const on = (...codes) => codes.some((c) => k.has(c));
     const fwd = (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0);

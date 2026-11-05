@@ -157,7 +157,7 @@ export function makeBanners(banners, lib, groundAt) {
   }
   group.userData.setSeason = (season) => {
     for (const c of cloths) {
-      c.g.visible = !c.b.only || c.b.only === season;
+      c.g.visible = (!c.b.only || c.b.only === season) && c.b.hide !== season;
       const spec = { ...c.b, ...(c.b.seasons?.[season] || {}) };
       const key = spec.text + spec.color;
       if (key === c.key) continue;
