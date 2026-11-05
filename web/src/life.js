@@ -127,13 +127,15 @@ export function makeBanners(banners, lib, groundAt) {
   const poleMat = lib.get('metal_dark');
   const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 6.6, 8);
   for (const b of banners) {
+    const g = new THREE.Group();      // one banner (poles + cloth): hidden outside its season when it has `only`
+    group.add(g);
     const A = new THREE.Vector3(b.a[0], 0, -b.a[1]), B = new THREE.Vector3(b.b[0], 0, -b.b[1]);
     A.y = groundAt(b.a[0], b.a[1]); B.y = groundAt(b.b[0], b.b[1]);
     for (const P of [A, B]) {
       const pole = new THREE.Mesh(poleGeo, poleMat);
       pole.position.set(P.x, P.y + 3.3, P.z);
       pole.castShadow = true;
-      group.add(pole);
+      g.add(pole);
     }
     const len = A.distanceTo(B) - 0.2;
     const geo = new THREE.PlaneGeometry(len, 1.35, 24, 1);
@@ -145,16 +147,17 @@ export function makeBanners(banners, lib, groundAt) {
     }
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
-    cloths.push({ b, mat, key: null });
+    cloths.push({ b, mat, g, key: null });
     const m = new THREE.Mesh(geo, mat);
     const mid = A.clone().add(B).multiplyScalar(0.5);
     m.position.set(mid.x, Math.max(A.y, B.y) + 5.6, mid.z);
     m.rotation.y = -Math.atan2(A.z - B.z, A.x - B.x);   // readable from the gate side
     m.castShadow = true;
-    group.add(m);
+    g.add(m);
   }
   group.userData.setSeason = (season) => {
     for (const c of cloths) {
+      c.g.visible = !c.b.only || c.b.only === season;
       const spec = { ...c.b, ...(c.b.seasons?.[season] || {}) };
       const key = spec.text + spec.color;
       if (key === c.key) continue;
