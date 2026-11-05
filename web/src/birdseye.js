@@ -20,6 +20,8 @@ export class BirdsEye {
     this.cur = { x: 0, y: -60, dist: 600, yaw: 0, pitch: 0.9, lift: 0 };    // lift: aim above the ground (statues)
     this.goal = { ...this.cur };
     this.auto = true;
+    this.baseFov = camera.fov;                 // the preset views below narrow it; everything else goes back to this
+    this.fovGoal = camera.fov;
     this.keys = new Set();
     this.focus = new THREE.Vector3();          // ground point at the view centre (tree LOD / shadows / crowd)
     this.selected = null;
@@ -162,10 +164,16 @@ export class BirdsEye {
     else if (what === 'up') { g.pitch = clamp(g.pitch + 0.18, ...PITCH); this.stopAuto(); }
     else if (what === 'down') { g.pitch = clamp(g.pitch - 0.18, ...PITCH); this.stopAuto(); }
     else if (what === 'street') {        // drop to eye level over the view centre, looking ahead
-      Object.assign(g, { dist: 14, pitch: 0.08 });
+      Object.assign(g, { dist: 14, pitch: 0.08, lift: 0 });
+      this.fovGoal = this.baseFov;
       this.stopAuto();
     } else if (what === 'overview') {    // the whole campus from high above
-      Object.assign(g, { x: -20, y: -40, dist: 900, pitch: 1.0 });
+      Object.assign(g, { x: -20, y: -40, dist: 900, pitch: 1.0, lift: 0 });
+      this.fovGoal = this.baseFov;
+    } else if (what === 'photo') {       // the 1997 aerial photo's viewpoint: just above 제1공학관's north end, along 백양로 to 언더우드관
+      Object.assign(g, { x: -10, y: 29, dist: 300, yaw: 0.235, pitch: 0.07, lift: -20 });
+      this.fovGoal = 54;
+      this.stopAuto();
     }
     this.labels();
   }
@@ -186,6 +194,7 @@ export class BirdsEye {
     this.keys.clear();
     this.pointers.clear();
     this.auto = true;
+    this.fovGoal = this.baseFov;
     if (player) {
       // start just above the walker and climb out
       Object.assign(this.cur, { x, y, dist: 20, yaw, pitch: 0.5, lift: 0 });
@@ -204,6 +213,7 @@ export class BirdsEye {
 
   exit() {
     this.active = false;
+    this.camera.fov = this.fovGoal = this.baseFov;
     this.camera.near = 0.1;
     this.camera.updateProjectionMatrix();
     this.layer.hidden = true;
@@ -259,6 +269,10 @@ export class BirdsEye {
     c.pitch += (g.pitch - c.pitch) * fa;
     c.yaw += wrapAngle(g.yaw - c.yaw) * fa;
     c.lift += ((g.lift || 0) - (c.lift || 0)) * f;
+    if (Math.abs(this.camera.fov - this.fovGoal) > 0.01) {
+      this.camera.fov += (this.fovGoal - this.camera.fov) * f;
+      this.camera.updateProjectionMatrix();
+    }
 
     const gh = this.heightAt(c.x, c.y);
     const hor = Math.cos(c.pitch) * c.dist;
