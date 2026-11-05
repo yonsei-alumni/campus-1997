@@ -65,6 +65,8 @@ if want('landmarks'):
             ob.name = key + '_' + ob.name
             objs.append(ob)
     objs.append(landmarks.walk_mesh().build())
+    # where the entrance flights are, so the web app keeps the apron shrubs off the steps
+    json.dump({'entrances': landmarks.ENTRANCES}, open(os.path.join(common.ROOT, 'web/public/data/entrances.json'), 'w'))
     stats['landmarks'] = tri_count(objs)
     export_glb(objs, os.path.join(OUT, 'campus_landmarks.glb'))
 

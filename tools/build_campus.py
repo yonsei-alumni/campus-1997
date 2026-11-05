@@ -261,6 +261,53 @@ def footprint(wv):
     return poly
 
 
+# --- level aprons in front of the old halls.  The 5 m terrain grid smooths the hillsides behind 스팀슨관, 아펜젤러관
+# and 연희관 down across their fronts, so the ground fell 2-4 m within a few metres of the doors and the entrance flights
+# grew to 16-20 risers.  The photos (Wikimedia Commons "Stimson Front.jpg", "Appenzeller Front.jpg", 2016) show
+# 8-9 risers up from a level walk: each front gets a level apron at the height of the ground along its wall,
+# blending back into the slope beyond.
+FORECOURTS = [  # OSM way, outward front direction (None: the recess edge footprint[3] -> [4] of an H plan), depth
+    (246156118, (1.0, -0.27), 11.0),      # 스팀슨관
+    (246156116, (-1.0, 0.27), 11.0),      # 아펜젤러관
+    (245623759, None, 11.0),              # 연희관
+]
+
+
+def level_forecourt(wid, front, depth, blend=18.0, side_blend=7.0, max_half=20.0):
+    poly = footprint(ways[wid])
+    if front is None:
+        (ax, ay), (bx, by) = list(poly.exterior.coords)[3], list(poly.exterior.coords)[4]
+        hl = math.hypot(bx - ax, by - ay)
+        fx, fy = (by - ay) / hl, -(bx - ax) / hl         # out of the courtyard between the wings
+        mx, my, hl = (ax + bx) / 2, (ay + by) / 2, hl / 2
+    else:
+        n_ = math.hypot(*front)
+        fx, fy = front[0] / n_, front[1] / n_
+        rr = list(poly.minimum_rotated_rectangle.exterior.coords)[:-1]
+        c_ = poly.centroid
+        best = None
+        for k in range(4):
+            (ax, ay), (bx, by) = rr[k], rr[(k + 1) % 4]
+            mx_, my_ = (ax + bx) / 2, (ay + by) / 2
+            sc_ = (mx_ - c_.x) * fx + (my_ - c_.y) * fy
+            if best is None or sc_ > best[0]:
+                best = (sc_, mx_, my_, math.hypot(bx - ax, by - ay) / 2)
+        _, mx, my, hl = best
+    tx, ty = -fy, fx
+    hw = min(hl, max_half)
+    level = float(np.mean([sample(Hn, NEAR_HALF, NEAR_STEP, mx + tx * s + fx, my + ty * s + fy) for s in np.linspace(-hw, hw, 7)]))
+    S = (X - mx) * tx + (Y - my) * ty
+    D = (X - mx) * fx + (Y - my) * fy
+    e = np.maximum.reduce([(np.abs(S) - hw) / side_blend, (D - depth) / blend, (-D - 2.0) / side_blend, np.zeros_like(S)])
+    w = np.clip(1 - e, 0, 1)                    # a straight grass bank (the 5 m grid rounds its edges)
+    w *= np.clip((dist - (ROAD_HALF + 4)) / 8.0, 0, 1)     # never under 백양로 and its sidewalks
+    Hn[:] = Hn * (1 - w) + level * w
+    print('forecourt', wid, 'level', round(level, 2))
+
+
+for wid, front, depth in FORECOURTS:
+    level_forecourt(wid, front, depth)
+
 buildings = []
 campus_polys = []
 for wid, (style, lv, label) in B.items():

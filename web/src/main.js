@@ -44,9 +44,10 @@ setupNews();
 
 async function main() {
   total = 40;
-  const [campus, matDefs, skyMeta, nearData, farData] = await Promise.all([
+  const [campus, matDefs, skyMeta, nearData, farData, entrances] = await Promise.all([
     json('data/campus.json'), json('data/materials.json'), json('data/sky.json'),
     bin('data/terrain_near.bin'), bin('data/terrain_far.bin'),
+    json('data/entrances.json').catch(() => ({ entrances: [] })),
   ]);
   progress('지형 데이터를 펼치는 중…');
 
@@ -171,6 +172,7 @@ async function main() {
   })));
   await texturesReady();
   const forest = new Forest(scene, renderer, lib, kits, campus.trees, groundAt);
+  clearEntrances(campus.shrubs, entrances.entrances || []);
   const shrubKits = {};
   const shrubCounts = countBy(campus.shrubs, (s) => s[0]);
   await Promise.all(Object.keys(shrubCounts).map(async (k) => {
@@ -191,7 +193,7 @@ async function main() {
     P[n] = g;
   }));
   const colliders = new Colliders();
-  for (const b of campus.buildings) colliders.addPolygon(b.footprint);
+  for (const b of campus.buildings) colliders.addPolygon(b.style === 'lm:hanok' ? hanokWalls(b.footprint) : b.footprint);
   {
     const byKind = {};
     for (const pr of campus.props) (byKind[pr[0]] ||= []).push(pr);
@@ -592,6 +594,46 @@ async function main() {
   };
   window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows, fountainWater,
     startWalk, enterBird, leaveBird, record, ball };
+}
+
+// 광혜원's OSM outline takes in its whole stone platform (기단) and more; the walker collides with the hall's walls
+// (15 x 8.4 m, blender/landmarks.py hanok) instead, so the steps up onto the platform can be climbed
+function hanokWalls(fp) {
+  const [a, b, c] = fp;
+  const e1 = [b[0] - a[0], b[1] - a[1]], e2 = [c[0] - b[0], c[1] - b[1]];
+  const l1 = Math.hypot(...e1), l2 = Math.hypot(...e2);
+  const [u, lu, v, lv] = l1 >= l2 ? [e1, l1, e2, l2] : [e2, l2, e1, l1];
+  const cx = (a[0] + c[0]) / 2, cy = (a[1] + c[1]) / 2;
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [cx + u[0] / lu * i * 7.6 + v[0] / lv * j * 4.3, cy + u[1] / lu * i * 7.6 + v[1] / lv * j * 4.3]);
+}
+
+// The clipped shrubs round the building aprons are scattered on a ring (tools/build_campus.py), and some landed on the
+// entrance steps (a round bush in the middle of the top of the 언더우드관 flight, right before the door).  Every flight's
+// zone comes from blender/build.py (data/entrances.json: origin at the door, u along the facade, v out along the
+// flight); a shrub on one steps aside along the facade, clear of the flight and its side walls, a hedge piece goes.
+function clearEntrances(shrubs, zones) {
+  const inZone = (z, x, y, r) => {
+    const dx = x - z.o[0], dy = y - z.o[1];
+    const u = dx * z.u[0] + dy * z.u[1], v = dx * z.v[0] + dy * z.v[1];
+    return v >= -r && v <= z.len + r && Math.abs(u) <= z.hw + r ? u : null;
+  };
+  for (let i = shrubs.length - 1; i >= 0; i--) {
+    const s = shrubs[i];
+    const r = 0.72 * s[3];
+    for (const z of zones) {
+      if (s[0] === 'hedge_low') {           // the three circles of its collider (main.js below)
+        const c = Math.cos(s[4]) * 0.55 * s[3], sn = Math.sin(s[4]) * 0.55 * s[3];
+        if ([0, 1, -1].some((k) => inZone(z, s[1] + k * c, s[2] + k * sn, 0.42 * s[3]) !== null)) { shrubs.splice(i, 1); break; }
+        continue;
+      }
+      const u = inZone(z, s[1], s[2], r);
+      if (u === null) continue;
+      const to = (u < 0 ? -1 : 1) * (z.hw + r + 0.25);
+      s[1] = +(s[1] + (to - u) * z.u[0]).toFixed(2);
+      s[2] = +(s[2] + (to - u) * z.u[1]).toFixed(2);
+      break;
+    }
+  }
 }
 
 // 게시판 with the 1997 photos pinned up (the "그때 우리는" memory spot)

@@ -41,6 +41,20 @@ def arch_points(s0, s1, zs, kind='round', seg=10):
             pts.append((s0 + w / 2 + r * math.sin(a), zs + r * math.cos(a) - (r - rise)))
         pts.sort(key=lambda p: p[0])
         return pts
+    elif kind == 'tudor':     # four-centred: tight arcs at the springings, then nearly straight to a low point
+        a = w / 2
+        r1, th = 0.36 * a, math.radians(66)
+        na = max(3, seg // 3)
+        left = [(s0 + r1 - r1 * math.cos(th * i / na), zs + r1 * math.sin(th * i / na)) for i in range(na + 1)]
+        ex, ez = left[-1]
+        apex = ez + (s0 + a - ex) / math.tan(th)
+        nl_ = max(2, seg // 2 - na)
+        for i in range(1, nl_ + 1):            # a slightly bellied line to the apex (a large-radius arc)
+            t = i / nl_
+            bell = 0.06 * a * math.sin(math.pi * t) * (1 - t)
+            left.append((ex + (s0 + a - ex) * t, ez + (apex - ez) * t + bell))
+        right = [(2 * (s0 + a) - s, z) for s, z in reversed(left[:-1])]
+        return left + right
     else:   # pointed (equilateral gothic)
         r = w
         half = seg // 2
@@ -476,7 +490,8 @@ def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8
     # walkable surface: the landing and one smooth ramp through the middle of the treads
     hw = width / 2
     W_ = lambda lx, ly, lz: tuple(mb.xf @ Vector((lx, ly, lz)))
-    WALK_FACES.append([W_(x - hw, y_face + 0.3, zl), W_(x + hw, y_face + 0.3, zl), W_(x + hw, y_face - landing, zl), W_(x - hw, y_face - landing, zl)])
+    # (the landing runs 1.2 m on into a recessed doorway, e.g. 대우관 별관's: walked on all the way to the door)
+    WALK_FACES.append([W_(x - hw, y_face + 1.15, zl), W_(x + hw, y_face + 1.15, zl), W_(x + hw, y_face - landing, zl), W_(x - hw, y_face - landing, zl)])
     hf_ = hw + flare
     WALK_FACES.append([W_(x - hw, y_face - landing, zl), W_(x + hw, y_face - landing, zl), W_(x + hf_, y_foot, zbot), W_(x - hf_, y_foot, zbot)])
     if cheek:
@@ -509,6 +524,7 @@ def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8
             for yy in (yb, ya):
                 zz = hb + (ha - hb) * ((yy - yb) / (ya - yb))
                 mb.box((xr, yy, zz - 0.45), (0.06, 0.06, 0.9), 'metal_dark')
+    note_entrance(mb, width / 2 + flare + cheek + 0.6, y_face + 1.2, y_foot - 1.0, x)
     return y_foot
 
 
@@ -519,6 +535,211 @@ def lamp_post(mb, x, y, h=3.6, globe='plaster_white'):
     mb.cylinder((x, y), 0.2, h, h + 0.22, globe, seg=12, r1=0.3)
     mb.cylinder((x, y), 0.3, h + 0.22, h + 0.5, globe, seg=12, r1=0.2)
     mb.cylinder((x, y), 0.22, h + 0.5, h + 0.6, 'metal_dark', seg=10)
+
+
+ENTRANCES = []        # world-space zones over every entrance flight (web/public/data/entrances.json): the web app
+                      # moves the clipped shrubs of the building aprons off the steps
+
+
+def note_entrance(mb, hw, y0, y1, x=0.0):
+    """Record the zone |x' - x| <= hw, y1 <= y <= y0 (local frame, the flight going down towards -y) of a flight."""
+    o = mb.xf @ Vector((x, y0, 0.0))
+    u = (mb.xf.to_3x3() @ Vector((1.0, 0.0, 0.0))).normalized()
+    v = (mb.xf.to_3x3() @ Vector((0.0, -1.0, 0.0))).normalized()
+    ENTRANCES.append(dict(o=[round(o.x, 2), round(o.y, 2)], u=[round(u.x, 4), round(u.y, 4)], v=[round(v.x, 4), round(v.y, 4)],
+                          hw=round(hw, 2), len=round(y0 - y1, 2)))
+
+
+def bar(mb, P, sa, za, sb, zb, w, d0, d1, mat, ends=False):
+    """A square-section member in a wall plane P(s, z, d) from (sa, za) to (sb, zb), w wide, from depth d0 to d1."""
+    ds, dz = sb - sa, zb - za
+    L = math.hypot(ds, dz) or 1e-6
+    ns, nz = -dz / L * w / 2, ds / L * w / 2
+    A, B, C, D = (sa + ns, za + nz), (sb + ns, zb + nz), (sb - ns, zb - nz), (sa - ns, za - nz)
+    mb.quad(P(*D, d1), P(*C, d1), P(*B, d1), P(*A, d1), mat)
+    mb.quad(P(*A, d1), P(*B, d1), P(*B, d0), P(*A, d0), mat)
+    mb.quad(P(*C, d1), P(*D, d1), P(*D, d0), P(*C, d0), mat)
+    if ends:
+        mb.quad(P(*D, d0), P(*D, d1), P(*A, d1), P(*A, d0), mat)
+        mb.quad(P(*B, d0), P(*B, d1), P(*C, d1), P(*C, d0), mat)
+
+
+# glazing of the old halls' front doors, from the photos: 언더우드관 a pair of leaves of small square panes under a
+# glazed transom (Commons "Underwood Hall Front.jpg", 2016; reference/언더우드관_2024_여름_정원.jpg), 스팀슨관 and
+# 아펜젤러관 dark leaves glazed above a solid lower panel (Commons "Stimson Front.jpg", "Appenzeller Front.jpg"),
+# 연희관 four glazed leaves under a transom of upright panes (Commons "Yonsei University Yeonhui Hall 2023-11-01.jpg"),
+# 대우관 plain dark-framed glass (reference/대우관_정면_전경.jpg).  All black-painted steel, none of them wooden.
+DOOR_STYLES = {
+    #          leaves, panes across x up per leaf (0 = one pane), solid lower panel, members, transom panes
+    'grid':   dict(leaves=2, cols=3, rows=5, panel=0.22, fw=0.09, mw=0.035, tcols=3),
+    'panel':  dict(leaves=2, cols=2, rows=3, panel=0.95, fw=0.1, mw=0.04, tcols=2),
+    'four':   dict(leaves=4, cols=2, rows=5, panel=0.2, fw=0.08, mw=0.035, tcols=2, plain_inner=True),
+    'modern': dict(leaves=4, cols=0, rows=0, panel=0.12, fw=0.07, mw=0.0, tcols=1),
+}
+
+
+def glazed_door(mb, P, s0, s1, zd, zs, kind, d, style='grid'):
+    """Black steel-framed glass doors and transom filling an arched opening [s0, s1] at depth d of a wall P."""
+    st = DOOR_STYLES[style]
+    apts = arch_points(s0, s1, zs, kind, 14)
+
+    def arch_z(s):
+        for (sa, za), (sb, zb) in zip(apts, apts[1:]):
+            if sa <= s <= sb:
+                return za + (zb - za) * (s - sa) / max(sb - sa, 1e-6)
+        return zs
+    F, G, H = 'door_frame', 'glass_door', 'frame_silver'
+    fw, mw = st['fw'], st['mw']
+    f0, f1 = d, d + 0.07                    # frame depth: glass at the back, members standing in front
+    m1 = d + 0.04
+    zt = min(zd + 2.45, zs - 0.08)          # head of the leaves = transom bar
+    mb.quad(P(s0, zd, d), P(s1, zd, d), P(s1, zs, d), P(s0, zs, d), G)
+    for (sa, za), (sb, zb) in zip(apts, apts[1:]):
+        mb.quad(P(sa, zs, d), P(sb, zs, d), P(sb, zb, d), P(sa, za, d), G)
+    # outer frame: jambs, the arch, the transom bar
+    bar(mb, P, s0 + fw / 2, zd, s0 + fw / 2, zs, fw, f0, f1, F)
+    bar(mb, P, s1 - fw / 2, zd, s1 - fw / 2, zs, fw, f0, f1, F)
+    for (sa, za), (sb, zb) in zip(apts, apts[1:]):
+        bar(mb, P, sa, za - fw / 2, sb, zb - fw / 2, fw, f0, f1, F)
+    bar(mb, P, s0, zt, s1, zt, fw * 1.3, f0, f1 + 0.01, F)
+    nlv = st['leaves']
+    lw = (s1 - s0) / nlv
+    lines = []
+    for k in range(nlv):
+        a, b = s0 + k * lw, s0 + (k + 1) * lw
+        if k:
+            bar(mb, P, a, zd, a, zt, fw * 1.2, f0, f1 + 0.01, F)          # meeting stiles
+        lines.append(a)
+        ia, ib = a + fw / 2, b - fw / 2
+        zp = zd + st['panel']
+        if st['panel'] > 0.3:            # solid lower panel with a raised field
+            mb.quad(P(ia, zd, m1), P(ib, zd, m1), P(ib, zp, m1), P(ia, zp, m1), F)
+            mb.quad(P(ia + 0.12, zd + 0.12, m1 + 0.015), P(ib - 0.12, zd + 0.12, m1 + 0.015), P(ib - 0.12, zp - 0.12, m1 + 0.015),
+                    P(ia + 0.12, zp - 0.12, m1 + 0.015), F)
+        bar(mb, P, ia, zp, ib, zp, fw, f0, f1, F)                           # bottom rail
+        if st['panel'] <= 0.3:
+            mb.quad(P(ia, zd, m1), P(ib, zd, m1), P(ib, zp - fw / 2, m1), P(ia, zp - fw / 2, m1), F)
+        cols, rows = st['cols'], st['rows']
+        if st.get('plain_inner') and 0 < k < nlv - 1:
+            cols, rows = 1, 2
+        for c in range(1, cols):
+            s = ia + (ib - ia) * c / cols
+            bar(mb, P, s, zp, s, zt, mw, f0, m1 + 0.02, F)
+        for r in range(1, rows):
+            z = zp + (zt - zp) * r / rows
+            bar(mb, P, ia, z, ib, z, mw if cols > 1 else fw, f0, m1 + 0.02, F)
+        if k in (nlv // 2 - 1, nlv // 2):
+            hs = b - 0.16 if k == nlv // 2 - 1 else a + 0.16
+            bar(mb, P, hs, zd + 0.95, hs, zd + 1.3, 0.03, f1, f1 + 0.06, H, ends=True)   # pull handles
+    lines.append(s1)
+    # transom: upright bars under the arch on the leaf lines (and between them)
+    tc = max(1, st['tcols'])
+    for k in range(nlv):
+        for c in range(tc):
+            s = lines[k] + (lines[k + 1] - lines[k]) * c / tc
+            if s0 + 0.05 < s < s1 - 0.05:
+                bar(mb, P, s, zt, s, arch_z(s) - 0.03, mw * 1.4 if c else fw, f0, m1 + 0.02, F)
+
+
+def sloped_wall(mb, x0, x1, prof, gnd, wall, cap='stone_trim', ct=0.14):
+    """A solid side wall between x0 < x1 whose top follows prof [(y, z), ...] (y decreasing), down to gnd, with a pale
+    stone coping ct deep along its top."""
+    for (ya, za), (yb, zb) in zip(prof, prof[1:]):
+        for x, sg in ((x0, -1), (x1, 1)):
+            q = [(x, ya, gnd), (x, yb, gnd), (x, yb, zb - ct), (x, ya, za - ct)]
+            c = [(x, ya, za - ct), (x, yb, zb - ct), (x, yb, zb), (x, ya, za)]
+            if sg > 0:
+                q, c = q[::-1], c[::-1]
+            mb.face(q, wall)
+            mb.face(c, cap)
+        mb.quad((x0, ya, za), (x0, yb, zb), (x1, yb, zb), (x1, ya, za), cap)
+    (ya, za), (yb, zb) = prof[0], prof[-1]
+    mb.quad((x1, ya, gnd), (x0, ya, gnd), (x0, ya, za), (x1, ya, za), wall)
+    mb.quad((x0, yb, gnd), (x1, yb, gnd), (x1, yb, zb), (x0, yb, zb), wall)
+
+
+def pedestal(mb, x, y, top, gnd, wall, w=0.64):
+    """A square stone post at the ends of a flight: rubble shaft, pale cap with a low hipped top."""
+    mb.box((x, y, (gnd + top - 0.3) / 2), (w, w, top - 0.3 - gnd), wall, skip=('bottom',))
+    mb.box((x, y, top - 0.21), (w + 0.12, w + 0.12, 0.18), 'stone_trim', skip=('bottom',))
+    h0, h1, a, b = top - 0.12, top, (w + 0.06) / 2, 0.14
+    for (p, q) in (((-1, -1), (1, -1)), ((1, -1), (1, 1)), ((1, 1), (-1, 1)), ((-1, 1), (-1, -1))):
+        mb.face([(x + p[0] * a, y + p[1] * a, h0), (x + q[0] * a, y + q[1] * a, h0),
+                 (x + q[0] * b, y + q[1] * b, h1), (x + p[0] * b, y + p[1] * b, h1)], 'stone_trim')
+    mb.face([(x - b, y - b, h1), (x + b, y - b, h1), (x + b, y + b, h1), (x - b, y + b, h1)], 'stone_trim')
+
+
+def hall_steps(mb, y_face, zl, wu, gfn, wall='stone_rubble', mat='stone_step', rec=0.9, porch=1.3, tread=0.35,
+               maxrise=0.16, wl=None, cheeks=True, lamps=False, zone_hw=0.0):
+    """The entrance steps of the old stone halls, as in the 2016 Commons photos of 언더우드관, 스팀슨관 and 아펜젤러관:
+    a porch from the door out past the arch, then granite treads of ~15 cm risers and 35 cm goings; flights of nine
+    risers or more break at a landing, the lower flight a little wider.  Low rubble side walls with a pale coping
+    follow the flights and end in square capped posts at the porch, at the landing and at the foot.
+    Local frame: the door wall faces -y at y_face (the door itself rec m back), the porch top is zl.  Returns the
+    y of the foot."""
+    wl = wl or wu + 1.4
+    T = tread
+    y_p = y_face - porch
+    for n in range(2, 31):
+        split = n >= 9
+        nl = max(3, round(n * 0.36)) if split else 0
+        nu = n - nl
+        mid = 1.6 if split else 0.0
+        y_foot = y_p - (nu - 1) * T - mid - (nl - 1) * T if split else y_p - (n - 1) * T
+        zbot = gfn(0, y_foot - 0.6) - 0.03
+        if (zl - zbot) / n <= maxrise:
+            break
+    zbot = min(zbot, zl - 0.3)
+    rise = (zl - zbot) / n
+    gnd = min(-1.2, zbot - 1.0)
+    ct = 0.5 if cheeks else 0.0
+    hu, hl = wu / 2, wl / 2
+    yw = y_face + rec
+    mb.box((0, (yw + y_p) / 2, (zl + gnd) / 2), (wu + 2 * ct, yw - y_p, zl - gnd), mat, skip=('bottom',))   # porch
+    nup = nu if split else n
+    for k in range(1, nup):
+        top = zl - k * rise
+        mb.box((0, y_p - (k - 0.5) * T + 0.01, (top + gnd) / 2), (wu, T + 0.02, top - gnd), mat, skip=('bottom',))
+    W_ = lambda lx, ly, lz: tuple(mb.xf @ Vector((lx, ly, lz)))
+
+    def walk(x0, x1, ya, za, yb, zb):
+        WALK_FACES.append([W_(x0, ya, za), W_(x1, ya, za), W_(x1, yb, zb), W_(x0, yb, zb)])
+    walk(-hu, hu, yw - 0.05, zl, y_p, zl)
+    xu, xl = hu + ct / 2, hl + ct / 2
+    if split:
+        zm = zl - nu * rise
+        yb_ = y_p - (nu - 1) * T                 # back edge of the landing
+        y_m = yb_ - mid                          # its nosing
+        mb.box((0, (yb_ + y_m) / 2, (zm + gnd) / 2), (wl, mid, zm - gnd), mat, skip=('bottom',))
+        for j in range(1, nl):
+            top = zm - j * rise
+            mb.box((0, y_m - (j - 0.5) * T + 0.01, (top + gnd) / 2), (wl, T + 0.02, top - gnd), mat, skip=('bottom',))
+        walk(-hu, hu, y_p, zl, y_p - nu * T, zm)
+        walk(-hl, hl, yb_, zm, y_m, zm)
+        walk(-hl, hl, y_m, zm, y_m - nl * T, zbot)
+        if cheeks:
+            for sg in (-1, 1):
+                x0, x1 = sorted((sg * hu, sg * (hu + ct)))
+                sloped_wall(mb, x0, x1, [(y_face, zl + 0.78), (y_p, zl + 0.78), (yb_ + 0.2, zm + rise + 0.78)], gnd, wall)
+                pedestal(mb, sg * xu, y_p + 0.25, zl + 1.08, gnd, wall)
+                pedestal(mb, sg * xu, yb_ + 0.05, zm + 1.0, gnd, wall)
+                x0, x1 = sorted((sg * hl, sg * (hl + ct)))
+                sloped_wall(mb, x0, x1, [(yb_ + 0.3, zm + 0.72), (y_m, zm + 0.72), (y_foot + 0.1, zbot + rise + 0.68)], gnd, wall)
+                pedestal(mb, sg * xl, y_m + 0.25, zm + 0.98, gnd, wall)
+                pedestal(mb, sg * xl, y_foot + 0.25, zbot + 0.95, gnd, wall)
+    else:
+        walk(-hu, hu, y_p, zl, y_p - n * T, zbot)
+        if cheeks:
+            for sg in (-1, 1):
+                x0, x1 = sorted((sg * hu, sg * (hu + ct)))
+                sloped_wall(mb, x0, x1, [(y_face, zl + 0.78), (y_p, zl + 0.78), (y_foot + 0.1, zbot + rise + 0.7)], gnd, wall)
+                pedestal(mb, sg * xu, y_p + 0.25, zl + 1.08, gnd, wall)
+                pedestal(mb, sg * xu, y_foot + 0.25, zbot + 0.97, gnd, wall)
+    if lamps:
+        for sg in (-1, 1):
+            lamp_post(mb, sg * (max(hu, hl if split else hu) + 1.9), y_foot - 0.5)
+    note_entrance(mb, max(zone_hw, (hl if split else hu) + ct + 0.6), y_face + 0.5, y_foot - 1.0)
+    return y_foot
 
 
 def flat_portal(mb, W, plinth, fh, wall, bw=7.4, gfn=None):
@@ -582,27 +803,60 @@ def flat_portal(mb, W, plinth, fh, wall, bw=7.4, gfn=None):
     return y2
 
 
+def stone_base(mb, poly, plinth, wall):
+    """The basement storey of the stone halls: the wall's own stone down into the ground (dark granite under the white
+    halls), and a pale water table where the ground floor starts."""
+    if wall == 'stone_white':
+        mb.prism(offset_poly(poly, 0.25), -4, plinth, 'stone_granite')
+        return
+    mb.prism(offset_poly(poly, 0.25), -4, plinth - 0.3, wall)
+    mb.prism(offset_poly(poly, 0.33), plinth - 0.3, plinth, 'stone_trim', 'stone_trim')
+
+
+def basement_windows(mb, P, s0, s1, bay, plinth, gfn, wall, ww=0.5):
+    """Low windows of the half-sunk basement (반지하층 of 스팀슨관, 지하층 of 언더우드관 and 아펜젤러관), one under each
+    ground-floor window, wherever the ground leaves them clear."""
+    if wall == 'stone_white' or s1 - s0 < 1.0:
+        return
+    nb = max(1, int(round((s1 - s0) / bay)))
+    bw = (s1 - s0) / nb
+    z0, z1, d = plinth - 1.15, plinth - 0.45, 0.27
+    for k in range(nb):
+        sc, w = s0 + (k + 0.5) * bw, bw * ww
+        g = [gfn(*P(sc + o, 0, 1.0)[:2]) for o in (-w / 2, w / 2)]
+        if max(g) > z0 - 0.12:
+            continue
+        mb.quad(P(sc - w / 2, z0, d), P(sc + w / 2, z0, d), P(sc + w / 2, z1, d), P(sc - w / 2, z1, d), 'glass')
+        bar(mb, P, sc, z0, sc, z1, 0.07, d, d + 0.05, 'frame_dark')
+        bar(mb, P, sc - w / 2 - 0.1, z0 - 0.06, sc + w / 2 + 0.1, z0 - 0.06, 0.12, 0.25, d + 0.08, 'stone_trim', ends=True)
+        bar(mb, P, sc - w / 2 - 0.06, z1 + 0.07, sc + w / 2 + 0.06, z1 + 0.07, 0.14, 0.25, d + 0.05, 'stone_trim', ends=True)
+
+
 def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=True, fh=4.1, wall='stone_rubble',
-           dormers=True, stairs=None, portal=None):
+           dormers=True, stairs=None, portal=None, door=None):
     cx, cy, L, W, ang, z0 = frame_for(b, front)
-    stairs = dict(dict(n=8, cheek=0.4, newel=False, lamps=False, width=None), **(stairs or {}))
+    stairs = dict(dict(width=None, wl=None, rise=1.3, cheeks=True, lamps=False), **(stairs or {}))
+    door = dict(dict(w=3.0, arch='tudor', spring=2.55, style='grid'), **(door or {}))
     # the floor stands on the ground in front of the door, not at the lowest corner of the footprint (the halls sit on
-    # slopes: 대우관 별관's front is ~3 m above that corner and would bury the whole flight)
-    z0 = lift_base(z0, cx, cy, ang, W / 2 + (1.8 if portal == 'flat' else 3.3), 1.2, 1.3)
+    # slopes: 대우관 별관's front is ~3 m above that corner and would bury the whole flight); `rise` is how high the
+    # porch stands over the ground just in front of the hall
+    z0 = lift_base(z0, cx, cy, ang, W / 2 + (1.8 if portal == 'flat' else 3.3), 1.2, stairs['rise'])
     mb = MeshBuilder('lm_' + name)
     iv = MeshBuilder('lm_' + name + '_ivy')
     mb.xf = iv.xf = local_frame(cx, cy, ang, z0)
     plinth = 1.3
     Hw = plinth + floors * fh + 0.6
     pitch = 0.9
+    gl = local_ground(mb)
     # --- main block walls
     body = rect(L, W)
-    mb.prism(offset_poly(body, 0.25), -4, plinth, 'stone_granite')
+    stone_base(mb, body, plinth, wall)
     for i in range(4):
         a, bb = body[i], body[(i + 1) % 4]
         P, Le, t, n = edge_P(a, bb)
         if Le < W + 0.1:          # gable ends
             window_grid(mb, P, Le, plinth, floors, fh, 3.4, wall, ww=0.42, trim='stone_trim', mull=1)
+            basement_windows(mb, P, 0, Le, 3.4, plinth, gl, wall, ww=0.42)
             flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
             # gable triangle + coping
             hz = Hw + (Le / 2) * pitch
@@ -624,8 +878,13 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
                     window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2, s_start=0, s_end=s_t0)
                     window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2, s_start=s_t1, s_end=Le)
                     flat_wall(mb, P, s_t0, s_t1, plinth, Hw, wall)
+                    for (a_, b_) in ((0, s_t0), (s_t1, Le)):
+                        if wings:      # the end pavilions stand in front of the outer bays
+                            a_, b_ = max(a_, 8.0 if a_ == 0 else a_), min(b_, Le - 8.0 if b_ == Le else b_)
+                        basement_windows(mb, P, a_, b_, 3.3, plinth, gl, wall)
             else:
                 window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2)
+                basement_windows(mb, P, 0, Le, 3.3, plinth, gl, wall)
             flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
             # buttresses
             nbut = int(round(Le / 6.6))
@@ -678,6 +937,7 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
             yb = -W / 2 - proj
             P, Le, t, n = edge_P((x0 - pw / 2, yb), (x0 + pw / 2, yb))
             window_grid(mb, P, Le, plinth, floors, fh, 4.0, wall, ww=0.55, trim='stone_trim', mull=2)
+            basement_windows(mb, P, 0, Le, 4.0, plinth, gl, wall, ww=0.55)
             flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
             ghz = Hw + pw / 2 * 1.1
             mb.face([P(0, Hw), P(Le, Hw), P(Le / 2, ghz)], wall)
@@ -688,7 +948,7 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
                 pa, pb = ((sx, -W / 2), (sx, yb)) if ex < 0 else ((sx, yb), (sx, -W / 2))
                 P2, Le2, _, _ = edge_P(pa, pb)
                 flat_wall(mb, P2, 0, Le2, -4, Hw, wall)
-            mb.prism(offset_poly([(x0 - pw / 2, yb), (x0 + pw / 2, yb), (x0 + pw / 2, -W / 2), (x0 - pw / 2, -W / 2)], 0.25), -4, plinth, 'stone_granite')
+            stone_base(mb, [(x0 - pw / 2, yb), (x0 + pw / 2, yb), (x0 + pw / 2, -W / 2), (x0 - pw / 2, -W / 2)], plinth, wall)
             # little gable roof over the projection
             mb.face([(x0 - pw / 2 - 0.3, yb - 0.3, Hw - 0.2), (x0, yb - 0.3, ghz), (x0, -W / 4, ghz), (x0 - pw / 2 - 0.3, -W / 4, Hw - 0.2)][::-1], 'roof_slate')
             mb.face([(x0 + pw / 2 + 0.3, yb - 0.3, Hw - 0.2), (x0 + pw / 2 + 0.3, -W / 4, Hw - 0.2), (x0, -W / 4, ghz), (x0, yb - 0.3, ghz)][::-1], 'roof_slate')
@@ -706,30 +966,49 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
     Ht = Hw + tower_extra
     ty0 = -W / 2 - tproj
     tower = [(-tw / 2, ty0), (tw / 2, ty0), (tw / 2, ty0 + tw), (-tw / 2, ty0 + tw)]
-    mb.prism(offset_poly(tower, 0.25), -4, plinth, 'stone_granite')
+    stone_base(mb, tower, plinth, wall)
     for i in range(4):
         a, bb = tower[i], tower[(i + 1) % 4]
         P, Le, t, n = edge_P(a, bb)
         if i == 0:
-            # pointed-arch entrance + tall window + clock-less belfry openings
-            ew = 3.2
-            e0, e1 = Le / 2 - ew / 2, Le / 2 + ew / 2
-            zs = plinth + 3.2
-            flat_wall(mb, P, 0, e0, -0.5, Ht, wall)
-            flat_wall(mb, P, e1, Le, -0.5, Ht, wall)
-            arch_fill(mb, P, e0, e1, zs, zs + ew * 0.95, 1.2, 'stone_trim', 'pointed', 12)
-            flat_wall(mb, P, e0, e1, zs + ew * 0.95, Ht, wall)
+            # entrance: a moulded four-centred (Tudor) arch over glazed steel doors set back in the reveal, then a
+            # mullioned window for each floor above, as on the tower fronts in the photos; clock-less belfry openings
+            ow = door['w']
+            e0, e1 = Le / 2 - ow / 2, Le / 2 + ow / 2
             zd = plinth - 0.1
-            mb.quad(P(e0, zd, -1.2), P(e1, zd, -1.2), P(e1, zs + ew * 0.9, -1.2), P(e0, zs + ew * 0.9, -1.2), 'wood_dark')
-            mb.quad(P(e0, zd, 0), P(e0, zd, -1.2), P(e0, zs, -1.2), P(e0, zs, 0), 'stone_trim')
-            mb.quad(P(e1, zd, -1.2), P(e1, zd, 0), P(e1, zs, 0), P(e1, zs, -1.2), 'stone_trim')
-            # tall tracery window above the door
-            w0, w1 = Le / 2 - 1.1, Le / 2 + 1.1
-            zw0, zw1 = zs + ew + 1.0, Hw - 1.0
-            mb.quad(P(w0, zw0, 0.02), P(w1, zw0, 0.02), P(w1, zw1, 0.02), P(w0, zw1, 0.02), 'glass')
-            for sm in (Le / 2 - 0.37, Le / 2 + 0.37):
-                mb.quad(P(sm - 0.08, zw0, 0.06), P(sm + 0.08, zw0, 0.06), P(sm + 0.08, zw1, 0.06), P(sm - 0.08, zw1, 0.06), 'stone_trim')
-            arch_fill(mb, P, w0, w1, zw1, zw1 + 2.2, 0.0001, 'stone_trim', 'pointed', 8)
+            kind = door['arch']
+            zs = zd + door['spring']
+            apts = arch_points(e0, e1, zs, kind, 14)
+            zap = max(z for _, z in apts)
+            rec, band = 0.9, 0.3
+            zt = zap + band + 0.15
+            flat_wall(mb, P, 0, e0 - band, -0.5, Ht, wall)
+            flat_wall(mb, P, e1 + band, Le, -0.5, Ht, wall)
+            flat_wall(mb, P, e0 - band, e1 + band, zt, Ht, wall)
+            flat_wall(mb, P, e0, e1, -0.5, zd, wall)
+            for (a_, b_) in ((e0 - band, e0), (e1, e1 + band)):              # stone jambs of the surround
+                flat_wall(mb, P, a_, b_, -0.5, zt, 'stone_trim', d=0.05)
+                mb.quad(P(a_, -0.5, 0), P(a_, -0.5, 0.05), P(a_, zt, 0.05), P(a_, zt, 0), 'stone_trim')
+                mb.quad(P(b_, -0.5, 0.05), P(b_, -0.5, 0), P(b_, zt, 0), P(b_, zt, 0.05), 'stone_trim')
+            arch_fill(mb, lambda s_, z_, d_=0.0: P(s_, z_, d_ + 0.05), e0 - band, e1 + band, zs, zt, 0.05, 'stone_trim', kind, 14)
+            arch_fill(mb, lambda s_, z_, d_=0.0: P(s_, z_, d_ + 0.08), e0 - band, e1 + band, zs + band * 0.2, zt, 0.001, wall, kind, 14)
+            mb.quad(P(e0 - band, zt, 0.05), P(e1 + band, zt, 0.05), P(e1 + band, zt, 0), P(e0 - band, zt, 0), 'stone_trim')
+            arch_fill(mb, P, e0, e1, zs, zt, rec, 'stone_trim', kind, 14)     # soffit of the deep reveal
+            mb.quad(P(e0, zd, 0), P(e0, zd, -rec), P(e0, zs, -rec), P(e0, zs, 0), 'stone_trim')
+            mb.quad(P(e1, zd, -rec), P(e1, zd, 0), P(e1, zs, 0), P(e1, zs, -rec), 'stone_trim')
+            glazed_door(mb, P, e0, e1, zd, zs, kind, -rec + 0.02, door['style'])
+            wins = []
+            for f in range(1, floors):
+                w0, w1 = Le / 2 - min(1.3, tw * 0.15), Le / 2 + min(1.3, tw * 0.15)
+                zw0, zw1 = plinth + f * fh + 0.9, plinth + (f + 1) * fh - 0.6
+                wins.append((w0, w1, zw0, zw1))
+                mb.quad(P(w0, zw0, 0.02), P(w1, zw0, 0.02), P(w1, zw1, 0.02), P(w0, zw1, 0.02), 'glass')
+                for sm in (w0 + (w1 - w0) / 3, w0 + 2 * (w1 - w0) / 3):
+                    bar(mb, P, sm, zw0, sm, zw1, 0.14, 0.02, 0.1, 'stone_trim')
+                bar(mb, P, w0, zw0 + (zw1 - zw0) * 0.7, w1, zw0 + (zw1 - zw0) * 0.7, 0.1, 0.02, 0.08, 'stone_trim')
+                for (a_, b_, za_, zb_) in ((w0 - 0.18, w0, zw0 - 0.18, zw1 + 0.2), (w1, w1 + 0.18, zw0 - 0.18, zw1 + 0.2),
+                                          (w0 - 0.18, w1 + 0.18, zw0 - 0.18, zw0), (w0 - 0.28, w1 + 0.28, zw1, zw1 + 0.22)):
+                    bar(mb, P, a_, (za_ + zb_) / 2, b_, (za_ + zb_) / 2, zb_ - za_, 0.0, 0.12, 'stone_trim', ends=True)
         else:
             flat_wall(mb, P, 0, Le, -0.5 if i != 2 else Hw, Ht, wall)
         # belfry louvres
@@ -747,7 +1026,7 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
         if ivy:
             holes = [(bw0, bw1, Ht - 4.5, Ht - 0.4)]
             if i == 0:
-                holes += [(e0 - 0.3, e1 + 0.3, -1.0, zs + ew * 0.95 + 0.3), (w0, w1, zw0, zw1 + 2.2)]
+                holes += [(e0 - band - 0.25, e1 + band + 0.25, -1.0, zt + 0.3)] + [(a_ - 0.35, b_ + 0.35, za_ - 0.3, zb_ + 0.35) for a_, b_, za_, zb_ in wins]
             ivy_patch(iv, P, 0, Le, Hw if i == 2 else 0, Ht - 0.5, 5.5, 11 + i, cover=ivy * 0.95, holes=holes)
     mb.face([(p[0], p[1], Ht) for p in tower], 'roof_flat')
     # corner pinnacles
@@ -757,27 +1036,28 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
         mb.face([(px_ + .45, py_ - .45, Ht + 1.8), (px_ + .45, py_ + .45, Ht + 1.8), (px_, py_, Ht + 3.2)], 'stone_trim')
         mb.face([(px_ + .45, py_ + .45, Ht + 1.8), (px_ - .45, py_ + .45, Ht + 1.8), (px_, py_, Ht + 3.2)], 'stone_trim')
         mb.face([(px_ - .45, py_ + .45, Ht + 1.8), (px_ - .45, py_ - .45, Ht + 1.8), (px_, py_, Ht + 3.2)], 'stone_trim')
-    # entrance: a broad granite flight up to a landing at the plinth top (daewoo-hall-annex photo), low sloping cheek walls
-    sw = stairs['width'] or tw * 0.72
-    y_foot = stair_flight(mb, 0, ty0, sw, plinth - 0.1, n=stairs['n'], landing=2.0 if stairs['n'] > 6 else 1.4,
-                          cheek=stairs['cheek'], newel=stairs['newel'], cheek_mat='stone_granite', gfn=local_ground(mb))
-    if stairs['lamps']:
-        for sg in (-1, 1):
-            lamp_post(mb, sg * (sw / 2 + 2.2), y_foot - 0.6)
+    # entrance steps: porch, granite flights with a landing, rubble side walls and capped posts
+    sw = stairs['width'] or min(tw * 0.5, 4.4)
+    hall_steps(mb, ty0, plinth - 0.1, sw, local_ground(mb), wall=wall, wl=stairs['wl'], cheeks=stairs['cheeks'],
+               lamps=stairs['lamps'])
     mb.z_base = z0
     return [mb, iv]
 
 
 def underwood():
-    return gothic('underwood', bld(246156115), (0.27, -1.0), 3, tower_w=9.0, tower_extra=9.5, ivy=1.0, stairs=dict(n=9, newel=True))
+    # the porch stands ~2.5 m over the garden walk (about 16 risers in the 2016 photo: five, a landing, then the rest)
+    return gothic('underwood', bld(246156115), (0.27, -1.0), 3, tower_w=9.0, tower_extra=9.5, ivy=1.0,
+                  stairs=dict(width=4.2, wl=5.8, rise=2.45), door=dict(w=3.0, style='grid'))
 
 
 def stimson():
-    return gothic('stimson', bld(246156118), (1.0, -0.27), 2, tower_w=6.5, tower_extra=6.0, ivy=0.8, wings=False, stairs=dict(n=6, newel=True))
+    return gothic('stimson', bld(246156118), (1.0, -0.27), 2, tower_w=6.5, tower_extra=6.0, ivy=0.8, wings=False,
+                  stairs=dict(width=3.6, wl=4.8), door=dict(w=2.6, spring=2.45, style='panel'))
 
 
 def appenzeller():
-    return gothic('appenzeller', bld(246156116), (-1.0, 0.27), 3, tower_w=7.0, tower_extra=6.5, ivy=1.1, wings=False, stairs=dict(n=7, newel=True))
+    return gothic('appenzeller', bld(246156116), (-1.0, 0.27), 3, tower_w=7.0, tower_extra=6.5, ivy=1.1, wings=False,
+                  stairs=dict(width=3.8, wl=5.0), door=dict(w=2.8, spring=2.5, style='panel'))
 
 
 # ============================================================================= 대강당
@@ -921,6 +1201,7 @@ def hanok():
     L, W = 15.0, 8.4
     plat = 0.9
     mb.prism(offset_poly(rect(L + 2.4, W + 2.4), 0), -3, plat, 'stone_granite', 'stone_granite')
+    WALK_FACES.append([tuple(mb.xf @ Vector((x_, y_, plat))) for x_, y_ in rect(L + 2.4, W + 2.4)])   # the 기단 is walked on
     stair_flight(mb, 0, -(W + 2.4) / 2, 3.0, plat, n=3, landing=0.3, tread=0.35, flare=0.25, gfn=local_ground(mb), maxrise=0.2)
     colh = 3.3
     nx, ny = 5, 3
@@ -1049,10 +1330,13 @@ def gable_hall(mb, u0, u1, v0, v1, floors, fh, wall, pitch=1.3, plinth=1.0, bay=
     Hw = plinth + floors * fh + 0.6
     hz = Hw + W / 2 * pitch
     body = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
-    mb.prism(offset_poly(body, 0.25), -4, plinth, 'stone_granite')
+    stone_base(mb, body, plinth, wall)
+    gl = local_ground(mb)
     for i in range(4):
         P, Le, t, n = edge_P(body[i], body[(i + 1) % 4])
         window_grid(mb, P, Le, plinth, floors, fh, bay, wall, ww=0.5, trim='stone_trim', mull=2)
+        if plinth > 1.2:
+            basement_windows(mb, P, 0, Le, bay, plinth, gl, wall)
         flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
         if gothic_trim and i in (1, 3):
             # as on the old stone halls (언더우드관): buttresses up the long sides and a battlemented parapet
@@ -1100,7 +1384,7 @@ def daewoo():
     W = lambda u, v: tuple(a + t * u + nl * v)
     centre = dict(b, footprint=[W(0.4, 0), W(46.7, 0), W(46.7, 14.8), W(0.4, 14.8)])
     out = gothic('daewoo', centre, tuple(-nl), 6, tower_w=9.0, tower_extra=2.5, ivy=0, wings=False, fh=3.6,
-                 wall='stone_white', stairs=dict(n=9, lamps=True))
+                 wall='stone_white', stairs=dict(width=6.0, cheeks=False, lamps=True), door=dict(w=3.2, spring=2.4, style='modern'))
     mb = MeshBuilder('lm_daewoo_pavilions')
     mb.xf = local_frame(a.x, a.y, ang, out[0].z_base)
     gable_hall(mb, -12.1, 0.0, -12.2, 24.5, 6, 3.6, 'stone_white')
@@ -1119,7 +1403,8 @@ def yeonhui():
     ang = math.atan2(t.y, t.x)
     W = lambda u, v: tuple(a + t * u + nl * v)
     centre = dict(b, footprint=[W(0.4, 0), W(39.9, 0), W(39.9, 14.2), W(0.4, 14.2)])
-    out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.5, tower_extra=9.5, ivy=0.85, wings=False, fh=4.1, stairs=dict(n=9, newel=True))
+    out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.5, tower_extra=9.5, ivy=0.85, wings=False, fh=4.1,
+                 stairs=dict(width=4.4, wl=5.6), door=dict(w=3.3, style='four'))
     mb = MeshBuilder('lm_yeonhui_pavilions')
     iv = MeshBuilder('lm_yeonhui_pavilions_ivy')
     mb.xf = iv.xf = local_frame(a.x, a.y, ang, out[0].z_base)
@@ -1131,7 +1416,7 @@ def yeonhui():
 def daewoo_annex():
     """대우관 별관: the same pale stone Gothic, five storeys, end gables on the front."""
     return gothic('daewoo_annex', bld(242897923), (-0.97, 0.24), 5, tower_w=7.0, tower_extra=1.5, ivy=0, wings=True,
-                  fh=3.6, wall='stone_white', stairs=dict(n=10, lamps=True, cheek=0.0), portal='flat')
+                  fh=3.6, wall='stone_white', portal='flat')
 
 
 # ============================================================================= 대강당 앞 농구장

@@ -14,7 +14,10 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 const RADIUS = 0.32, STEP = 0.55;
-const WALL_RAY_H = [0.65, 1.3];       // above the feet
+// wall rays, above the feet: the two low ones catch kerbs, plinths, planter and flower-bed edges, the low ends of the
+// stair side walls; a face they hit is still a step when the walkable ground right behind it rises to the ray
+const WALL_RAY_H = [0.2, 0.42, 0.65, 1.3];
+const LOW_RAY = 0.6;
 export const WALK = 2.4, RUN = 6.2, TURN = 2.3;
 
 // numeric grid-cell key (no string building in the per-frame lookups); unique for |i|, |j| < 32768
@@ -124,6 +127,7 @@ export class Player {
     this.ray = new THREE.Raycaster();
     this.ray.firstHitOnly = true;
     this.walls = [];                  // static building / landmark meshes (with BVHs): columns, porches, stair walls the footprints miss
+    this.wallRays = WALL_RAY_H;
     this.wray = new THREE.Raycaster();
     this.wray.firstHitOnly = true;
     this._wo = new THREE.Vector3(); this._wd = new THREE.Vector3(); this._wn = new THREE.Vector3();
@@ -178,8 +182,8 @@ export class Player {
     this.cam.orbit = 0;
   }
 
-  // push the walker out of the walls of the real meshes: rays round a circle at knee and chest height, so columns,
-  // porches and the side walls of stairs block like the footprints do (the stair treads themselves are below the knee ray)
+  // push the walker out of the walls of the real meshes: rays round a circle from ankle to chest height, so columns,
+  // porches, the side walls of stairs and low ledges block like the footprints do; stair risers are let through
   pushFromWalls(x, y, z) {
     const R = RADIUS + 0.05, o = this._wo, d = this._wd, n = this._wn, ray = this.wray;
     ray.far = R;
@@ -194,7 +198,7 @@ export class Player {
       if (dx * dx + dy * dy + dz * dz < (sp.radius + 1) * (sp.radius + 1)) near.push(this.walls[i]);
     }
     if (!near.length) return [x, z];
-    for (const h of WALL_RAY_H) {
+    for (const h of this.wallRays) {
       for (let k = 0; k < 8; k++) {
         const a = k * Math.PI / 4;
         d.set(Math.cos(a), 0, Math.sin(a));
@@ -203,10 +207,20 @@ export class Player {
         if (!hit || hit.distance >= R) continue;
         n.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
         if (Math.abs(n.y) > 0.6) continue;         // floors and slopes are the ground's business
+        if (h < LOW_RAY && this.stepBehind(hit.point.x, hit.point.z, d.x, d.z, y + h, y)) continue;
         x -= d.x * (R - hit.distance); z -= d.z * (R - hit.distance);
       }
     }
     return [x, z];
+  }
+
+  // a low face is a step (a stair riser, a kerb onto a walked surface) when the walkable ground just behind it comes
+  // up to the ray that hit it, within a step of the feet; a planter or a flower-bed edge has only the lawn behind it
+  stepBehind(px, pz, dx, dz, ry, feet) {
+    this.ray.set(this._from.set(px + dx * 0.08, ry + 0.6, pz + dz * 0.08), this.down);
+    this.ray.far = 0.75;
+    const hits = this.ray.intersectObjects(this.walk, false);
+    return hits.length > 0 && hits[0].point.y > ry - 0.06 && hits[0].point.y < feet + STEP;
   }
 
   groundAt(x, z, from = null) {
