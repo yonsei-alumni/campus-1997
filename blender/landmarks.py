@@ -421,14 +421,14 @@ def ivy_patch(iv, P, s0, s1, z0, z1, density, seedoff=0, holes=(), top=None, cov
 
 
 def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8, tread=0.36, flare=0.35,
-                 cheek=0.0, cheek_mat=None, newel=False, rail=False, ground=-1.2):
+                 cheek=0.0, cheek_mat=None, newel=False, rail=False, ground=-1.2, zbot=-0.15):
     """A straight entrance flight in a builder's local frame, going down towards -y from the wall at y_face.
     zl: top of the landing in front of the door; n risers (rise = (zl - ground_level) / n, ground_level ~ -0.15);
     each tread is a solid block down to `ground`, the lowest ones a little wider (flare) like the real granite steps.
     cheek: thickness of the low sloped side walls (0 = none); newel: a squared post with a cap at the foot of each;
     rail: slim metal handrails along the flight."""
     cheek_mat = cheek_mat or mat
-    rise = (zl + 0.15) / n
+    rise = (zl - zbot) / n
     mb.box((x, y_face - landing / 2 + 0.6, (zl + ground) / 2), (width, landing + 1.2, zl - ground), mat,
            mats={'top': mat})                                               # landing, running into the recess
     for k in range(1, n + 1):
@@ -440,7 +440,7 @@ def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8
     if cheek:
         for sg in (-1, 1):
             xo = x + sg * (width / 2 + flare * 0.6 + cheek / 2)
-            hz0, hz1 = zl + 0.55, -0.15 + 0.35
+            hz0, hz1 = zl + 0.55, zbot + 0.35
             # sloped coping wall: a wedge from the landing down to the foot of the flight
             ya, yb = y_face + 0.4, y_foot - 0.1
             xa, xb = xo - cheek / 2, xo + cheek / 2
@@ -458,7 +458,7 @@ def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8
         for sg in (-1, 1):
             xr = x + sg * (width / 2 + 0.05)
             yb, ya = y_foot + 0.2, y_face - landing + 0.3
-            hb, ha = -0.15 + 0.95, zl + 0.95
+            hb, ha = zbot + 0.95, zl + 0.95
             nr = 12
             for j in range(nr):
                 t0, t1 = j / nr, (j + 1) / nr
@@ -479,13 +479,76 @@ def lamp_post(mb, x, y, h=3.6, globe='plaster_white'):
     mb.cylinder((x, y), 0.22, h + 0.5, h + 0.6, 'metal_dark', seg=10)
 
 
+def flat_portal(mb, W, plinth, fh, wall, bw=7.4):
+    """대우관 별관's front door (reference/대우관_별관_정면_현관.jpg): a squared, slightly projecting central bay
+    in pale stone, a rectangular glass double door deep in a recess under a flat lintel carrying a round medallion,
+    stepped pilasters, red diamond tiles beside it, rusticated blocks on the wall corners, and two flights of steps with
+    stone planters and round shrubs.  Local frame: front is -y, the wall plane is y = -W/2."""
+    y0, pj = -W / 2, 1.3
+    yf = y0 - pj
+    zb = plinth + fh + 1.4                      # top of the bay
+    ow, zo = 3.5, plinth + 3.7                  # opening width / top
+    zd = plinth - 0.1                           # threshold
+    for sg in (-1, 1):                          # piers either side of the opening
+        xc = sg * (ow + (bw - ow) / 2) / 2 + sg * ow / 4 * 0
+        mb.box((sg * (ow / 2 + (bw - ow) / 4), y0 - pj / 2, (zb - 0.5) / 2), ((bw - ow) / 2, pj, zb + 0.5), wall)
+        mb.box((sg * (bw / 2 - 0.2), yf - 0.1, (zb + zd) / 2), (0.4, 0.2, zb - zd), 'stone_trim')       # stepped pilaster
+    mb.box((0, y0 - pj / 2, (zb + zo) / 2), (ow, pj, zb - zo), wall)                                 # lintel
+    mb.box((0, yf - 0.1, zb + 0.12), (bw + 0.5, pj + 0.25, 0.26), 'stone_trim')                       # cornice
+    mb.box((0, yf - 0.05, zo - 0.08), (ow + 0.3, 0.12, 0.16), 'stone_trim')
+    # back of the recess with the glass double door and a glazed transom
+    yb = y0 - 0.03
+    mb.quad((-ow / 2, yb, zd), (ow / 2, yb, zd), (ow / 2, yb, zo), (-ow / 2, yb, zo), wall)
+    dw, dh = 2.9, 3.0
+    mb.quad((-dw / 2, yb - 0.02, zd), (dw / 2, yb - 0.02, zd), (dw / 2, yb - 0.02, zd + dh), (-dw / 2, yb - 0.02, zd + dh), 'glass')
+    mb.quad((-dw / 2, yb - 0.02, zd + dh + 0.1), (dw / 2, yb - 0.02, zd + dh + 0.1), (dw / 2, yb - 0.02, zo - 0.15), (-dw / 2, yb - 0.02, zo - 0.15), 'glass')
+    for x in (-dw / 2, 0.0, dw / 2):
+        mb.box((x, yb - 0.05, (zd + zo - 0.15) / 2), (0.1, 0.06, zo - 0.15 - zd), 'frame_dark')
+    for z in (zd + dh + 0.05, zd + 0.05, zo - 0.15):
+        mb.box((0, yb - 0.05, z), (dw + 0.1, 0.06, 0.1), 'frame_dark')
+    for sg in (-1, 1):
+        mb.box((sg * (ow / 2 - 0.05), y0 - pj / 2, (zd + zo) / 2), (0.1, pj, zo - zd), 'stone_trim')    # reveals
+    # round medallion over the door
+    cz, r = (zo + zb) / 2 + 0.02, 0.5
+    ring = [(r * math.cos(2 * math.pi * i / 16), cz + r * math.sin(2 * math.pi * i / 16)) for i in range(16)]
+    mb.face([(x, yf - 0.02, z) for x, z in ring][::-1], 'stone_trim')
+    ring2 = [(0.72 * x, cz + 0.72 * (z - cz)) for x, z in ring]
+    mb.face([(x, yf - 0.05, z) for x, z in ring2][::-1], 'plaster_cream')
+    # red diamond tiles and rusticated corner blocks on the wall either side of the bay
+    for sg in (-1, 1):
+        dx, dz = sg * (bw / 2 + 2.1), zb - 0.1
+        mb.face([(dx, y0 - 0.03, dz - 0.32), (dx + 0.32, y0 - 0.03, dz), (dx, y0 - 0.03, dz + 0.32), (dx - 0.32, y0 - 0.03, dz)][::-1], 'brick_red')
+        for k in range(5):
+            mb.box((sg * (bw / 2 + 0.7), y0 - 0.05, plinth + 0.5 + k * 0.62), (0.8 if k % 2 else 0.55, 0.12, 0.5), 'stone_trim')
+    # two flights: a narrow one to the door between planters, then a wide one with handrails
+    zl = plinth - 0.1
+    zm = zl / 2 + 0.05
+    y1 = stair_flight(mb, 0, yf, ow + 1.1, zl, n=4, landing=1.2, tread=0.38, flare=0.0, zbot=zm)
+    for sg in (-1, 1):
+        px = sg * (ow / 2 + 0.55 + 0.9)
+        ph = zl - zm + 0.85
+        mb.box((px, (yf + y1) / 2, zm - 0.1 + ph / 2 - 0.05), (1.6, yf - y1 + 1.2, ph), 'stone_trim', mats={'top': 'soil'})
+        for dxy, rr in (((0.0, 0.2), 0.85), ((0.0, -1.2), 0.6)):
+            c = (px + dxy[0], (yf + y1) / 2 + dxy[1])
+            mb.cylinder(c, rr, zm + ph - 0.15, zm + ph + 0.35, 'shrub_green', seg=10, r1=rr * 0.9)
+            mb.cylinder(c, rr * 0.85, zm + ph + 0.35, zm + ph + 0.62, 'shrub_green', seg=10, r1=rr * 0.5)
+    y2 = stair_flight(mb, 0, y1, 9.5, zm, n=5, landing=2.2, tread=0.36, flare=0.3, rail=True)
+    for sg in (-1, 1):                                       # a round shrub at each side of the lower flight
+        c = (sg * 6.4, y1 - 2.0)
+        mb.cylinder(c, 1.0, -0.3, 0.7, 'shrub_green', seg=12, r1=1.05)
+        mb.cylinder(c, 1.0, 0.7, 1.15, 'shrub_green', seg=12, r1=0.5)
+    return y2
+
+
 def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=True, fh=4.1, wall='stone_rubble',
-           dormers=True, stairs=None):
+           dormers=True, stairs=None, portal=None):
     cx, cy, L, W, ang, z0 = frame_for(b, front)
     stairs = dict(dict(n=8, cheek=0.4, newel=False, lamps=False, width=None), **(stairs or {}))
     # the floor stands on the ground in front of the door, not at the lowest corner of the footprint (the halls sit on
     # slopes: 대우관 별관's front is ~3 m above that corner and would bury the whole flight)
     d_foot = W / 2 + 3.0 + (2.0 if stairs['n'] > 6 else 1.4) + stairs['n'] * 0.36
+    if portal == 'flat':
+        d_foot = W / 2 + 1.3 + 1.2 + 4 * 0.38 + 2.2 + 5 * 0.36
     z0 = max(z0, ground(cx + math.sin(ang) * d_foot, cy - math.cos(ang) * d_foot) + 0.15)
     mb = MeshBuilder('lm_' + name)
     iv = MeshBuilder('lm_' + name + '_ivy')
@@ -516,9 +579,12 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
             if front_side:
                 tw = tower_w
                 s_t0, s_t1 = Le / 2 - tw / 2, Le / 2 + tw / 2
-                window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2, s_start=0, s_end=s_t0)
-                window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2, s_start=s_t1, s_end=Le)
-                flat_wall(mb, P, s_t0, s_t1, plinth, Hw, wall)
+                if portal == 'flat':
+                    window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.55, trim='stone_trim', mull=2)
+                else:
+                    window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2, s_start=0, s_end=s_t0)
+                    window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2, s_start=s_t1, s_end=Le)
+                    flat_wall(mb, P, s_t0, s_t1, plinth, Hw, wall)
             else:
                 window_grid(mb, P, Le, plinth, floors, fh, 3.3, wall, ww=0.5, trim='stone_trim', mull=2)
             flat_wall(mb, P, 0, Le, plinth + floors * fh, Hw, wall)
@@ -591,6 +657,10 @@ def gothic(name, b, front, floors, tower_w=8.5, tower_extra=8.0, ivy=1.0, wings=
                 ivy_patch(iv, P, 0, Le, 0, ghz - 0.4, 5.5, sgn * 7, cover=ivy,
                           holes=win_holes(Le, plinth, floors, fh, 4.0, ww=0.55),
                           top=lambda s, Le=Le: Hw + (Le / 2 - abs(s - Le / 2)) * 1.1 - 0.4)
+    if portal == 'flat':
+        flat_portal(mb, W, plinth, fh, wall, bw=tower_w + 0.4)
+        mb.z_base = z0
+        return [mb, iv]
     # --- central tower
     tw = tower_w
     tproj = 3.0
@@ -1020,7 +1090,7 @@ def yeonhui():
 def daewoo_annex():
     """대우관 별관: the same pale stone Gothic, five storeys, end gables on the front."""
     return gothic('daewoo_annex', bld(242897923), (-0.97, 0.24), 5, tower_w=7.0, tower_extra=1.5, ivy=0, wings=True,
-                  fh=3.6, wall='stone_white', stairs=dict(n=10, lamps=True, cheek=0.0))
+                  fh=3.6, wall='stone_white', stairs=dict(n=10, lamps=True, cheek=0.0), portal='flat')
 
 
 # ============================================================================= 대강당 앞 농구장
