@@ -22,6 +22,8 @@
   h2 a { color:inherit; text-decoration:none; }
   ul { margin:0; padding-left:20px; }
   li { margin:0 0 6px; }
+  li > ul { margin-top:4px; }
+  li > ul > li { margin-bottom:2px; font-size:15px; }
   figure { margin:14px 0 0; }
   img { display:block; width:100%; height:auto; border-radius:10px; border:1px solid rgba(0,0,0,.12); }
   figcaption { font-size:13px; color:var(--mute); margin:4px 2px 0; }
@@ -36,6 +38,16 @@
 </header>
 <main id="list"><p>불러오는 중…</p></main>
 <script>
+function renderItems(items) {
+  const ul = document.createElement('ul');
+  for (const it of items) {
+    const li = document.createElement('li');
+    if (typeof it === 'string') li.textContent = it;
+    else { li.append(it.text || ''); if (it.items?.length) li.appendChild(renderItems(it.items)); }
+    ul.appendChild(li);
+  }
+  return ul;
+}
 (async () => {
   const list = document.getElementById('list');
   let notes;
@@ -53,8 +65,7 @@
     date.textContent = `${y}년 ${m}월 ${d}일`;
     a.append(date, n.title || '');
     h.appendChild(a);
-    const ul = document.createElement('ul');
-    for (const t of n.items) { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }
+    const ul = renderItems(n.items);
     sec.append(h, ul);
     for (const im of n.images || []) {
       const fig = document.createElement('figure');

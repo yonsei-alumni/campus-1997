@@ -300,6 +300,7 @@ export class FountainWater {
     this.curtainR = 1.5;
     this.impacts = Array.from({ length: IMPACTS }, () => new THREE.Vector4());
     this.sizes = new Array(IMPACTS).fill(0.06);
+    this._flowSpray(lib.get('water_spray'));
     this.life = new Array(IMPACTS).fill(0);
     const sl = this.sim.slope;
     this.material = new THREE.ShaderMaterial({
@@ -379,9 +380,45 @@ export class FountainWater {
     u.uSlope0.value = sl[0]; u.uSlope1.value = sl[1]; u.uSlope2.value = sl[2]; u.uSlope3.value = sl[3];
   }
 
+  // The jets and the falling curtain are static meshes sharing the 'water_spray' material; instead of a fixed white
+  // sheet, break it into streaks that run down (and up the central jet) at their own speeds, with gaps and
+  // bright lumps of water, so it reads as flowing water.  Pattern is in world space: angle round the basin + height.
+  _flowSpray(m) {
+    if (!m) return;
+    this.sprayT = { value: 0 };
+    const cx = this.center.x, cz = this.center.z, t = this.sprayT;
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uSprayT = t;
+      sh.uniforms.uSprayC = { value: new THREE.Vector2(cx, cz) };
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vSprayW;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvSprayW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>
+varying vec3 vSprayW; uniform float uSprayT; uniform vec2 uSprayC;
+float sprH(float n) { return fract(sin(n * 127.1) * 43758.5453); }`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  vec2 rel = vSprayW.xz - uSprayC;
+  float ang = atan(rel.y, rel.x), rad = length(rel);
+  float cell = floor(ang * 26.0 + rad * 9.0);
+  float h = sprH(cell), h2 = sprH(cell + 31.7);
+  float spd = 2.6 + 2.2 * h2;
+  float ph = vSprayW.y * (1.1 + 0.8 * h) + (vSprayW.y > 2.0 ? 1.0 : -1.0) * uSprayT * spd * 0.5 + h * 9.0;
+  float lump = smoothstep(0.35, 0.9, fract(ph));
+  float fr = fract(ang * 26.0 + rad * 9.0);
+  float thread = smoothstep(0.12, 0.5, fr) * smoothstep(0.95, 0.55, fr);
+  float gap = step(0.25, h);
+  diffuseColor.a *= clamp((0.12 + 0.95 * lump) * (0.35 + 0.65 * thread) * gap + 0.04, 0.0, 1.0);
+}`);
+    };
+    m.needsUpdate = true;
+  }
+
   // once per frame, before the scene is drawn
   update(dt, camera) {
     this.time += dt;
+    if (this.sprayT) this.sprayT.value = this.time;
     this.material.uniforms.uTime.value = this.time;
     const d = camera.position.distanceTo(this.sphere.center);
     if (d > SIM_DIST) return;

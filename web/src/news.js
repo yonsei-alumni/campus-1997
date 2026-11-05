@@ -2,6 +2,18 @@
 // A red dot marks the buttons until the newest entry has been opened once (per browser).
 import { $, safeGet, safeSet, versioned } from './util.js';
 
+// items: string | { text, items: [...] } (sublists nest to any depth)
+function renderItems(items) {
+  const ul = document.createElement('ul');
+  for (const it of items) {
+    const li = document.createElement('li');
+    if (typeof it === 'string') li.textContent = it;
+    else { li.append(it.text || ''); if (it.items?.length) li.appendChild(renderItems(it.items)); }
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
 export async function setupNews(onOpen = () => {}, onClose = () => {}) {
   let notes = [];
   try { notes = await fetch(versioned('data/releases.json')).then((r) => r.json()); } catch { return; }
@@ -19,8 +31,7 @@ export async function setupNews(onOpen = () => {}, onClose = () => {}) {
     const [y, m, day] = n.date.split('-').map(Number);
     d.textContent = `${y}년 ${m}월 ${day}일`;
     h.append(d, n.title || '');
-    const ul = document.createElement('ul');
-    for (const it of n.items) { const li = document.createElement('li'); li.textContent = it; ul.appendChild(li); }
+    const ul = renderItems(n.items);
     sec.id = n.date;
     sec.append(h, ul);
     for (const im of n.images || []) {

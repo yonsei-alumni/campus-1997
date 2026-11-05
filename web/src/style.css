@@ -146,6 +146,7 @@ body.birds #blabels { display: none; }
 #news section { border-top: 1px dashed #d9d3c3; padding: 10px 0 4px; }
 #news h3 { margin: 0 0 4px; font-size: 15px; color: var(--ink); }
 #news h3 span { display: inline-block; background: var(--yellow); border-radius: 4px; padding: 0 6px; margin-right: 6px; font-size: 13px; }
+#news li > ul { margin-top: 2px; font-size: 13px; }
 #news ul { margin: 0; padding-left: 20px; line-height: 1.6; font-size: 14px; color: #34404f; }
 #news .close { position: absolute; top: 14px; right: 14px; border: 0; background: var(--ink); color: #fff; border-radius: 8px; padding: 7px 12px; font-weight: 700; }
 

@@ -18,7 +18,7 @@
 **바로 해 보기: http://yonsei-1997.benelog.net/** (GitHub Pages, `main`에 올리면 `.github/workflows/pages.yml`이 다시 배포)
 
 건물 이름표는 걸을 때 가까운 건물 위에, 둘러보기와 큰 지도에서는 건물마다 보입니다. 날짜별 업데이트 내역은 제목 화면의 「새 소식」(`web/public/data/releases.json`)에 있고, 화면 캡처가 들어간 별도 페이지 **http://yonsei-1997.benelog.net/news.html** (날짜마다 `#2026-11-06` 같은 주소로 바로 연결)로도 볼 수 있습니다.
-새 소식을 쓸 때는 `releases.json` 맨 위에 `{date, title, items, images: [{src, alt}]}` 를 더하고, 캡처는 `docs/screenshots/` 와 `web/public/assets/news/` 에 둡니다.
+새 소식을 쓸 때는 `releases.json` 맨 위에 `{date, title, items, images: [{src, alt}]}` 를 더하고(`items` 는 문자열 또는 `{text, items: [...]}` 로 하위 목록을 중첩, 같은 날의 비슷한 변경은 카테고리로 묶기), 캡처는 `docs/screenshots/` 와 `web/public/assets/news/` 에 둡니다.
 
 ## 실행
 
