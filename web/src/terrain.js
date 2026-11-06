@@ -74,6 +74,8 @@ export function makeNearTerrain(hf, campus, lib) {
   const T = (n, srgb = true) => loadTex(P + n, { srgb });
   const uniforms = {
     uSplat: { value: loadTex('assets/textures/ground_splat.png', { srgb: false, repeat: false, mobileMax: 2048 }) },
+    // worn, dry lawn (the east lawn and the 화단섬 of the May 1997 photo): same rectangle, 1 m texels
+    uDry: { value: loadTex('assets/textures/ground_dry.png', { srgb: false, repeat: false }) },
     uRect: { value: new THREE.Vector4(S.x0, S.y0, S.x1, S.y1) },
     gD: { value: T('leafy_grass/diff.jpg') }, gN: { value: T('leafy_grass/nor.jpg', false) },
     aD: { value: T('asphalt_02/diff.jpg') }, aN: { value: T('asphalt_02/nor.jpg', false) },
@@ -93,7 +95,7 @@ export function makeNearTerrain(hf, campus, lib) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         varying vec3 vWPos; varying vec3 vWNrm;
-        uniform sampler2D uSplat, gD, gN, aD, aN, pD, pN, dD, dN, fD;
+        uniform sampler2D uSplat, uDry, gD, gN, aD, aN, pD, pN, dD, dN, fD;
         uniform vec4 uRect; uniform vec3 uGrass;
         vec3 gTN; float gRough;
         vec3 nrm(sampler2D t, vec2 uv) { return texture2D(t, uv).xyz * 2.0 - 1.0; }
@@ -115,15 +117,29 @@ export function makeNearTerrain(hf, campus, lib) {
         float lum = dot(cg, vec3(0.299, 0.587, 0.114));
         vec3 grass = uGrass * (0.45 + 1.6 * lum) * mix(0.82, 1.15, macro) * mix(0.92, 1.06, n2);
         grass = mix(grass, grass * vec3(1.15, 1.05, 0.7), smoothstep(0.55, 0.75, macro) * 0.5);
-        vec3 asph = texture2D(aD, ua).rgb * 0.85;
+        // asphalt: the 1997 photo's roads are even, so the texture's cracks and patches are toned down (issue #11:
+        // the side road's apron next to 백양로's own asphalt mesh showed more of them)
+        vec3 aTex = texture2D(aD, ua).rgb;
+        vec3 asph = mix(texture2D(aD, ua, 9.0).rgb, aTex, 0.55) * 0.85;
         vec3 pav = texture2D(pD, up).rgb * vec3(1.08, 0.94, 0.92);
         vec3 dirt = texture2D(dD, ud).rgb;
         vec3 forest = texture2D(fD, wp / 5.0).rgb * 0.8;
         float forestMask = smoothstep(0.55, 0.7, sp.b) * (1.0 - smoothstep(0.85, 0.95, sp.b));
         dirt = mix(dirt, forest, forestMask);
+        // dry lawn: the grass goes to straw, with patches of bare trodden earth where the macro noise is high
+        float dry = texture2D(uDry, suv).r * inside;
+        if (dry > 0.003) {
+          dry = clamp(dry * 1.5 - 0.25 + (macro - 0.5) * 0.9 + (n2 - 0.5) * 0.3, 0.0, 1.0);   // a ragged edge, green tufts
+          vec3 straw = vec3(0.45, 0.37, 0.2) * (0.5 + 1.3 * lum) * mix(0.85, 1.12, n2);
+          float patchy = macro + (n2 - 0.5) * 0.6 + (texture2D(dD, wp / 17.0).g - 0.45) * 0.5;
+          float bare = smoothstep(0.38, 0.58, patchy) * smoothstep(0.3, 0.9, dry);
+          vec3 earth = texture2D(dD, ud).rgb * vec3(1.05, 0.9, 0.74);
+          vec3 worn = mix(mix(grass, straw, 0.65 + 0.3 * smoothstep(0.35, 0.6, n2)), earth, bare * 0.85);
+          grass = mix(grass, worn, smoothstep(0.0, 0.6, dry));
+        }
         vec3 albedo = grass * wg + asph * wa + pav * wpv + dirt * wd;
         diffuseColor.rgb *= albedo;
-        gTN = nrm(gN, ug) * wg + nrm(aN, ua) * wa + nrm(pN, up) * wpv + nrm(dN, ud) * wd;
+        gTN = nrm(gN, ug) * wg + nrm(aN, ua) * wa * 0.45 + nrm(pN, up) * wpv + nrm(dN, ud) * wd;
         gRough = 0.98 * wg + 0.92 * wa + 0.85 * wpv + 1.0 * wd;
       `)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = gRough;')

@@ -164,7 +164,7 @@ async function main() {
 
   // ---------------------------------------------------------------- vegetation
   const kits = {};
-  const species = ['ginkgo', 'zelkova', 'cherry', 'maple', 'oak', 'pine'];
+  const species = [...new Set(campus.trees.map((t) => t[0]))];      // ginkgo, zelkova, …, zelkova_young, metasequoia
   await Promise.all(species.flatMap((sp) => [0, 1].map(async (v) => {
     const g = await load(`veg/${sp}_${v}.glb`, '나무를 심는 중…');
     bindMaterials(g.scene, lib);
@@ -194,6 +194,7 @@ async function main() {
   }));
   const colliders = new Colliders();
   for (const b of campus.buildings) colliders.addPolygon(b.style === 'lm:hanok' ? hanokWalls(b.footprint) : b.footprint);
+  for (const poly of campus.colliders || []) colliders.addPolygon(poly);     // parts outside the OSM outlines (백주년기념관's front block)
   {
     const byKind = {};
     for (const pr of campus.props) (byKind[pr[0]] ||= []).push(pr);
@@ -546,6 +547,7 @@ async function main() {
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
     traffic.update(dt, started ? player : NOBODY);
     fountainWater?.update(dt, camera);
+    banners.userData.update(tAcc);
     ball?.update(dt, tAcc, started && !bird.active);
     // the shadow frustum follows the view in texel-snapped steps; people and cars are redrawn into it every frame
     shadows.update(focus, bird.active ? focus.y : camera.position.y - 10, span);

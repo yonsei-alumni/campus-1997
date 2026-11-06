@@ -387,7 +387,58 @@ def centennial():
     for k in range(3):
         q = [P(PS0, 0.4 - k * 0.15, 0.4 + k * 0.6), P(PS1, 0.4 - k * 0.15, 0.4 + k * 0.6)]
         mb.quad(P(PS0, 0.4 - k * 0.15, k * 0.6), P(PS1, 0.4 - k * 0.15, k * 0.6), q[1], q[0], 'stone_granite')
-    return [mb, sh]
+    # the porch's depths go black as in the photo (a flat unlit lining just inside the glass and the walls)
+    s0, s1 = PS0 + 0.05, PS1 - 0.05
+    mb.quad(P(s0, 0.05, -PD + 0.01), P(s1, 0.05, -PD + 0.01), P(s1, HP - 0.05, -PD + 0.01), P(s0, HP - 0.05, -PD + 0.01), 'void_black')
+    out = [mb, sh]
+    # the low front block before the podium's south-west corner (tools/build_campus.py CENT_BLOCK, issue #9)
+    K = CAMPUS.get('centennial_block')
+    if K:
+        bk = MeshBuilder('lm_centennial_block')
+        c0, tf, tsd = Vector(K['corner']), Vector(K['t_front']), Vector(K['t_side'])
+        Hb = K['h']
+
+        def Q(e, a, z, out_f=0.0, out_s=0.0):
+            # e along the front (east), a along the side (north), out_f out of the front (south), out_s out of the side
+            p = c0 + tf * e + tsd * a - tsd * out_f - tf * out_s
+            return (p.x, p.y, z0 + z)
+        F, S = K['front'], K['side']
+        e0, e1, he = K['entrance']
+        d0, d1, hd = K['door']
+        # front face (south) with the wide dark entrance, recessed 2.5 m
+        bk.quad(Q(0, 0, -3), Q(e0, 0, -3), Q(e0, 0, Hb), Q(0, 0, Hb), 'stone_ashlar')
+        bk.quad(Q(e1, 0, -3), Q(F, 0, -3), Q(F, 0, Hb), Q(e1, 0, Hb), 'stone_ashlar')
+        bk.quad(Q(e0, 0, he), Q(e1, 0, he), Q(e1, 0, Hb), Q(e0, 0, Hb), 'stone_ashlar')
+        bk.quad(Q(e0, 2.5, 0), Q(e1, 2.5, 0), Q(e1, 2.5, he), Q(e0, 2.5, he), 'void_black')        # its dark back
+        bk.quad(Q(e1, 0, 0), Q(e1, 2.5, 0), Q(e1, 2.5, he), Q(e1, 0, he), 'void_black')
+        bk.quad(Q(e0, 2.5, 0), Q(e0, 0, 0), Q(e0, 0, he), Q(e0, 2.5, he), 'void_black')
+        bk.quad(Q(e0, 0, he), Q(e0, 2.5, he), Q(e1, 2.5, he), Q(e1, 0, he), 'void_black')          # its soffit
+        bk.quad(Q(e0, 0, 0.02), Q(e1, 0, 0.02), Q(e1, 2.5, 0.02), Q(e0, 2.5, 0.02), 'stone_granite')
+        bk.quad(Q(e0 + 0.4, 2.45, 0.05), Q(e1 - 0.4, 2.45, 0.05), Q(e1 - 0.4, 2.45, he - 0.3), Q(e0 + 0.4, 2.45, he - 0.3), 'glass')
+        # west side with its dark door
+        bk.quad(Q(0, d0, -3), Q(0, 0, -3), Q(0, 0, Hb), Q(0, d0, Hb), 'stone_ashlar')
+        bk.quad(Q(0, S, -3), Q(0, d1, -3), Q(0, d1, Hb), Q(0, S, Hb), 'stone_ashlar')
+        bk.quad(Q(0, d1, hd), Q(0, d0, hd), Q(0, d0, Hb), Q(0, d1, Hb), 'stone_ashlar')
+        bk.quad(Q(0.6, d1, 0), Q(0.6, d0, 0), Q(0.6, d0, hd), Q(0.6, d1, hd), 'void_black')
+        bk.quad(Q(0, d0, 0), Q(0.6, d0, 0), Q(0.6, d0, hd), Q(0, d0, hd), 'void_black')
+        bk.quad(Q(0.6, d1, 0), Q(0, d1, 0), Q(0, d1, hd), Q(0.6, d1, hd), 'void_black')
+        bk.quad(Q(0, d0, hd), Q(0.6, d0, hd), Q(0.6, d1, hd), Q(0, d1, hd), 'void_black')
+        # north side (mostly against the podium), the roof with a coping, and a band of joints like the podium's
+        bk.quad(Q(0, S, -3), Q(F, S, -3), Q(F, S, Hb), Q(0, S, Hb), 'stone_ashlar')
+        bk.quad(Q(F, 0, -3), Q(F, S, -3), Q(F, S, Hb), Q(F, 0, Hb), 'stone_ashlar')
+        bk.face([Q(0, 0, Hb), Q(F, 0, Hb), Q(F, S, Hb), Q(0, S, Hb)], 'roof_flat')
+        for (a0, a1, b0, b1) in ((0, F, 0, 0), (0, 0, 0, S)):
+            bk.box(((Q(a0, b0, 0)[0] + Q(a1, b1, 0)[0]) / 2, (Q(a0, b0, 0)[1] + Q(a1, b1, 0)[1]) / 2, z0 + Hb + 0.2),
+                   (math.hypot(Q(a1, b1, 0)[0] - Q(a0, b0, 0)[0], Q(a1, b1, 0)[1] - Q(a0, b0, 0)[1]) + 0.3, 0.45, 0.4),
+                   'stone_ashlar', rotz=math.atan2(Q(a1, b1, 0)[1] - Q(a0, b0, 0)[1], Q(a1, b1, 0)[0] - Q(a0, b0, 0)[0]))
+        bk.quad(Q(e1, 0, 2.9, 0.04), Q(F, 0, 2.9, 0.04), Q(F, 0, 3.02, 0.04), Q(e1, 0, 3.02, 0.04), 'concrete_dark')
+        # the light wall stepping up from the block's west side towards the porch (photo x 1500 - 1562)
+        for (a0, a1, top) in K['parapet']:
+            pa, pb = Q(0, a0, 0), Q(0, a1, 0)
+            bk.box(((pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2, z0 + top / 2 - 1.5), (math.hypot(pb[0] - pa[0], pb[1] - pa[1]), 0.5, top + 3.0),
+                   'stone_ashlar', rotz=math.atan2(pb[1] - pa[1], pb[0] - pa[0]))
+        out.append(bk)
+    return out
 
 
 # ============================================================================= gothic stone halls
@@ -1726,43 +1777,118 @@ def basketball_court():
     return [mb]
 
 
-# ============================================================================= 활천 분수 (제1공학관 앞)
+# ============================================================================= 활천대 (독수리상 옆)
+# The sculpture, from the 2017 photos of it (reference/활천대_2017_연세대블로그_*.jpg; the name plate reads 「활천대 기증
+# 전기공학과 동창회 (1974년)」): a white stone column of cross section, carved all over with abstract figures in low
+# relief, in three drums with a dark joint between them and its four arms ending above in upright prongs of
+# different heights; it stands on a square slab with a carved edge, on a lower cross-shaped pedestal (letters cut in
+# its faces), on a round dark plinth in the water.  The 1997 basin, from the 2009 photo (reference/활천대_2009_연세춘추.jpg,
+# 「활천대는 독수리상 옆에 있는 분수대다」): a round pool about 6.4 m across with a low light rim, a tall jet out of
+# the top of the column, and a ring of jets on the rim arching up and in towards the column, a bell of water as high
+# as the column.  (Since 백양로's rebuilding it stands in front of 제1공학관 in a small brick-edged pool without jets.)
+FOUNTAIN_COL = dict(plinth=0.45, ped=1.25, slab=1.52, top=3.72, arm=0.55, arm_w=0.34, core=0.3)
+FOUNTAIN_JETS = dict(n=32, land=1.12, peak=3.5)            # web/src/water/fountain.js mirrors these
+
+
+def _relief(mb, c, n, t, w, z0, z1, rnd, mat, depth=0.05):
+    """carved low relief on a vertical face: c its centre line foot (x, y), n the outward normal, t the face's own
+    horizontal direction, w its width; little blocks and ribs standing a few cm proud, like the 활천대 figures"""
+    for _ in range(int(w * (z1 - z0) * 9)):
+        u = rnd.uniform(-w / 2 + 0.04, w / 2 - 0.04)
+        z = rnd.uniform(z0 + 0.05, z1 - 0.05)
+        bw, bh = rnd.uniform(0.04, 0.14), rnd.uniform(0.05, 0.3)
+        d = depth * rnd.uniform(0.4, 1.0)
+        x, y = c[0] + t[0] * u + n[0] * d / 2, c[1] + t[1] * u + n[1] * d / 2
+        mb.box((x, y, z), (bw, d, bh), mat, rotz=math.atan2(t[1], t[0]), skip=('bottom', 'back'))
+
+
 def fountain():
-    """활천 (活泉, 'living spring'), the engineering college's fountain before 제1공학관: a round basin with a
-    granite rim, water, a stepped central pedestal and a white jet.  No photo found, so a plain campus fountain."""
+    """활천대 (活泉臺, 1974): the electrical engineering alumni's fountain beside the eagle (see FOUNTAIN_COL)."""
     F = CAMPUS.get('statues', {}).get('fountain')
     if not F:
         return []
     r = F['r']
+    rnd = random.Random(1974)
     mb = MeshBuilder('lm_fountain')
-    mb.xf = local_frame(F['pos'][0], F['pos'][1], 0.0, F['h'])
-    # rim: a granite ring (outer and inner walls, flat top) round the water
-    mb.cylinder((0, 0), r + 0.35, -0.6, 0.5, 'stone_granite', seg=40, cap_top=False)
-    seg = 40
+    mb.xf = local_frame(F['pos'][0], F['pos'][1], F.get('rot', 0.0), F['h'])
+    # rim: a low ring of light granite (outer and inner walls, flat top) round the water
+    seg = 48
+    mb.cylinder((0, 0), r + 0.4, -0.6, 0.5, 'granite_light', seg=seg, cap_top=False)
     for k in range(seg):
         a0, a1 = 2 * math.pi * k / seg, 2 * math.pi * (k + 1) / seg
         c0, s0, c1, s1 = math.cos(a0), math.sin(a0), math.cos(a1), math.sin(a1)
-        mb.face([(r * c0, r * s0, 0.5), (r * c1, r * s1, 0.5), ((r + 0.35) * c1, (r + 0.35) * s1, 0.5), ((r + 0.35) * c0, (r + 0.35) * s0, 0.5)], 'stone_granite')
+        mb.face([(r * c0, r * s0, 0.5), (r * c1, r * s1, 0.5), ((r + 0.4) * c1, (r + 0.4) * s1, 0.5), ((r + 0.4) * c0, (r + 0.4) * s0, 0.5)], 'granite_light')
         mb.face([(r * c1, r * s1, 0.0), (r * c0, r * s0, 0.0), (r * c0, r * s0, 0.5), (r * c1, r * s1, 0.5)], 'stone_granite')
-    mb.cylinder((0, 0), r, -0.2, 0.0, 'concrete_dark', seg=40)                       # basin floor
+    mb.cylinder((0, 0), r, -0.2, 0.0, 'concrete_dark', seg=seg)                     # basin floor
     # the water surface (level 0.375) is drawn live in the web app: web/src/water/fountain.js (Ultra Water)
-    mb.cylinder((0, 0), 0.9, 0.3, 0.75, 'stone_granite', seg=20)                    # stepped pedestal
-    mb.cylinder((0, 0), 0.5, 0.75, 1.25, 'stone_granite', seg=16)
-    mb.cylinder((0, 0), 0.12, 1.25, 1.45, 'metal_dark', seg=10)
+    C = FOUNTAIN_COL
+    mb.cylinder((0, 0), 0.9, 0.0, C['plinth'], 'concrete_dark', seg=28)             # the round dark plinth
+    # lower pedestal: a cross of two slabs (0.95 x 0.42 m), letters cut in its faces
+    for ang in (0.0, math.pi / 2):
+        mb.box((0, 0, (C['plinth'] + C['ped']) / 2), (0.95, 0.42, C['ped'] - C['plinth']), 'stone_white', rotz=ang)
+    for k in range(4):
+        a = k * math.pi / 2
+        n_, t_ = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
+        _relief(mb, (n_[0] * 0.475, n_[1] * 0.475), n_, t_, 0.42, C['plinth'] + 0.1, C['ped'] - 0.08, rnd, 'stone_white', 0.03)
+    # the square slab with a carved (wavy) edge
+    mb.box((0, 0, (C['ped'] + C['slab']) / 2), (1.38, 1.38, C['slab'] - C['ped']), 'stone_white')
+    for k in range(4):
+        a = k * math.pi / 2
+        n_, t_ = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
+        for j in range(9):
+            u = -0.6 + j * 0.15
+            x, y = n_[0] * 0.7 + t_[0] * u, n_[1] * 0.7 + t_[1] * u
+            mb.box((x, y, C['ped'] + 0.06 + 0.16 * (j % 2)), (0.1, 0.035, 0.09), 'stone_white', rotz=a + math.pi / 2, skip=('back',))
+    # the column: a core and four arms, in three drums with dark joints
+    drums = [(C['slab'], 2.24), (2.27, 2.99), (3.02, C['top'])]
+    for z0, z1 in drums:
+        mb.box((0, 0, (z0 + z1) / 2), (C['core'] * 2, C['core'] * 2, z1 - z0), 'stone_white')
+        for ang in (0.0, math.pi / 2):
+            mb.box((0, 0, (z0 + z1) / 2), (C['arm'] * 2, C['arm_w'], z1 - z0), 'stone_white', rotz=ang)
+        for k in range(4):
+            a = k * math.pi / 2
+            n_, t_ = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
+            _relief(mb, (n_[0] * C['arm'], n_[1] * C['arm']), n_, t_, C['arm_w'], z0, z1, rnd, 'stone_white')
+            for sd in (-1, 1):          # the arm's two side faces and the core's corner faces between the arms
+                o = (n_[0] * (C['core'] + (C['arm'] - C['core']) / 2) + t_[0] * sd * C['arm_w'] / 2,
+                     n_[1] * (C['core'] + (C['arm'] - C['core']) / 2) + t_[1] * sd * C['arm_w'] / 2)
+                _relief(mb, o, (t_[0] * sd, t_[1] * sd), n_, C['arm'] - C['core'], z0, z1, rnd, 'stone_white')
+    for z0, z1 in zip([d[1] for d in drums[:-1]], [d[0] for d in drums[1:]]):            # the dark joints
+        mb.box((0, 0, (z0 + z1) / 2), (C['arm'] * 2 - 0.06, C['arm_w'] - 0.06, z1 - z0 + 0.01), 'concrete_dark')
+        mb.box((0, 0, (z0 + z1) / 2), (C['arm_w'] - 0.06, C['arm'] * 2 - 0.06, z1 - z0 + 0.01), 'concrete_dark')
+    # the prongs: each arm ends above in two upright blades of different heights
+    for k in range(4):
+        a = k * math.pi / 2
+        n_, t_ = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
+        for j, (off, h) in enumerate(((-0.09, rnd.uniform(0.22, 0.4)), (0.09, rnd.uniform(0.08, 0.25)))):
+            dd = C['arm'] - 0.12
+            mb.box((n_[0] * dd + t_[0] * off, n_[1] * dd + t_[1] * off, C['top'] + h / 2), (0.2, 0.15, h), 'stone_white',
+                   rotz=a, skip=('bottom',))
+    mb.cylinder((0, 0), 0.07, C['top'], C['top'] + 0.12, 'metal_dark', seg=8)        # the jet's nozzle
     sp = MeshBuilder('lm_fountain_spray')
     sp.xf = mb.xf
-    sp.cylinder((0, 0), 0.22, 1.45, 4.4, 'water_spray', seg=12, r1=0.07)            # the central jet
-    sp.cylinder((0, 0), 1.5, 0.4, 1.45, 'water_spray', seg=24, r1=0.3, cap_top=False)   # water falling back
-    for k in range(8):                                                              # a ring of small arching jets
-        a = 2 * math.pi * k / 8
-        pts = [(r - 0.3 - (r - 1.4) * f, 0.42 + 1.6 * f * (1 - f) * 2.2) for f in [q / 6 for q in range(7)]]
-        for (r0, z0), (r1_, z1) in zip(pts, pts[1:]):
-            c, s_ = math.cos(a), math.sin(a)
-            n_ = (-s_ * 0.07, c * 0.07)
-            q = [(r0 * c - n_[0], r0 * s_ - n_[1], z0), (r1_ * c - n_[0], r1_ * s_ - n_[1], z1),
-                 (r1_ * c + n_[0], r1_ * s_ + n_[1], z1), (r0 * c + n_[0], r0 * s_ + n_[1], z0)]
-            sp.face(q, 'water_spray')
-            sp.face([(x, y, zz + 0.07) for x, y, zz in q], 'water_spray')
+    sp.cylinder((0, 0), 0.13, C['top'] + 0.1, C['top'] + 2.5, 'water_spray', seg=12, r1=0.04)   # the tall central jet
+    sp.cylinder((0, 0), 0.95, 0.4, C['top'] + 0.5, 'water_spray', seg=24, r1=0.22, cap_top=False)  # falling back over the column
+    # the ring of jets on the rim, arching up and in to land at the column's foot (a bell as high as the column)
+    J = FOUNTAIN_JETS
+    r0 = r - 0.12
+    for k in range(J['n']):
+        a = 2 * math.pi * (k + 0.5) / J['n']
+        c, s_ = math.cos(a), math.sin(a)
+        prof = []
+        for q in range(13):
+            f = q / 12
+            rad = r0 - (r0 - J['land']) * f ** 0.85             # it leaves the rim steeply, falls in near the column
+            z = 0.5 + (J['peak'] - 0.5) * 4 * f * (1 - f) * (1.0 - 0.25 * f) / 0.89 - 0.12 * f
+            prof.append((rad, z))
+        w = 0.045
+        for (ra, za), (rb, zb) in zip(prof, prof[1:]):
+            ring = lambda rad, z: [(rad * c - s_ * w, rad * s_ + c * w, z), (rad * c + s_ * w, rad * s_ - c * w, z),
+                                   (rad * c + s_ * w, rad * s_ - c * w, z + 2 * w), (rad * c - s_ * w, rad * s_ + c * w, z + 2 * w)]
+            A, B = ring(ra, za), ring(rb, zb)
+            for i in range(4):
+                sp.face([A[i], A[(i + 1) % 4], B[(i + 1) % 4], B[i]], 'water_spray')
+        mb.cylinder((r0 * c, r0 * s_), 0.05, 0.42, 0.55, 'metal_dark', seg=6)        # nozzle on the rim
     return [mb, sp]
 
 

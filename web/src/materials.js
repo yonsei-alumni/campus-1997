@@ -70,8 +70,10 @@ const LEAF_VARIANTS = {
   azalea: ['summer'], azalea_red: [],
 };
 
-export function leafUrl(species, season) {
+export function leafUrl(species, season, young = false) {
   const v = LEAF_VARIANTS[species] || [];
+  // young trees (1997's lawn planting) still wear April's light, sparse leaves in May
+  if (young && season === 'summer' && v.includes('spring')) return `assets/textures/leaf_${species}_spring.png`;
   // 철쭉 bloom red from late April through May; green leaves in October
   if (species === 'azalea_red') return season === 'autumn' ? `assets/textures/leaf_azalea_summer.png` : `assets/textures/leaf_azalea_red.png`;
   if (species === 'azalea') return season === 'spring' ? `assets/textures/leaf_azalea.png` : `assets/textures/leaf_azalea_summer.png`;
@@ -106,22 +108,27 @@ export class MaterialLibrary {
         color: new THREE.Color(...(d.tint || [1, 1, 1])),
         side: THREE.DoubleSide,
       });
-      m.normalScale.set(0.9, 0.9);
+      m.normalScale.set(d.nor ?? 0.9, d.nor ?? 0.9);
       if (d.recolor) this._recolor(m);
       else if (d.sat !== undefined) this._desaturate(m, d.sat);
+      else if (d.contrast !== undefined) this._contrast(m, d.contrast);
       if (name.startsWith('bark')) this._foliage(m, 0.0);
     } else if (d.leaf) {
       const species = d.leaf;
       m = new THREE.MeshStandardMaterial({
-        map: loadTex(leafUrl(species, this.season), { repeat: !!d.opaque }),
+        map: loadTex(leafUrl(species, this.season, !!d.young), { repeat: !!d.opaque }),
         alphaTest: d.opaque ? 0 : 0.42,
         transparent: false,
         side: THREE.DoubleSide,
         roughness: 0.82,
         vertexColors: true,
+        color: new THREE.Color(...(d.tint || [1, 1, 1])),
       });
       m.userData.species = species;
       m.userData.opaque = !!d.opaque;
+      m.userData.young = !!d.young;
+      m.userData.tint = d.tint || [1, 1, 1];
+      m.userData.tintAutumn = d.tintAutumn || m.userData.tint;
       this._foliage(m);
       this.leafMats.push(m);
     } else if (d.image) {
@@ -171,6 +178,17 @@ export class MaterialLibrary {
     };
   }
 
+  // tone a texture's detail down towards its own average colour (the 1997 roads' even asphalt)
+  _contrast(m, k) {
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `
+          vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+          sampledDiffuseColor.rgb = mix(texture2D( map, vMapUv, 9.0 ).rgb, sampledDiffuseColor.rgb, ${k.toFixed(3)});
+          diffuseColor *= sampledDiffuseColor;
+        `);
+    };
+  }
+
   _recolor(m) {
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uGrass = this.uniforms.uGrass;
@@ -207,8 +225,9 @@ export class MaterialLibrary {
     this.season = season;
     this.uniforms.uGrass.value.setRGB(...SEASONS[season].grass);
     for (const m of this.leafMats) {
-      const t = loadTex(leafUrl(m.userData.species, season), { repeat: m.userData.opaque });
+      const t = loadTex(leafUrl(m.userData.species, season, m.userData.young), { repeat: m.userData.opaque });
       m.map = t;
+      m.color.setRGB(...(season === 'autumn' ? m.userData.tintAutumn : m.userData.tint));
       m.needsUpdate = true;
     }
   }

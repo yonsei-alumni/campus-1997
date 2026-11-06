@@ -46,13 +46,19 @@ def lamp_arm():
 
 # ----------------------------------------------------------------------------- 흰 세로 깃발 (sidewalk flags near the gate)
 def flag_white():
-    """Pole with a short top arm and a long white cloth hanging from it.  The cloth faces along the road."""
+    """A white cloth hung from a slim pole by the hedge, as the three on the west side of 백양로 north-east of the
+    화단섬 in the 1997 aerial photo (reference/1997_백양로_항공사진.jpg, x 740 - 795, y 928 - 1033): about 1 m wide and
+    2.3 m long, its foot a metre off the ground, the cloth stirring in the breeze (a few soft vertical folds)."""
     mb = MeshBuilder('flag_white')
-    mb.cylinder((0, 0), 0.04, 0.0, 4.6, 'metal_dark', seg=8)
-    mb.box((-0.38, 0, 4.45), (0.8, 0.04, 0.04), 'metal_dark')
-    mb.box((-0.38, 0, 2.4), (0.8, 0.03, 0.03), 'metal_dark')
-    q = [(-0.75, 0, 2.4), (-0.05, 0, 2.4), (-0.05, 0, 4.42), (-0.75, 0, 4.42)]
-    mb.face(q, 'flag_cloth')
+    mb.cylinder((0, 0), 0.035, 0.0, 3.5, 'metal_dark', seg=8)
+    mb.box((-0.55, 0, 3.32), (1.1, 0.035, 0.035), 'metal_dark')
+    n = 8
+    for k in range(n):
+        u0, u1 = k / n, (k + 1) / n
+        x0, x1 = -0.08 - 1.0 * u0, -0.08 - 1.0 * u1
+        y0, y1 = 0.09 * math.sin(u0 * 2 * math.pi * 1.5), 0.09 * math.sin(u1 * 2 * math.pi * 1.5)
+        mb.face([(x0, y0, 1.0 - 0.06 * u0), (x1, y1, 1.0 - 0.06 * u1), (x1, y1 * 0.4, 3.3), (x0, y0 * 0.4, 3.3)], 'flag_cloth',
+                uvs=[(u0, 0), (u1, 0), (u1, 1), (u0, 1)])
     return mb
 
 

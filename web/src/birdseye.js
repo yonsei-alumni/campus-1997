@@ -187,10 +187,11 @@ export class BirdsEye {
     } else if (what === 'photo') {       // the 1997 aerial photo (reference/1997_백양로_항공사진.jpg): taken ~19 m over the gate with a
       this.stopAuto();                   // normal lens, up 백양로 to 언더우드관 and 대우관 (any other control returns to the orbit view).
       // Camera fitted by least squares to the photo positions of 제1공학관's south-east corner, 중앙도서관, the
-      // outline of 백주년기념관's drum and the towers of 언더우드관 and 대우관 (~10 px rms on the 2100 px scan)
-      this.fixed = { x: -119.2, y: -421.2, h: 53.5, tx: 44.1, ty: 155.3, th: 22.6 };
-      this.fovGoal = 28.3;
-      this.camera.fov = 28.3;
+      // outline of 백주년기념관's drum and the towers of 언더우드관 and 대우관 (~12 px rms on the 2100 px scan; refitted
+      // after 백양로's height section was corrected, issue #8)
+      this.fixed = { x: -119.6, y: -424.0, h: 54.0, tx: 43.4, ty: 152.7, th: 25.6 };
+      this.fovGoal = 27.9;
+      this.camera.fov = 27.9;
       this.camera.updateProjectionMatrix();
     }
     this.labels();

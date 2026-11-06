@@ -1,6 +1,6 @@
-// 활천 fountain water, rendered with Ultra Water (https://github.com/Humpalumps/Ultra-Water, MIT; ./ultra-water/).
+// 활천대 fountain water, rendered with Ultra Water (https://github.com/Humpalumps/Ultra-Water, MIT; ./ultra-water/).
 //
-// Ultra Water is an ocean renderer; the fountain basin is 8.4 m across and 37.5 cm deep, so only the parts that
+// Ultra Water is an ocean renderer; the fountain basin is about 6.4 m across and 37.5 cm deep, so only the parts that
 // scale down are used:
 //  - OceanSim: the Tessendorf FFT with capillary-gravity dispersion, at 64² and with cascades of 4.5 m to 19 cm,
 //    driven by a light breeze over a few metres of fetch, so the basin carries fine wind ripples.
@@ -21,7 +21,10 @@ import { WaveCaustics } from './ultra-water/Caustics.js';
 const N = 64;
 const CASCADES = [4.5, 1.5, 0.5, 0.19];    // 4.5 = 3 x 1.5 = 9 x 0.5 exactly, so the caustic tile (all three summed) tiles
 const WATER_Z = 0.375;                     // basin water level above the floor (blender/landmarks.py fountain())
-const PED_R = 0.9;                         // pedestal radius at the water
+const PED_R = 0.9;                         // the round plinth at the water (blender/landmarks.py FOUNTAIN_COL)
+const PLINTH_H = 0.45;                     // its top
+const COL_R = 0.58, COL_H = 3.72;          // the carved cross column on it (its shadow: a cylinder that wide)
+const JETS = 32, JET_LAND = 1.12;          // the rim's arching jets and where they come down (FOUNTAIN_JETS)
 const RIM_H = 0.5;                         // top of the granite rim above the floor
 const SIM_DIST = 70;                       // metres: beyond this the ripples freeze (too small to see move)
 const IMPACTS = 16;
@@ -138,14 +141,14 @@ float basinShadow(vec3 q, vec3 rs, vec3 sun) {
   // under water: the inner wall and the pedestal foot
   if (exitCircle(q.xz, up.xz, uR) < tS) return 0.0;
   if (length(q.xz) > PED_R && enterCircle(q.xz, up.xz, PED_R) < tS) return 0.0;
-  // above: the rim (up to RIM_H at radius uR) and the stepped pedestal (0.9 m to 0.75, 0.5 m to 1.25)
+  // above: the rim (up to RIM_H at radius uR), the plinth and the column on it
   vec3 e = q + up * tS;
   float tR = exitCircle(e.xz, sun.xz, uR);
   if (WATER_Z + sun.y * tR < RIM_H) return 0.0;
   float tP = enterCircle(e.xz, sun.xz, PED_R);
-  if (tP < 1e8 && WATER_Z + sun.y * tP < 0.75) return 0.0;
-  float tP2 = enterCircle(e.xz, sun.xz, 0.5);
-  if (tP2 < 1e8 && WATER_Z + sun.y * tP2 < 1.25) return 0.0;
+  if (tP < 1e8 && WATER_Z + sun.y * tP < ${PLINTH_H.toFixed(3)}) return 0.0;
+  float tP2 = enterCircle(e.xz, sun.xz, ${COL_R.toFixed(3)});
+  if (tP2 < 1e8 && WATER_Z + sun.y * tP2 < ${COL_H.toFixed(3)}) return 0.0;
   return 1.0;
 }
 
@@ -295,9 +298,9 @@ export class FountainWater {
     const env = scene.environment;
     const h = env.image.height, maxMip = Math.log2(h) - 2;
     const floorM = lib.get('concrete_dark'), wallM = lib.get('stone_granite');
-    // the arching jets land 1.1 m out (8 of them), the central jet's curtain at 1.5 m (blender/landmarks.py)
-    this.jetR = 1.1;
-    this.curtainR = 1.5;
+    // the rim's arching jets land at the column's foot, the central jet falls back round it (blender/landmarks.py)
+    this.jetR = JET_LAND;
+    this.curtainR = 0.95;
     this.impacts = Array.from({ length: IMPACTS }, () => new THREE.Vector4());
     this.sizes = new Array(IMPACTS).fill(0.06);
     this._flowSpray(lib.get('water_spray'));
@@ -360,8 +363,8 @@ export class FountainWater {
   _spawn(i, age = 0) {
     const F = this.F, rot = F.rot || 0;
     let a, r, amp, size;
-    if (i < 8) {                       // the eight arching jets: one landing point each
-      a = rot + (2 * Math.PI * i) / 8; r = this.jetR + (Math.random() - 0.5) * 0.08; amp = 0.006; size = 0.07;
+    if (i < 10) {                      // the arching jets: where one of them comes down
+      a = rot + (2 * Math.PI * (Math.floor(Math.random() * JETS) + 0.5)) / JETS; r = this.jetR + (Math.random() - 0.5) * 0.08; amp = 0.006; size = 0.07;
     } else {                           // the central jet's falling curtain: anywhere round its ring
       a = Math.random() * Math.PI * 2; r = this.curtainR + (Math.random() - 0.5) * 0.3; amp = 0.005; size = 0.09;
     }
@@ -386,25 +389,27 @@ export class FountainWater {
   _flowSpray(m) {
     if (!m) return;
     this.sprayT = { value: 0 };
-    const cx = this.center.x, cz = this.center.z, t = this.sprayT;
+    const cx = this.center.x, cz = this.center.z, cy = this.center.y, t = this.sprayT;
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uSprayT = t;
-      sh.uniforms.uSprayC = { value: new THREE.Vector2(cx, cz) };
+      sh.uniforms.uSprayC = { value: new THREE.Vector3(cx, cy, cz) };
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vSprayW;')
         .replace('#include <project_vertex>', '#include <project_vertex>\nvSprayW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
-varying vec3 vSprayW; uniform float uSprayT; uniform vec2 uSprayC;
+varying vec3 vSprayW; uniform float uSprayT; uniform vec3 uSprayC;
 float sprH(float n) { return fract(sin(n * 127.1) * 43758.5453); }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
 {
-  vec2 rel = vSprayW.xz - uSprayC;
+  vec2 rel = vSprayW.xz - uSprayC.xz;
+  float hy = vSprayW.y - uSprayC.y;       // height over the basin floor
   float ang = atan(rel.y, rel.x), rad = length(rel);
   float cell = floor(ang * 26.0 + rad * 9.0);
   float h = sprH(cell), h2 = sprH(cell + 31.7);
   float spd = 2.6 + 2.2 * h2;
-  float ph = vSprayW.y * (1.1 + 0.8 * h) + (vSprayW.y > 2.0 ? 1.0 : -1.0) * uSprayT * spd * 0.5 + h * 9.0;
+  // the central jet runs up out of the column's top; everything else (the curtain, the arching jets) runs down
+  float ph = hy * (1.1 + 0.8 * h) + (hy > ${COL_H.toFixed(2)} && rad < 0.3 ? 1.0 : -1.0) * uSprayT * spd * 0.5 + h * 9.0;
   float lump = smoothstep(0.35, 0.9, fract(ph));
   float fr = fract(ang * 26.0 + rad * 9.0);
   float thread = smoothstep(0.12, 0.5, fr) * smoothstep(0.95, 0.55, fr);

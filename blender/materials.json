@@ -173,6 +173,8 @@
  "asphalt": {
   "tex": "asphalt_02",
   "tile": 7.0,
+  "contrast": 0.55,
+  "nor": 0.45,
   "tint": [
    0.85,
    0.85,
@@ -553,6 +555,18 @@
  "leaf_pine": {
   "leaf": "pine"
  },
+ "leaf_zelkova_young": {
+  "leaf": "zelkova",
+  "young": true
+ },
+ "leaf_cherry_young": {
+  "leaf": "cherry"
+ },
+ "leaf_metasequoia": {
+  "leaf": "pine",
+  "tint": [1.45, 1.7, 0.75],
+  "tintAutumn": [1.9, 1.0, 0.5]
+ },
  "leaf_ivy": {
   "leaf": "ivy"
  },
@@ -569,6 +583,15 @@
  "hedge_azalea": {
   "leaf": "azalea",
   "opaque": true
+ },
+ "void_black": {
+  "color": [
+   0.004,
+   0.004,
+   0.005
+  ],
+  "rough": 1.0,
+  "side": "double"
  },
  "trim_black": {
   "color": [

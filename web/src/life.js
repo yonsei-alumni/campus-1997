@@ -162,6 +162,8 @@ export function makeBanners(banners, lib) {
   group.name = 'banners';
   const cloths = [];
   const ropeMat = new THREE.MeshStandardMaterial({ color: 0xd9d5c9, roughness: 0.9 });
+  const windT = { value: 0 };
+  group.userData.update = (t) => { windT.value = t; };
   const V = (p) => new THREE.Vector3(p[0], p[2], -p[1]);
   for (const b of banners) {
     const g = new THREE.Group();      // one banner (cloth + ropes): hidden outside its season when it has `only`
@@ -172,16 +174,31 @@ export function makeBanners(banners, lib) {
     const len = Math.hypot(span.x, span.z);
     // towards the gate (south): the side the text reads from
     const nrm = new THREE.Vector3(-span.z, 0, span.x).normalize();
-    const N = 24;
+    // the cloth (issue #12): a grid so it can hang like cloth -- the top sags a little between the ties and the
+    // free bottom edge a little more, a couple of long soft bellies along it, and fan-shaped tension folds running in
+    // from the four tied corners; the wind stirs it (vertex shader below)
+    const N = 40, M = 4;
+    const ph = (b.a[0] * 0.37 + b.b[1] * 0.11) % 6.283;
     const pos = [], uv = [], idx = [];
     for (let i = 0; i <= N; i++) {
       const t = i / N;
-      const p = B.clone().lerp(A, t);
-      p.y -= Math.sin(t * Math.PI) * 0.07;                 // the top hangs a little between the ties
-      p.addScaledVector(nrm, Math.sin(t * Math.PI * 3) * 0.04);
-      pos.push(p.x, p.y, p.z, p.x, p.y - dep, p.z);
-      uv.push(t, 1, t, 0);
-      if (i < N) { const k = 2 * i; idx.push(k, k + 1, k + 2, k + 2, k + 1, k + 3); }
+      const top = B.clone().lerp(A, t);
+      const dEnd = Math.min(t, 1 - t) * len;                       // metres from the nearer tied end
+      for (let j = 0; j <= M; j++) {
+        const v = j / M;                                          // 0 top .. 1 bottom
+        const p = top.clone();
+        p.y -= v * dep + Math.sin(t * Math.PI) * (0.07 + 0.07 * v);
+        let off = Math.sin(t * Math.PI * 3 + ph) * 0.035 * (0.6 + 0.4 * v) + Math.sin(t * Math.PI * 7 + ph * 2) * 0.012;
+        const corner = v < 0.5 ? v : 1 - v;                       // folds fan in from the top and bottom corners
+        off += Math.sin((dEnd * 2.6 + corner * 2.2) * Math.PI) * 0.028 * Math.exp(-dEnd / 1.3);
+        p.addScaledVector(nrm, off);
+        pos.push(p.x, p.y, p.z);
+        uv.push(t, 1 - v);
+      }
+      if (i < N) for (let j = 0; j < M; j++) {
+        const k = i * (M + 1) + j, k2 = k + M + 1;
+        idx.push(k, k + 1, k2, k2, k + 1, k2 + 1);
+      }
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -189,6 +206,18 @@ export function makeBanners(banners, lib) {
     geo.setIndex(idx);
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
+    const uN = { value: nrm.clone() }, uPh = { value: ph };
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uWindT = windT; sh.uniforms.uWindN = uN; sh.uniforms.uWindPh = uPh;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uWindT, uWindPh; uniform vec3 uWindN;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          {
+            float t = uv.x, v = 1.0 - uv.y;
+            float w = sin(t * 3.14159) * (0.3 + 0.7 * v);
+            transformed += uWindN * w * (0.05 * sin(uWindT * 1.3 + t * 6.0 + uWindPh) + 0.02 * sin(uWindT * 2.1 + t * 13.0 + uWindPh * 1.7));
+          }`);
+    };
     const texH = Math.max(96, Math.min(256, Math.round(2048 * dep / len)));
     cloths.push({ b, mat, g, key: null, texH });
     const m = new THREE.Mesh(geo, mat);

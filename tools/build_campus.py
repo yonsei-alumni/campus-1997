@@ -178,13 +178,30 @@ def along_raw(s, off):
     n_ = math.hypot(tx, ty)
     return p.x - ty / n_ * off, p.y + tx / n_ * off, math.atan2(ty, tx)
 
-# Height profile along 백양로: sample, smooth, enforce gentle monotonic climb
+# Height profile along 백양로 (issue #8).  The elevation tiles are a surface model (roofs and tree crowns in it) and
+# the 5 m grid smears the hall blocks and the wooded hill behind 언더우드관 down onto the road: sampled along it, the
+# road stayed flat for 100 m in from the gate, then climbed 20.6 m to the 삼거리, 11.6 of them in the last 110 m.
+# The designers of the 2015 rebuilding (Annual Technical Report(지하융복합)_2023, 2.1: 「정문에서 본관 앞 삼거리까지
+# 약 12m의 레벨 차가 있는 완만한 경사」, about 8 m of it over the 360 m of the building) drew the road before the works
+# in their long section (그림 2.5 (a), reference/백양로_1997_고증.md): its ground line, read off column by column, rises
+# about 1.1 m in the first 50 m, runs nearly level to ~150 m and then climbs evenly (about 2.5 %) to the 삼거리.
+# So: the road gets that section, 12 m from the gate's height, and the ground around it moves with it (by the
+# difference between the section and the ground's trend across a 120 m band), fading out 50-230 m from the road;
+# beyond the 삼거리 that lowers 언더우드관's quarter, which carries its aprons, garden, statue and steps along.
 L = bline.length
 ss = np.arange(0, L + 0.1, 2.0)
-prof = np.array([sample(Hn, NEAR_HALF, NEAR_STEP, *bline.interpolate(s).coords[0]) for s in ss])
-prof = ndimage.gaussian_filter1d(prof, 12)
-prof = np.maximum.accumulate(prof)              # 백양로 climbs steadily toward 본관
-prof = ndimage.gaussian_filter1d(prof, 8)
+_dem = np.array([sample(Hn, NEAR_HALF, NEAR_STEP, *bline.interpolate(s).coords[0]) for s in ss])
+H_GATE = float(ndimage.gaussian_filter1d(_dem, 12)[0])
+# 그림 2.5 (a): (fraction of the way to the 삼거리, rise in m) at the ground line's turning points
+SECTION = [(0.0, 0.0), (0.019, 0.0), (0.083, 1.14), (0.252, 1.71), (0.359, 3.43), (0.487, 5.14), (0.592, 6.86),
+           (0.656, 7.43), (0.805, 9.71), (0.910, 10.86), (1.0, 12.0)]
+prof = H_GATE + np.interp(ss / L, [f for f, _ in SECTION], [d for _, d in SECTION])
+prof = ndimage.gaussian_filter1d(prof, 6, mode='nearest')
+prof += (H_GATE + 12.0 - prof[-1]) * (ss / L) ** 2            # (keep the ends where they belong after smoothing)
+_band = np.array([np.mean([sample(Hn, NEAR_HALF, NEAR_STEP, *along_raw(s, o)[:2]) for o in np.arange(-60, 61, 10)])
+                  for s in ss])
+_shift = ndimage.gaussian_filter1d(prof - ndimage.gaussian_filter1d(_band, 15, mode='nearest'), 10, mode='nearest')
+_shift *= np.clip(ss / 80.0, 0, 1) ** 2 * (3 - 2 * np.clip(ss / 80.0, 0, 1))     # (the town outside the gate stays)
 
 
 def prof_h(s):
@@ -202,6 +219,9 @@ from shapely import points as shp_points, distance as shp_distance, line_locate_
 P = shp_points(pts)
 dist = shp_distance(P, bline).reshape(X.shape)
 spos = line_locate_point(bline, P).reshape(X.shape)
+_fade = np.clip((dist - 50.0) / 180.0, 0, 1)
+Hn = Hn + np.interp(spos, ss, _shift) * (1 - _fade * _fade * (3 - 2 * _fade))
+print('백양로 section: gate %.2f, 삼거리 %.2f m; ground shifted by %.1f .. %.1f m' % (prof[0], prof[-1], _shift.min(), _shift.max()))
 hline = np.interp(spos, ss, prof)
 w = np.clip((dist - (ROAD_HALF + 4)) / 30.0, 0, 1)
 w = w * w * (3 - 2 * w)
@@ -224,9 +244,17 @@ for wv in ways.values():
 # 백양누리) was later built (namu.wiki 연세대학교/신촌캠퍼스).  No photo found: a standard 28 x 15 m court, long side
 # along 백양로.  Flatten the ground under it.
 COURT = dict(pos=[21.9, 2.5], rot=1.313, L=28.0, W=15.0)
-# --- 활천 (活泉) fountain in front of 제1공학관 (alumni memory; namu.wiki lists 활천대 among the landmarks moved for
-# 금호아트홀).  No photo found: a round granite basin with a central jet on the lawn before the hall's 백양로 front.
-FOUNTAIN = dict(pos=[-99.0, -255.0], r=4.2)
+# --- 활천대 (活泉臺): the fountain the electrical engineering alumni raised money for in 1974 (연세대학교 공식 블로그
+# 「연세대학교의 조형물을 찾아서!! 제3탄」, 2017).  Before 백양로 was rebuilt it stood beside the eagle (연세춘추
+# 「연세인도 모르는 연세대학교」, 2009.9: 「활천대는 독수리상 옆에 있는 분수대다」; since 2015 it is in front of
+# 제1공학관, where its old spot became the stairs down to 백양누리).  Its 2009 photo (reference/활천대_2009_연세춘추.jpg)
+# was taken from 백양로's west sidewalk looking north-west past it: the arched east front of 중앙도서관 behind, the dome
+# of 과학관 far left, the eagle on the right.  Solving for that camera (the eagle's top and foot and its place in the
+# frame, the library's arches and roofline, the dome; a wide lens, residuals under 6 px) puts the basin 11 m in front
+# of it, 36 m south-south-west of the eagle and 20 m off 백양로's centre line; it is ~6.4 m across (the bell of jets
+# 180 px wide) and its column ~3.3 m over the water.  (The camera: (-51.0, -125.8), 1.6 m up, heading 29.2 deg west
+# of north, tilted 5.1 deg up, vertical field 51.5 deg.)
+FOUNTAIN = dict(pos=[-58.0, -117.0], r=3.2)
 
 
 def court_poly(pad=0.0):
@@ -320,11 +348,31 @@ FORECOURTS = [  # OSM way, outward front direction (None: the recess edge footpr
     (242897923, (-0.97, 0.24), 9.0, dict(max_half=10.0, blend=10.0)),
     # 백주년기념관's 백양로 front: the smoothed DEM drapes the hall's own bulk over its west lawn, a 3-5 m mound
     # against its dark porch; the 1997 aerial photo shows level lawn (and parked cars) from the sidewalk to the porch.
-    # Level it at the hall's floor (its lowest corner, 40.9 m; 백양로 alongside is at 39.7-40.0 m)
-    (324328422, None, 30.0, dict(face=((-11.05, -181.26), (-28.82, -256.68)), max_half=40.0, blend=8.0, level=40.9,
+    # Level it at the hall's floor (its lowest corner, a little over 백양로 alongside)
+    (324328422, None, 30.0, dict(face=((-11.05, -181.26), (-28.82, -256.68)), max_half=40.0, blend=8.0, level='corner',
                                          inside=7.0)),              # (and under the 5 m deep porch)
 ]
 FIXED = np.zeros(X.shape, bool)       # grid nodes a later harmonic fill must keep: the level aprons themselves
+# 백주년기념관's low front block (issue #9).  In the 1997 aerial photo the hall's south-west corner is not the podium's
+# corner but a lower block standing out in front of it, its long face towards the camera (the south face) with a wide
+# dark entrance, its short west side with a dark door, and above that side a light wall stepping up towards the
+# porch.  Back-projected with the photo's camera: the top edge of the west side (x 1523 -> 1587, y 630 -> 642) is a
+# level line ~5.2 m up in a plane ~6 m west of the podium's 백양로 face, so the block's corner (x 1587) stands about
+# 3.5 m south of the outline's south face; its front runs on east past the drum (to x ~2000), and the entrance spans
+# 0.7 - 9.7 m from the corner (x 1597 - 1730; its foot is behind the trees).  blender/landmarks.py builds it from this.
+_cnw, _csw, _cse = np.array([-11.05, -181.26]), np.array([-28.82, -256.68]), np.array([-12.33, -261.24])
+_tw = (_cnw - _csw) / np.linalg.norm(_cnw - _csw)                 # the 백양로 face, south -> north
+_ts = (_cse - _csw) / np.linalg.norm(_cse - _csw)                 # the south face, west -> east
+_nw = np.array([-_tw[1], _tw[0]])                                 # out of the 백양로 face (west)
+_c0 = _csw + _nw * 6.0 - _tw * 3.3
+CENT_BLOCK = dict(corner=[round(float(v), 2) for v in _c0], t_front=[round(float(v), 4) for v in _ts],
+                  t_side=[round(float(v), 4) for v in _tw], front=33.0, side=19.6, h=5.2,
+                  entrance=[0.7, 9.7, 2.7], door=[13.2, 15.8, 2.5], parapet=[(19.6, 25.0, 6.0), (25.0, 30.0, 6.8)])
+CENT_BLOCK['poly'] = [[round(float(v), 2) for v in q] for q in
+                      (_c0, _c0 + _ts * 33.0, _c0 + _ts * 33.0 + _tw * 19.6, _c0 + _tw * 19.6)]
+# (its forecourt: level at the hall's floor like the 백양로 side, so the entrance is not half buried)
+FORECOURTS.append((324328422, None, 14.0, dict(face=(tuple(_c0), tuple(_c0 + _ts * 33.0)), max_half=16.5, blend=8.0,
+                                                level='corner', inside=1.0)))
 
 
 def level_forecourt(wid, front, depth, blend=18.0, side_blend=7.0, max_half=20.0, level=None, face=None, inside=2.0):
@@ -361,6 +409,8 @@ def level_forecourt(wid, front, depth, blend=18.0, side_blend=7.0, max_half=20.0
         _, mx, my, hl = best
     tx, ty = -fy, fx
     hw = min(hl, max_half)
+    if level == 'corner':
+        level = min(sample(Hn, NEAR_HALF, NEAR_STEP, x_, y_) for x_, y_ in poly.exterior.coords)
     if level is None:
         level = float(np.mean([sample(Hn, NEAR_HALF, NEAR_STEP, mx + tx * s + fx, my + ty * s + fy) for s in np.linspace(-hw, hw, 7)]))
     S = (X - mx) * tx + (Y - my) * ty
@@ -616,7 +666,8 @@ for wv in ways.values():
     if hw in ('footway', 'path', 'steps', 'pedestrian'):
         if EAST_LAWN.contains(ls.centroid):
             continue
-        ls = ls.difference(bcorr).difference(ISL.buffer(1.0))
+        # (and none across 활천대's basin: OSM's walks there lead down to the 2015 백양누리 entrance)
+        ls = ls.difference(bcorr).difference(ISL.buffer(1.0)).difference(Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 1.5))
         if ls.is_empty:
             continue
         lsl = ls.geoms if hasattr(ls, 'geoms') else [ls]
@@ -649,7 +700,7 @@ draw_poly('asphalt', MOUTH_POLY)
 LOT_E = [along_raw(s, -(ROAD_HALF + 8.5)) for s in np.arange(150, 196, 3.2)]
 # 1997 photo: no car park beside the road here; the cars stand in a row on the dry lawn in front of 백주년기념관
 LOT_C = [(x, -301.0 + (x + 58) * 0.06, 0.0) for x in np.arange(-58, -24, 4.6)]     # its cars back-projected
-draw_line('asphalt', [(x, y) for x, y, _ in LOT_C], 7.0)
+draw_line('dirt', [(x, y) for x, y, _ in LOT_C], 7.0)          # (on the trodden dry lawn, no paving)
 # 백양로 itself is real geometry (Blender) – paint asphalt below so seams never show grass
 draw_line('asphalt', bys, 2 * E_CURB)
 draw_line('pavers', bys, 2 * ROAD_HALF)
@@ -711,8 +762,8 @@ draw_poly('pavers', Point(*SANG).buffer(6.4))
 draw_poly('pavers', Point(*SANG).buffer(3.9), 0)
 draw_line('pavers', [WD(23.5, 0), SANG], 4.0)
 draw_poly('pavers', court_poly(1.0))
-draw_poly('pavers', Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 2.2))
-GARDEN_ZONES = [garden, yeonhui_garden, daewoo_garden, court_poly(2.0), Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 4)]
+draw_poly('pavers', Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 1.1))         # a narrow paved ring, lawn beyond
+GARDEN_ZONES = [garden, yeonhui_garden, daewoo_garden, court_poly(2.0), Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 7)]
 
 # amphitheater arena (dirt), sports field (dirt), tree-root patches done in web shader
 draw_poly('dirt', Point(AMPH['cx'], AMPH['cy']).buffer(1).simplify(0))
@@ -744,6 +795,24 @@ for ch in range(3):
 os.makedirs(os.path.join(ROOT, 'web/public/assets/textures'), exist_ok=True)
 Image.fromarray(np.clip(spl, 0, 255).astype(np.uint8), 'RGB').save(
     os.path.join(ROOT, 'web/public/assets/textures/ground_splat.png'), optimize=True)
+# Dry lawn (issue #10): in the May 1997 photo the lawn east of 백양로 between the gate and 백주년기념관 is worn, yellowed
+# grass with bare earth showing (the cars park on it in the shade), and so is the ground inside the 화단섬 hedge
+# between the azaleas and the trees.  A grey mask over the splat's rectangle at 1 m (web/src/terrain.js mixes the
+# lawn there to straw and patches of earth); the trodden car row darker still.
+DRY_RES = 1.0
+_dry = Image.new('L', (int(SW * SPLAT['res'] / DRY_RES), int(SH * SPLAT['res'] / DRY_RES)), 0)
+_dd = ImageDraw.Draw(_dry)
+_tp = lambda x, y: ((x - SPLAT['x0']) / DRY_RES, (SPLAT['y1'] - y) / DRY_RES)
+# (the worn lawn reaches right up to 백양로's planting strip, wider than EAST_LAWN, whose west edge keeps the trees
+# off the road)
+_dl = Polygon([(-140, -404), (-18, -404), (-18, -266), (-44, -258), (-140, -258)]).difference(bline.buffer(ROAD_HALF + 0.8))
+_dl = max(_dl.geoms, key=lambda g_: g_.centroid.x) if hasattr(_dl, 'geoms') else _dl
+for _poly, _v in ((_dl, 235), (ISL.buffer(-1.0), 190)):
+    _dd.polygon([_tp(x, y) for x, y in _poly.exterior.coords], fill=_v)
+_dd.line([_tp(x, y) for x, y, _ in LOT_C], fill=255, width=9)
+_dry = ndimage.gaussian_filter(np.array(_dry).astype(np.float32), 2.5)
+Image.fromarray(np.clip(_dry, 0, 255).astype(np.uint8), 'L').save(
+    os.path.join(ROOT, 'web/public/assets/textures/ground_dry.png'), optimize=True)
 
 # ---------------------------------------------------------------------------
 # Vegetation
@@ -955,7 +1024,8 @@ for a in np.linspace(0, 2 * math.pi, 26, endpoint=False):
 # generic model heights (zelkova ~9 m, not 13-16); the ginkgo rows already match.  Scale the scattered trees there
 # (not the rows or the hand-placed photo trees), easing back to full size past the library where the photo shows
 # nothing, and keep the east lawn's below 8 m so 백주년기념관's dark porch shows over them as in the photo.
-SPECIES_H = {'ginkgo': 9.8, 'zelkova': 13.0, 'cherry': 7.5, 'maple': 6.5, 'oak': 12.5, 'pine': 11.0}   # blender/vegetation.py
+SPECIES_H = {'ginkgo': 9.8, 'zelkova': 13.0, 'cherry': 7.5, 'maple': 6.5, 'oak': 12.5, 'pine': 11.0,
+             'zelkova_young': 9.0, 'cherry_young': 5.4, 'metasequoia': 13.5}   # blender/vegetation.py
 YOUNG = 0.65
 n_young = 0
 for i, t_ in enumerate(trees):
@@ -973,6 +1043,31 @@ for i, t_ in enumerate(trees):
     t_[3] = round(sc_, 2)
     n_young += 1
 print('young 1997 trees scaled:', n_young)
+# ... and they look young (issue #10): the photo's zelkovas and cherries up to here are thin, upright crowns in light
+# new leaves, not the round full domes of the grown models.  Wherever a zelkova or cherry stands at under 0.9 of its
+# grown size between the gate and the library (the scattered trees above, the island's and the photo's own), it
+# becomes the young model, scaled to the same height.
+n_vase = 0
+for i, t_ in enumerate(trees):
+    if i < N_ROWS or t_[0] not in ('zelkova', 'cherry') or t_[3] >= 0.9:
+        continue
+    if bline.distance(Point(t_[1], t_[2])) > 120 or bline.project(Point(t_[1], t_[2])) > 430:
+        continue
+    young_sp = t_[0] + '_young'
+    t_[3] = round(t_[3] * SPECIES_H[t_[0]] / SPECIES_H[young_sp], 2)
+    t_[0] = young_sp
+    n_vase += 1
+print('young crowns:', n_vase)
+# 메타세쿼이아 (issue #10): tall narrow conifers in the photo's bottom right corner, east of 백양로 just inside the gate.
+# Their trunks are below the frame; the columns of the two crowns (photo x 1930 and 2080, tops at y 1000 and 1030)
+# through the fitted camera, on the lawn behind the ginkgo row (clear of its trees), give these spots and heights
+METASEQ = [(52.0, 14.7, 9.4), (57.0, 19.9, 8.0)]       # s, offset east, height
+_mq = []
+for _s, _o, _h in METASEQ:
+    _x, _y, _ = along_raw(_s, -_o)
+    _mq.append((_x, _y))
+    trees.append(['metasequoia', round(_x, 2), round(_y, 2), round(_h / SPECIES_H['metasequoia'], 2), round(rng2.uniform(0, 6.28), 2)])
+trees[N_ROWS:] = [t_ for t_ in trees[N_ROWS:] if t_[0] == 'metasequoia' or min(math.hypot(t_[1] - x_, t_[2] - y_) for x_, y_ in _mq) > 5.0]
 def hedge_rect(W, u0, u1, v0, v1, gap=None, step=1.5):
     """low clipped boxwood round a bed; gap=(edge index, centre, half width) leaves an opening"""
     corners = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
@@ -1037,6 +1132,23 @@ for k in range(8):
     a_ = 2 * math.pi * k / 8 + math.pi / 8
     x_, y_ = SANG[0] + 11.5 * math.cos(a_), SANG[1] + 11.5 * math.sin(a_)
     trees.append(['pine', round(x_, 2), round(y_, 2), round(rng.uniform(0.75, 0.95), 2), round(rng.uniform(0, 6.28), 2)])
+# 활천대 (reference/활천대_2009_연세춘추.jpg): on the lawn round its narrow paved ring, low clipped shrubs and a few
+# small clipped pines scattered a few metres out, and red azaleas towards the eagle
+_fx, _fy = FOUNTAIN['pos']
+for k, a_ in enumerate(np.radians([40, 105, 170, 235])):       # (none on the 2009 photo's side, south-east)
+    rr_ = FOUNTAIN['r'] + 5.0 + (k % 2) * 1.6
+    trees.append(['pine', round(_fx + rr_ * math.cos(a_), 2), round(_fy + rr_ * math.sin(a_), 2), round(rng2.uniform(0.2, 0.26), 2),
+                  round(rng2.uniform(0, 6.28), 2)])
+for k in range(14):
+    a_ = 2 * math.pi * (k + 0.5) / 14 + rng2.uniform(-0.12, 0.12)
+    rr_ = FOUNTAIN['r'] + 2.4 + rng2.uniform(0, 2.6)
+    shrubs.append(['topiary_round', round(_fx + rr_ * math.cos(a_), 2), round(_fy + rr_ * math.sin(a_), 2),
+                   round(rng2.uniform(0.6, 0.85), 2), 0])
+for k in range(9):
+    a_ = math.atan2(-82 - _fy, -52 - _fx) + (k - 4) * 0.09
+    rr_ = FOUNTAIN['r'] + 9.5 + (k % 3) * 0.8
+    shrubs.append(['azalea_red', round(_fx + rr_ * math.cos(a_), 2), round(_fy + rr_ * math.sin(a_), 2),
+                   round(rng2.uniform(0.9, 1.1), 2), round(rng2.uniform(0, 6.28), 2)])
 # shrubs around building aprons
 for b, bp in zip(buildings, bpolys):
     if b['style'] == 'city':
@@ -1070,7 +1182,12 @@ for s in np.arange(40, L - 20, 34):
             s_ += 4.0
         x, y, a = along_raw(s_, side * (E_VERGE + 0.45))
         props.append(['lamp_arm', round(x, 2), round(y, 2), round(a + (math.pi if side < 0 else 0), 3)])
-# (no white flags along the west sidewalk: the 1997 photo shows none between the gate and the island)
+# (no white flags along the west sidewalk: the 1997 photo shows none between the gate and the island.)  Past the
+# island, though, three white cloths hang by the hedge on the west side, about 92, 99 and 106 m in from the gate
+# (issue #12; their feet back-projected with the photo's camera), turned half towards the road
+for _s in (92.0, 99.0, 106.0):
+    x, y, a = along_raw(_s, E_WALK + 0.55)
+    props.append(['flag_white', round(x, 2), round(y, 2), round(a + 0.8, 3)])
 # banners (현수막) across the road, tied with ropes to the trees and lamp posts on either side (no poles of their
 # own).  The first five are read off the 1997 photo: their distances along the road back-projected with its fitted
 # camera, and their ends found where the rays of the cloth's corners meet the vertical plane across the road there:
@@ -1258,6 +1375,10 @@ LANDMARKS = [
     dict(id='eagle', name='독수리상', pos=[-52, -82], r=16, photo=['photos/eagle_2024.jpg'],
          title='독수리상', year='1997',
          text='연세의 상징 독수리. 높은 기둥 위에서 날개를 편 독수리는 지금도 같은 자리에서 백양로를 내려다본다.'),
+    dict(id='hwalcheon', name='활천대', pos=FOUNTAIN['pos'], r=12, photo=['photos/hwalcheon_2009.jpg', 'photos/hwalcheon_2017.jpg'],
+         title='활천대 (活泉臺)', year='1974',
+         credit='사진: 연세춘추 「연세인도 모르는 연세대학교」(2009.9.5, 우리대학교 홈페이지 자료) · 연세대학교 공식 블로그 「연세대학교의 조형물을 찾아서!! 제3탄」(2017)',
+         text='독수리상 옆의 분수대. 전기공학과 동창회가 모금해 1974년 앞뜰에 만들었고, 연세의 영향력이 사회 전 분야에 퍼지길 바라는 마음을 담았다고 한다. 흰 돌을 깎은 十자 기둥 꼭대기에서 물기둥이 솟고, 둘레에서는 물줄기가 종처럼 휘어 들었다. 공대 축제 「활천제」의 이름도 여기서 왔다. 백양로 재창조 뒤에는 제1공학관 앞으로 자리를 옮겼다.'),
     dict(id='library', name='중앙도서관', pos=[-58, -40], r=22, photo=['photos/library_1997.jpg', 'photos/library_reading_1997.jpg', 'photos/baekyangro_library_1995.jpg'],
          title='1997년 중앙도서관', year='1997',
          text='1984년 준공된 중앙도서관. 아치형 기둥이 늘어선 정면은 그 시절 연세인 모두의 배경이었다. 시험 기간이면 열람실 자리를 맡으려 새벽부터 줄을 섰다.'),
@@ -1298,7 +1419,7 @@ STATUES = dict(
     eagle=dict(pos=[-52, -82], rot=math.radians(-14 + 90)),
     underwood_statue=dict(pos=[55.5, 187.5], rot=math.radians(-14)),
     court=dict(pos=COURT['pos'], rot=COURT['rot'], L=COURT['L'], W=COURT['W']),
-    fountain=dict(pos=FOUNTAIN['pos'], r=FOUNTAIN['r'], rot=0.0),     # courtyard entrance, facing down the campus axis
+    fountain=dict(pos=FOUNTAIN['pos'], r=FOUNTAIN['r'], rot=0.0),     # (the column's arms face the compass points)
     gate=dict(pos=[round(GATE[0], 2), round(GATE[1] + 4, 2)], rot=math.radians(-14)),
 )
 for v in STATUES.values():
@@ -1320,7 +1441,7 @@ Hf.tofile(os.path.join(ROOT, 'web/public/data/terrain_far.bin'))
 # MARKER_NAME: the name a 1997 student would use (or None: no marker, e.g. not built yet in 1997).
 # ---------------------------------------------------------------------------
 MARKER_NAME = {n: None for n in ('별동연구동', '영빈관', '영선실', '차량실', '행정동', '학생회관 별관', '광혜관')}
-EXTRA_MARKERS = [('청송대', 238.0, 284.0), ('농구장', 21.9, 2.5), ('활천 분수', -99.0, -255.0)]          # the wooded park east of 연희관 (OSM leisure=park)
+EXTRA_MARKERS = [('청송대', 238.0, 284.0), ('농구장', 21.9, 2.5)]          # the wooded park east of 연희관 (OSM leisure=park)
 LANDMARK_NAMES = {l['name'] for l in LANDMARKS}
 groups = {}
 for b in buildings:
@@ -1359,6 +1480,7 @@ out = dict(
     amphitheater={k: (round(v, 3) if isinstance(v, float) else v) for k, v in AMPH.items()},
     buildings=buildings, trees=trees, shrubs=shrubs, props=props, cars=cars, banners=banners,
     paths=paths_out, landmarks=LANDMARKS, statues=STATUES, spawn=SPAWN, markers=markers, daewoo_front=DAEWOO,
+    centennial_block=CENT_BLOCK, colliders=[CENT_BLOCK['poly']],
 )
 for p in (os.path.join(ROOT, 'data/campus.json'), os.path.join(ROOT, 'web/public/data/campus.json')):
     json.dump(out, open(p, 'w'), ensure_ascii=False, separators=(',', ':'))
@@ -1380,7 +1502,8 @@ for b in buildings:
     d.polygon([tp(x, y) for x, y in b['footprint']], fill=col, outline=(0, 0, 0))
 for t in trees:
     x, y = tp(t[1], t[2])
-    c_ = {'ginkgo': (255, 230, 0), 'pine': (0, 90, 30), 'zelkova': (40, 160, 40), 'cherry': (255, 150, 200), 'maple': (200, 60, 20), 'oak': (60, 120, 30)}[t[0]]
+    c_ = {'ginkgo': (255, 230, 0), 'pine': (0, 90, 30), 'zelkova': (40, 160, 40), 'cherry': (255, 150, 200), 'maple': (200, 60, 20), 'oak': (60, 120, 30),
+          'zelkova_young': (120, 220, 90), 'cherry_young': (255, 190, 220), 'metasequoia': (150, 200, 60)}[t[0]]
     d.ellipse([x - 2, y - 2, x + 2, y + 2], fill=c_)
 for l in LANDMARKS:
     x, y = tp(*l['pos'])

@@ -13,6 +13,17 @@ SPECIES = {
     'maple':   dict(h=6.5, th=1.7, cz=4.3, rx=3.2, rz=2.5, n=120, card=1.45, groups=6, exc=False, bark='bark', taper=0.2),
     'oak':     dict(h=12.5, th=3.5, cz=8.2, rx=5.0, rz=4.2, n=190, card=2.0, groups=8, exc=False, bark='bark', taper=0.2),
     'pine':    dict(h=11.0, th=4.2, cz=8.2, rx=4.0, rz=2.9, n=250, card=2.1, groups=9, exc=True, bark='bark_pine', taper=0.35),
+    # 1997's young lawn trees (issue #10; reference/1997_백양로_항공사진.jpg, May): thin, upright crowns you see the sky
+    # through, a few branches reaching up from a low fork, in bright new leaves (leaf_zelkova_young keeps the light
+    # April atlas into May; the young cherries keep their summer leaves, April's cherry atlas being the blossom).  Natural heights as measured in the photo (zelkova ~9 m, cherry ~5 m).
+    'zelkova_young': dict(h=9.0, th=2.3, cz=6.1, rx=2.9, rz=3.2, n=85, card=1.55, groups=6, exc=False, bark='bark',
+                          taper=0.15, leaf='leaf_zelkova_young', spread=0.55),
+    'cherry_young':  dict(h=5.4, th=1.4, cz=3.7, rx=2.2, rz=1.8, n=62, card=1.25, groups=5, exc=False, bark='bark',
+                          taper=0.1, leaf='leaf_cherry_young', spread=0.6),
+    # 메타세쿼이아: the row of tall narrow conifers east of 백양로 just inside the gate (bottom right of the photo):
+    # a slim cone of soft light-green sprays from low down, a straight trunk to the tip
+    'metasequoia':   dict(h=13.5, th=1.2, cz=7.0, rx=2.3, rz=6.4, n=300, card=1.05, groups=14, exc=True, bark='bark',
+                          taper=0.92, leaf='leaf_metasequoia'),
 }
 
 
@@ -62,7 +73,8 @@ def make_tree(species, seed=0, leaf_mat=None):
     s = rnd.uniform(0.92, 1.08)
     sp = dict(sp, h=sp['h'] * s, cz=sp['cz'] * s, rz=sp['rz'] * s, rx=sp['rx'] * rnd.uniform(0.9, 1.1))
     mb = MeshBuilder(f'tree_{species}_{seed}')
-    leaf_mat = leaf_mat or f'leaf_{species}'
+    leaf_mat = leaf_mat or sp.get('leaf') or f'leaf_{species}'
+    young = sp.get('spread') is not None
     C = Vector((0, 0, sp['cz']))
     # --- leaf cluster positions (biased toward the crown shell)
     cards = []
@@ -75,6 +87,8 @@ def make_tree(species, seed=0, leaf_mat=None):
             continue
         a = rnd.uniform(0, 2 * math.pi)
         rr = r_env * (rnd.random() ** 0.35)
+        if young and rnd.random() < 0.35:
+            continue                    # (gaps: the crown is a few loose clusters, not a full dome)
         if species == 'pine':
             # flat pads: quantise heights into a few layers
             z = sp['cz'] + round((z - sp['cz']) / 1.1) * 1.1 + rnd.uniform(-0.25, 0.25)
@@ -84,6 +98,8 @@ def make_tree(species, seed=0, leaf_mat=None):
         cards.append(p)
     # --- trunk
     lean = Vector((rnd.uniform(-1, 1), rnd.uniform(-1, 1), 0)) * (0.06 if species != 'pine' else 0.18)
+    if species == 'metasequoia':
+        lean *= 0.2
     top = sp['h'] * (0.92 if sp['exc'] else 0.55)
     if not sp['exc']:
         top = sp['th'] + 1.2
@@ -94,7 +110,7 @@ def make_tree(species, seed=0, leaf_mat=None):
         z = top * t
         wob = Vector((math.sin(t * 5 + seed) * 0.12, math.cos(t * 4 + seed) * 0.12, 0)) * (2.5 if species == 'pine' else 1)
         trunk.append(Vector((0, 0, z)) + lean * z + wob * t)
-    r0 = 0.11 * sp['h'] ** 0.85 / 3.0 * (1.15 if species in ('zelkova', 'oak') else 1)
+    r0 = 0.11 * sp['h'] ** 0.85 / 3.0 * (1.15 if species in ('zelkova', 'oak') else 1) * (0.75 if young else 1)
     trunk_r = [r0 * (1.35 - 0.35 * min(1, i / 1.0)) * (1 - 0.75 * i / nseg) for i in range(nseg + 1)]
     tube(mb, trunk, trunk_r, sp['bark'], 8, rnd, col=(0.75, 0.75, 0.75, 1))
     # root flare
@@ -127,7 +143,12 @@ def make_tree(species, seed=0, leaf_mat=None):
         else:
             anchor_z = top - rnd.uniform(0.1, 0.8)
         base, tr = trunk_at(anchor_z)
-        mid = base.lerp(cen, 0.5) + Vector((0, 0, (0.6 if species != 'pine' else 0.15) * (cen - base).length * 0.35))
+        lift = 0.6 if species != 'pine' else 0.15
+        if young:
+            lift = 1.0 + sp['spread']           # branches reach up rather than out (a vase, not a dome)
+        if species == 'metasequoia':
+            lift = 0.05                         # short level branches round the straight stem
+        mid = base.lerp(cen, 0.5) + Vector((0, 0, lift * (cen - base).length * 0.35))
         end = base.lerp(cen, 0.88)
         pts = bezier(base, mid, end, 4)
         br = max(0.04, tr * 0.62)
@@ -144,7 +165,7 @@ def make_tree(species, seed=0, leaf_mat=None):
         shell = min(1.0, dn.length)
         out = d.normalized() if d.length > 1e-3 else Vector((0, 0, 1))
         nrm = (out * 0.6 + Vector((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-0.3, 1))) * 0.55).normalized()
-        if species == 'pine':
+        if species in ('pine', 'metasequoia'):
             nrm = (Vector((0, 0, 1)) + out * 0.5 + Vector((rnd.uniform(-1, 1), rnd.uniform(-1, 1), 0)) * 0.8).normalized()
         up = Vector((0, 0, 1))
         tang = nrm.cross(up)
