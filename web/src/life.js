@@ -41,12 +41,14 @@ export class Path {
     const f = Math.max(0, s) / 2, i = Math.min(this.hs.length - 2, f | 0);
     return this.hs[i] + (this.hs[i + 1] - this.hs[i]) * (f - i);
   }
+  // a parallel line `off` m to the left; off may also be a function of the arc length (a lane bending round an island)
   offset(off) {
     const out = [];
     const step = 3, p = new THREE.Vector2(), d = new THREE.Vector2();
     for (let s = 0; s <= this.length; s += step) {
       this.at(s, p); this.dir(s, d);
-      out.push([p.x - d.y * off, p.y + d.x * off]);
+      const o = typeof off === 'function' ? off(s) : off;
+      out.push([p.x - d.y * o, p.y + d.x * o]);
     }
     return out;
   }
@@ -345,6 +347,42 @@ export class Crowd {
 function playGesture(a, name) {
   if (!a.actions[name]) return;
   play(a, name, { once: true, fade: 0.3 });
+}
+
+// ---------------------------------------------------------------- 초소 barrier gates
+// The guard booth on 백양로's centre line (1997 aerial photo; tools/build_campus.py BOOTH): a red-and-white arm across
+// each lane, down as in the photo, swung up while a car on that lane comes within ~22 m of it and until it is past.
+export class BoothGates {
+  constructor(scene, armGltf, booth, lanes, groundAt, shadows = null) {
+    this.arms = [];
+    if (!booth || !armGltf) return;
+    for (const a of booth.arms) {
+      const root = armGltf.scene.clone(true);
+      root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      root.rotation.order = 'YXZ';
+      root.rotation.y = a.dir;
+      root.position.set(a.x, groundAt(a.x, a.y) + a.z, -a.y);
+      scene.add(root);
+      shadows?.addDynamic(root, 3);
+      // the road heading there, and the way the lane's cars run along it (+1 northbound, the arm pointing east)
+      const head = a.dir - a.side * Math.PI / 2;
+      this.arms.push({ root, a, lane: lanes[a.side > 0 ? 1 : 0], fx: Math.cos(head) * -a.side, fy: Math.sin(head) * -a.side, lift: 0 });
+    }
+  }
+  update(dt, traffic) {
+    for (const g of this.arms) {
+      let open = false;
+      for (const c of traffic.cars) {
+        if (c.lane !== g.lane) continue;
+        const dx = c.root.position.x - g.a.x, dy = -c.root.position.z - g.a.y;
+        const along = dx * g.fx + dy * g.fy;          // < 0 still coming
+        if (along > -22 && along < 4 + c.len / 2 && Math.abs(dx * g.fy - dy * g.fx) < 6) { open = true; break; }
+      }
+      const target = open ? 1.45 : 0;
+      g.lift += Math.sign(target - g.lift) * Math.min(Math.abs(target - g.lift), dt * (open ? 1.4 : 0.9));
+      g.root.rotation.z = g.lift;
+    }
+  }
 }
 
 // ---------------------------------------------------------------- traffic

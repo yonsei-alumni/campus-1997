@@ -10,7 +10,7 @@ import { loadGLB, bindMaterials, mergeStatic, InstancedKit, Forest } from './wor
 import { Player, Colliders } from './player.js';
 import { UI } from './ui.js';
 import { Post } from './post.js';
-import { Path, makeBanners, Crowd, Traffic, CAR_COLORS } from './life.js';
+import { Path, makeBanners, Crowd, Traffic, BoothGates, CAR_COLORS } from './life.js';
 import { Cast, PEOPLE, STUDENTS, HEROES, portraits } from './characters.js';
 import { BirdsEye } from './birdseye.js';
 import { SunShadows } from './shadows.js';
@@ -185,7 +185,7 @@ async function main() {
   for (const k in shrubKits) { shrubKits[k].commit(); shrubKits[k].addTo(scene); }
 
   // ---------------------------------------------------------------- props
-  const propNames = ['lamp_double', 'lamp_arm', 'flag_white', 'planter', 'stone_marker', 'sign_board', 'motorbike', 'car_sedan', 'car_sedan2', 'car_hatch', 'car_tico', 'car_taxi', 'car_van', 'payphone', 'bench', 'trashcan'];
+  const propNames = ['lamp_double', 'lamp_arm', 'flag_white', 'planter', 'stone_marker', 'sign_board', 'motorbike', 'car_sedan', 'car_sedan2', 'car_hatch', 'car_tico', 'car_taxi', 'car_van', 'payphone', 'bench', 'trashcan', 'guard_booth', 'barrier_arm'];
   const P = {};
   await Promise.all(propNames.map(async (n) => {
     const g = await load(`props/${n}.glb`, '공중전화를 놓는 중…');
@@ -199,7 +199,7 @@ async function main() {
     const byKind = {};
     for (const pr of campus.props) (byKind[pr[0]] ||= []).push(pr);
     const rnd = mulberry(5);
-    const COLLIDE = { lamp_double: 0.25, lamp_arm: 0.25, flag_white: 0.12, planter: 0.5, stone_marker: 1.0, sign_board: 0.9, payphone: 0.62 };
+    const COLLIDE = { lamp_double: 0.25, lamp_arm: 0.25, flag_white: 0.12, planter: 0.5, stone_marker: 1.0, sign_board: 0.9, payphone: 0.62, guard_booth: 1.05 };
     for (const [kind, list] of Object.entries(byKind)) {
       const src = P[kind];
       if (!src) continue;
@@ -270,13 +270,23 @@ async function main() {
   const crowd = new Crowd(scene, cast, [...STUDENTS, ...STUDENTS, 'man-professor', 'man-staff', 'woman-staff'], paths, groups, MOBILE ? 40 : 110);
   for (const p of crowd.people) shadows.addDynamic(p.a.holder);
   const lanes = [];
-  // one lane each way on the 1997 two-lane road (right-hand traffic)
+  // one lane each way on the 1997 two-lane road (right-hand traffic); both bend out round the guard booth's island
+  // on the centre line (tools/build_campus.py BOOTH, which stands a little east of it)
+  const bo = R.booth;
+  const roundBooth = (s) => {
+    if (!bo) return 0;
+    const a = bo.s - bo.island[3] - 1.2, b = bo.s - bo.island[2] + 1.0;         // the island, nose to tail (+ margin)
+    const t = s < a ? 1 - (a - s) / 12 : s > b ? 1 - (s - b) / 12 : 1;
+    const u = Math.min(1, Math.max(0, t));
+    return u * u * (3 - 2 * u);
+  };
   for (const off of [R.median + R.lane * 0.5]) {
-    lanes.push(new Path(center.offset(-off), heightFn));                       // northbound
-    lanes.push(new Path(center.offset(off).reverse(), heightFn));              // southbound
+    lanes.push(new Path(center.offset((s) => -(off + 0.7 * roundBooth(s))), heightFn));            // northbound
+    lanes.push(new Path(center.offset((s) => off + 0.3 * roundBooth(s)).reverse(), heightFn));    // southbound
   }
   const traffic = new Traffic(scene, { sedan: P.car_sedan, sedan2: P.car_sedan2, hatch: P.car_hatch, tico: P.car_tico, taxi: P.car_taxi, van: P.car_van }, lanes, 14, cast, STUDENTS.concat(['man-professor', 'man-staff', 'woman-staff']));
   for (const c of traffic.cars) shadows.addDynamic(c.root, c.len / 2 + 1.5);
+  const gates = new BoothGates(scene, P.barrier_arm, R.booth, lanes, groundAt, shadows);
 
   // ---------------------------------------------------------------- player / UI / post
   let heroId = safeGet('y97-hero');
@@ -546,6 +556,7 @@ async function main() {
     forest.update(focus);
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
     traffic.update(dt, started ? player : NOBODY);
+    gates.update(dt, traffic);
     fountainWater?.update(dt, camera);
     banners.userData.update(tAcc);
     ball?.update(dt, tAcc, started && !bird.active);

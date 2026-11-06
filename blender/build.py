@@ -105,7 +105,8 @@ if want('veg'):
 if want('props'):
     for name, fn in (('lamp_double', props.lamp_double), ('motorbike', props.motorbike), ('lamp_arm', props.lamp_arm),
                      ('flag_white', props.flag_white), ('planter', props.planter), ('stone_marker', props.stone_marker),
-                     ('sign_board', props.sign_board)):
+                     ('sign_board', props.sign_board), ('guard_booth', props.guard_booth),
+                     ('barrier_arm', props.barrier_arm)):
         reset_scene()
         ob = fn().build()
         stats[name] = tri_count([ob])

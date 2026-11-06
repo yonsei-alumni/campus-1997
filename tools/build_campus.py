@@ -59,7 +59,7 @@ B = {
     256932940: ('modern', 6, '제2공학관'),
     224955691: ('modern', 5, '제3공학관 (공사중)'), 324328471: ('white', 2, '별동연구동'),
     222843398: ('white', 6, '과학관'), 468614722: ('brick', 3, '광복관'),
-    256933753: ('white', 5, '경영학교실단'),
+    256933753: ('white', 5, '백양관'),          # (OSM: 경영학교실단) the old 상경대학 hall, 백양관 since 1996
     421415366: ('gym', 2, '체육관'), 421415365: ('white', 4, '체육교육관'),
     # humanities / north campus
     246156112: ('modern', 6, '인문관'), 246156114: ('modern', 5, '인문관'),
@@ -449,6 +449,24 @@ def near_buildings(pad):
     return m
 
 
+# --- 중앙도서관: level all round.  The 5 m grid drapes the slope behind it (and the bulk of the 학술정보원 built
+# against its back in the 2000s) over the hall: the ground stood 6 m over the front plaza at its north-west corner, so
+# the back and the north end were buried past the ground floor.  The 1997 photos show the piers coming down to a
+# level walk; give the hall a level apron 6 m wide at the height of its 백양로 forecourt on every side, and fill the
+# ground from there out to 30 m with one smooth surface (so the rise to the slope behind is spread over the lawn).
+_lib = footprint(ways[163525865])
+_lf0, _lf1 = np.array([-85.44, -71.08]), np.array([-65.91, 3.16])           # the 백양로 front, south -> north
+_lfn = np.array([(_lf1 - _lf0)[1], -(_lf1 - _lf0)[0]]) / np.linalg.norm(_lf1 - _lf0)   # out of it (east)
+LIBRARY_LEVEL = float(np.mean([sample(Hn, NEAR_HALF, NEAR_STEP, *(_lf0 + (_lf1 - _lf0) * f + _lfn * 3.0))
+                               for f in np.linspace(0.05, 0.95, 9)]))
+_lap = shapely.contains_xy(_lib.buffer(6.0, join_style=2), X, Y) & (dist > ROAD_HALF + 4)
+Hn[_lap] = LIBRARY_LEVEL
+FIXED[_lap] = True
+_lring = shapely.contains_xy(_lib.buffer(30.0), X, Y) & ~_lap & ~FIXED & (dist > ROAD_HALF + 4) & ~near_buildings(1.0)
+harmonic_fill(_lring)
+print('library apron', round(LIBRARY_LEVEL, 2))
+
+
 # --- 언더우드관 앞 정원 (issue #3).  The level aprons of 스팀슨관 (51.6 m) and 아펜젤러관 (54.3 m) face each other across
 # the garden, but the 5 m grid keeps a hollow down its middle (49.4 m): each apron ended in a grass bank, 5 m over 18 m
 # in front of 아펜젤러관, where the photos (reference/아펜젤러관_정면_2016.jpg, 언더우드관_2024_여름_계단에서_본_정원.jpg) show
@@ -488,6 +506,31 @@ Hn[_strip] = _P - DAEWOO['fall'] * (-17.0 - DW_V[_strip])
 _free = (DW_U > -32) & (DW_U < 80) & (DW_V > -74) & (DW_V < 4) & ~_court & ~_strip & ~FIXED & ~near_buildings(1.0)
 harmonic_fill(_free)
 print('daewoo', DAEWOO)
+# --- 대우관 뒤 (Google Street View, 2009-11, from the drive behind the hall and from the road to 북문 east of it; the
+# hall itself opened in June 1996, so its back and yard looked the same in 1997).  The hall's back faces a large
+# car park on a terrace at about its ground floor: three rows of cars east of the middle, a lawn mound with clipped
+# pines west of it (the drive from the west road to the car park runs between that and the hall), and along the back
+# of the hall, in the recess between the wings, a long planter with low concrete walls and pointed conifers.  The
+# road to 북문 runs above the car park's east side behind an iron fence, on a planted bank.  The 5 m grid had only a
+# slope rising 9 m from west to east across all this: the yard becomes one plane falling gently westwards (as a car
+# park drains), the ground round it one smooth surface.  (u, v) as above: u along the hall from the west end of its
+# front, v from the front wall to the back (the back wall at v = 14.8, the wings' back ends at v = 24.4).
+DAEWOO_BACK = dict(h0=round(DAEWOO['floor'] - 0.1, 2), su=0.03, sv=0.03, u0=22.0, v0=26.0,
+                   yard=[(-4.0, 14.9), (46.5, 14.9), (46.5, 24.4), (66.0, 24.4), (64.5, 79.0), (24.5, 79.0), (24.5, 27.0),
+                         (-12.5, 27.0), (-12.5, 24.4), (-4.0, 24.4)],
+                   lot=[(25.0, 25.0), (66.0, 25.0), (64.0, 78.0), (25.0, 78.0)],
+                   planter=[(2.0, 17.6), (44.6, 17.6), (44.6, 23.2), (2.0, 23.2)],
+                   # rows of stalls either side of the aisles OSM has (u = 33 and 49, a cross aisle at v ~ 53),
+                   # cars nose in: (row centre u, which way they face along u)
+                   rows=[(27.6, -1), (38.4, 1), (43.6, -1), (54.4, 1), (59.6, -1)], stall=2.6, row_v=(33.0, 76.0),
+                   gap=(50.4, 56.6), fence=[(74.5, 25.0), (71.5, 38.0), (67.8, 68.0), (67.2, 79.0)])
+_db = DAEWOO_BACK
+_yard = shapely.contains_xy(Polygon(_db['yard']), DW_U, DW_V)
+Hn[_yard] = _db['h0'] + _db['su'] * (DW_U[_yard] - _db['u0']) + _db['sv'] * (DW_V[_yard] - _db['v0'])
+FIXED[_yard] = True
+_free = (DW_U > -40) & (DW_U < 90) & (DW_V > 10) & (DW_V < 115) & ~_yard & ~FIXED & ~near_buildings(1.0)
+harmonic_fill(_free)
+print('daewoo back yard', _db['h0'])
 
 buildings = []
 campus_polys = []
@@ -706,6 +749,13 @@ draw_line('asphalt', bys, 2 * E_CURB)
 draw_line('pavers', bys, 2 * ROAD_HALF)
 
 
+# 대강당: its forecourt is paved from the porch out to the drive (the 2009 photos: cars park in front of the porch)
+_af0, _af1 = np.array([51.13, 28.26]), np.array([59.82, 61.16])
+_av = (_af1 - _af0) / np.linalg.norm(_af1 - _af0)
+_aw = np.array([-_av[1], _av[0]])                                   # out of the front (west)
+AUD_FORECOURT = Polygon([tuple(_af0 - _av * 14), tuple(_af1 + _av * 14), tuple(_af1 + _av * 14 + _aw * 12.5),
+                         tuple(_af0 - _av * 14 + _aw * 12.5)])
+draw_poly('asphalt', AUD_FORECOURT)
 # building aprons (paved strips around campus buildings), library forecourt, 정문 plaza
 aprons = unary_union([bp.buffer(3.5) for bp, b in zip(bpolys, buildings) if b['style'] != 'city'])
 draw_poly('pavers', aprons)
@@ -761,6 +811,10 @@ daewoo_garden = Point(*SANG).buffer(17)
 draw_poly('pavers', Point(*SANG).buffer(6.4))
 draw_poly('pavers', Point(*SANG).buffer(3.9), 0)
 draw_line('pavers', [WD(23.5, 0), SANG], 4.0)
+# 대우관 뒤: the car park and the drive asphalt, paving round the planter in the recess (DAEWOO_BACK above)
+for _k in ('lot',):
+    draw_poly('asphalt', fpoly(WD, DAEWOO_BACK[_k]))
+draw_poly('pavers', fpoly(WD, [(-0.6, 14.8), (46.0, 14.8), (46.0, 24.6), (-0.6, 24.6)]))
 draw_poly('pavers', court_poly(1.0))
 draw_poly('pavers', Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 1.1))         # a narrow paved ring, lawn beyond
 GARDEN_ZONES = [garden, yeonhui_garden, daewoo_garden, court_poly(2.0), Point(*FOUNTAIN['pos']).buffer(FOUNTAIN['r'] + 7)]
@@ -1132,6 +1186,29 @@ for k in range(8):
     a_ = 2 * math.pi * k / 8 + math.pi / 8
     x_, y_ = SANG[0] + 11.5 * math.cos(a_), SANG[1] + 11.5 * math.sin(a_)
     trees.append(['pine', round(x_, 2), round(y_, 2), round(rng.uniform(0.75, 0.95), 2), round(rng.uniform(0, 6.28), 2)])
+# 대우관 뒤 (Street View 2009): pointed conifers 4-5 m tall in a row along the two planters (none before the tower);
+# on the lawn mound west of the car park young clipped pines and round shrubs; a few trees between the rows of cars
+rng4 = random.Random(1997 + 23)
+_pl = DAEWOO_BACK['planter']
+for k in range(12):
+    u_ = _pl[0][0] + 1.6 + k * (_pl[1][0] - _pl[0][0] - 3.2) / 11
+    if abs(u_ - 23.55) < 6.5:
+        continue                                                  # the back tower stands out into the planter there
+    x_, y_ = WD(u_, 20.4 + rng4.uniform(-0.4, 0.4))
+    trees.append(['metasequoia', round(x_, 2), round(y_, 2), round(rng4.uniform(0.3, 0.36), 2), round(rng4.uniform(0, 6.28), 2)])
+for (u_, v_, sc_) in ((-4.0, 31.0, 0.42), (3.0, 34.0, 0.38), (10.0, 32.0, 0.45), (17.0, 34.0, 0.4), (16.0, 44.0, 0.36),
+                      (22.0, 40.0, 0.44), (21.0, 52.0, 0.4), (20.0, 62.0, 0.46), (23.0, 68.0, 0.4), (2.0, 30.5, 0.3)):
+    plant('pine', WD, u_, v_, sc_, rng4.uniform(0, 6.28))
+_diag = LineString([(-13.0, 29.0), (10.0, 62.0), (31.0, 83.0)])     # the drive to 북문 (OSM), in (u, v)
+_n_sh = 0
+while _n_sh < 10:
+    u_, v_ = rng4.uniform(-8, 23), rng4.uniform(29, 72)
+    if _diag.distance(Point(u_, v_)) > 4.5 and Point(u_, v_).y < 29 + (u_ + 13) * 1.43 \
+            and LineString([(4, 39), (16, 55)]).distance(Point(u_, v_)) > 4 and LineString([(10, 62), (25, 55)]).distance(Point(u_, v_)) > 4:
+        plant(rng4.choice(['topiary_round', 'bush']), WD, u_, v_, rng4.uniform(0.8, 1.2))
+        _n_sh += 1
+for (u_, v_) in ((68.5, 34.0), (66.5, 58.0)):                     # on the bank below the road to 북문
+    plant('maple', WD, u_, v_, 0.7, rng4.uniform(0, 6.28))
 # 활천대 (reference/활천대_2009_연세춘추.jpg): on the lawn round its narrow paved ring, low clipped shrubs and a few
 # small clipped pines scattered a few metres out, and red azaleas towards the eagle
 _fx, _fy = FOUNTAIN['pos']
@@ -1174,20 +1251,25 @@ def along(s, off):
     return p.x - ty / n_ * off, p.y + tx / n_ * off, math.atan2(ty, tx)
 
 props = []
-# 백양로 street lamps: two-armed lamps with box heads at the inner edge of both sidewalks (1997 aerial photo)
+# 백양로 street lamps: two-armed lamps with box heads at the inner edge of the east sidewalk (1997 aerial photo: they
+# stand along the east sidewalk all the way up; along the west sidewalk, from the gate past the library, there is
+# not one pole)
 for s in np.arange(40, L - 20, 34):
-    for side in (-1, 1):
-        s_ = s + (17 if side > 0 else 0)
+    for side in (-1,):
+        s_ = s
         while in_gap(s_, side, 1.0):
             s_ += 4.0
         x, y, a = along_raw(s_, side * (E_VERGE + 0.45))
         props.append(['lamp_arm', round(x, 2), round(y, 2), round(a + (math.pi if side < 0 else 0), 3)])
-# (no white flags along the west sidewalk: the 1997 photo shows none between the gate and the island.)  Past the
-# island, though, three white cloths hang by the hedge on the west side, about 92, 99 and 106 m in from the gate
-# (issue #12; their feet back-projected with the photo's camera), turned half towards the road
-for _s in (92.0, 99.0, 106.0):
-    x, y, a = along_raw(_s, E_WALK + 0.55)
-    props.append(['flag_white', round(x, 2), round(y, 2), round(a + 0.8, 3)])
+# (no white flags or poles along the west sidewalk.)  The white cloth past the gate, by the island's hedge about
+# 92-106 m in from the gate (issue #12, back-projected with the photo's camera), is no row of flags: it is one long
+# placard stretched between two trees inside the island's hedge, seen end-on through the trees so that it shows as
+# three white patches.  The north end is tied to the island's young zelkova, the south end to a young tree by the
+# hedge; the cloth hangs low, about 2.3 m up, its lettering towards the road.
+_pt0 = along_raw(93.5, 12.8)[:2]                      # the south tree, just inside the hedge
+trees.append(['zelkova_young', round(_pt0[0], 2), round(_pt0[1], 2), 0.9, 1.3])
+BED_PLACARD = dict(s=(95.3, 106.4), off=(13.0, 14.5), tie=((93.5, 12.8), (108.1, 15.3)), top=2.35, depth=0.82,
+                   text='’97 공과대학 학술제  —  공학인의 밤', sub='연세대학교 공과대학 학생회', color='white')
 # banners (현수막) across the road, tied with ropes to the trees and lamp posts on either side (no poles of their
 # own).  The first five are read off the 1997 photo: their distances along the road back-projected with its fitted
 # camera, and their ends found where the rays of the cloth's corners meet the vertical plane across the road there:
@@ -1229,24 +1311,27 @@ def s_off(x, y):
     return s_, (x - cx_) * -math.sin(a_) + (y - cy_) * math.cos(a_)
 
 
-# what a banner rope can be tied to: the lamp posts and the trees beside the road (the ginkgo rows, and where the
-# west row has not started yet, the island's and the lawn's trees)
-ANCHORS = [(*s_off(t_[1], t_[2]), t_[1], t_[2]) for t_ in trees if bline.distance(Point(t_[1], t_[2])) < 30] + \
-          [(*s_off(p_[1], p_[2]), p_[1], p_[2]) for p_ in props if p_[0] == 'lamp_arm']
+# what a banner rope can be tied to: the trees beside the road only (the ginkgo rows, and where the west row has not
+# started yet, the island's and the lawn's trees).  In the 1997 photo every banner hangs from the trees: the lamp
+# posts carry none.
+ANCHORS = [(*s_off(t_[1], t_[2]), t_[1], t_[2]) for t_ in trees if bline.distance(Point(t_[1], t_[2])) < 30]
 N_FLOATING_TIES = 0
 
 
 def tie_for(s, off_end, top):
-    """the nearest post or trunk outside the banner's end on its side of the road"""
+    """the nearest trunk outside the banner's end on its side of the road (further along the road if none is close)"""
     global N_FLOATING_TIES
     side = 1 if off_end > 0 else -1
     best = None
-    for sa, oa, xa, ya in ANCHORS:
-        if not (side * off_end + 0.3 < side * oa < 30.0) or abs(sa - s) > 14.0:
-            continue
-        d_ = math.hypot(sa - s, oa - off_end)
-        if best is None or d_ < best[0]:
-            best = (d_, xa, ya)
+    for reach in (14.0, 24.0):
+        for sa, oa, xa, ya in ANCHORS:
+            if not (side * off_end + 0.3 < side * oa < 30.0) or abs(sa - s) > reach:
+                continue
+            d_ = math.hypot(sa - s, oa - off_end)
+            if best is None or d_ < best[0]:
+                best = (d_, xa, ya)
+        if best is not None:
+            break
     if best is None:
         N_FLOATING_TIES += 1
         xa, ya, _ = along_raw(s, side * (E_WALK + ROAD['strip'] * 0.5))
@@ -1264,6 +1349,16 @@ for row in BANNERS:
                         b=[round(xw, 2), round(yw, 2), round(h0 + tw, 2)], depth=dep,
                         ties=[tie_for(s, oe, te), tie_for(s, ow, tw)], **spec))
 print('banner ropes tied to nothing:', N_FLOATING_TIES)
+# the placard in the island bed (above): along the road, its north end first so the lettering faces 백양로
+_bp = BED_PLACARD
+_bn, _bs = along_raw(_bp['s'][1], _bp['off'][1])[:2], along_raw(_bp['s'][0], _bp['off'][0])[:2]
+_gn, _gs = sample(Hn, NEAR_HALF, NEAR_STEP, *_bn), sample(Hn, NEAR_HALF, NEAR_STEP, *_bs)
+_tn, _ts_ = along_raw(*_bp['tie'][1])[:2], along_raw(*_bp['tie'][0])[:2]
+banners.append(dict(color=_bp['color'], text=_bp['text'], sub=_bp['sub'], depth=_bp['depth'],
+                    a=[round(_bn[0], 2), round(_bn[1], 2), round(_gn + _bp['top'] + 0.05, 2)],
+                    b=[round(_bs[0], 2), round(_bs[1], 2), round(_gs + _bp['top'], 2)],
+                    ties=[[round(_tn[0], 2), round(_tn[1], 2), round(_gn + _bp['top'] + 0.3, 2)],
+                          [round(_ts_[0], 2), round(_ts_[1], 2), round(_gs + _bp['top'] + 0.25, 2)]]))
 
 def P(name, x, y, rot=0.0):
     props.append([name, round(x, 2), round(y, 2), round(rot, 3)])
@@ -1305,8 +1400,9 @@ for k in range(6):                                  # 대우관 상뜰: round th
     P('bench', x_, y_, a_ + math.pi / 2 + BENCH_FACE)
 for (x, y) in [(-48, -40), (-4, -64), (45, 200), (-94, -404), (-44, -175)]:
     P('trashcan', x, y, 0)
-# double-globe lamps around the library forecourt (1997 library photo) and at the tip of the 화단섬
-for (x, y) in [(-64, -58), (-58, -22), (-74, -40), (-106.7, -315.3)]:
+# double-globe lamps around the library forecourt (1997 library photo: in the clipped shrubs some way out from the
+# piers, not on the steps) and at the tip of the 화단섬
+for (x, y) in [(-64, -58), (-58, -22), (-68.5, -41.5), (-106.7, -315.3)]:
     P('lamp_double', x, y, -0.25)
 # 화단섬: natural stone marker, campus guide sign, white round planters along the side road (all from the 1997 photo)
 P('stone_marker', -112.9, -321.5, 0.4)
@@ -1342,6 +1438,18 @@ for (x, y, a) in LOT_C:          # a red sedan among them, as in the photo
     if rng3.random() < 0.85:
         cars.append([rng3.choice(['sedan', 'sedan', 'hatch', 'taxi']), round(x, 2), round(y, 2),
                      round(math.pi / 2 + rng3.uniform(-.06, .06), 3), rng3.randrange(8)])
+# 대우관 뒤: the car park behind the hall (Street View 2009: three rows of cars, nearly full), nose in, along v
+rng5 = random.Random(1997 + 29)
+(_x0, _y0), (_x1, _y1) = WD(0, 0), WD(1, 0)
+_hu = math.atan2(_y1 - _y0, _x1 - _x0)                            # heading along +u
+for (u_, face) in DAEWOO_BACK['rows']:
+    v_ = DAEWOO_BACK['row_v'][0]
+    while v_ <= DAEWOO_BACK['row_v'][1] + 0.01:
+        if not (DAEWOO_BACK['gap'][0] < v_ < DAEWOO_BACK['gap'][1]) and rng5.random() < 0.8:
+            x_, y_ = WD(u_, v_)
+            cars.append([rng5.choice(['sedan', 'sedan', 'sedan', 'hatch']), round(x_, 2), round(y_, 2),
+                         round(_hu + (0.0 if face > 0 else math.pi) + rng5.uniform(-.04, .04), 3), rng5.randrange(8)])
+        v_ += DAEWOO_BACK['stall']
 # motorbikes in front of the south end of 제1공학관 (the 1997 photo: by its south-east corner, next to the island)
 for k in range(16):
     t_ = k / 15
@@ -1389,9 +1497,10 @@ LANDMARKS = [
     dict(id='chapel', name='루스채플', pos=[50, -70], r=18, photo=None,
          title='루스채플', year='1997',
          text='1974년 미국 헨리 루스 재단의 기부금과 학교 보조금으로 지어진 채플. 채플 수업 시간이면 학생들이 이 앞에 모여들었다.'),
-    dict(id='auditorium', name='대강당', pos=[38, 30], r=22, photo=None,
-         title='대강당', year='1997',
-         text='1980년 완공된 대강당(선교70주년기념관). 입학식과 졸업식, 각종 집회와 공연이 열린 큰 무대였다.'),
+    dict(id='auditorium', name='대강당', pos=[38, 30], r=22, photo=['photos/auditorium_2009.jpg', 'photos/auditorium_2009_side.jpg'],
+         title='대강당', year='1980',
+         text='1980년 완공된 대강당(선교70주년기념관). 입학식과 졸업식, 각종 집회와 공연이 열린 큰 무대였다. 화강석 판의 큰 박공 아래 놋쇠 틀 유리문 세 칸, 그 앞 열 단 계단 위의 넓은 현관.',
+         credit='사진: younghwan12.tistory.com (2009.4.12 촬영)'),
     dict(id='amphitheater', name='노천극장', pos=[150, 150], r=30, photo=['photos/amphitheater_1997.jpg', 'photos/amphitheater_1999.jpg'],
          title='구 노천극장의 마지막 모습', year='1997.04',
          text='잔디 계단이 언덕을 따라 둥글게 둘러선 옛 노천극장. 1997년 4월 사진은 철거 전 마지막 모습이다. 아카라카와 응원제의 함성이 울리던 이 자리에는 1999년 5월 지금의 새 노천극장이 들어섰다.'),
@@ -1469,6 +1578,23 @@ for k_, c_ in APRON_LINES:
     pts_ = [ls_.interpolate(d_).coords[0] for d_ in np.arange(0, ls_.length + 0.01, 1.0)]
     APRON_PAINT.append(dict(kind=k_, pts=[[round(x, 2), round(y, 2), round(ground_h(x, y), 3)] for x, y in pts_]))
 
+# 백양로 가운데 초소 (the guard booth on the centre line, 1997 aerial photo x 1020 - 1049, y 841 - 906): its foot
+# back-projected onto the road profile with the photo's camera lands 132 m in from the gate, 0.34 m east of the
+# centre line, 1.4 m across; a red-and-white barrier arm runs west from beside it across the outgoing lane (s ~134)
+# and another east across the incoming lane further on (s ~138).  blender/props.py guard_booth / barrier_arm build
+# it in a frame with the origin at the booth's centre, -Y up the road, +X west; the arm pivots below are that
+# file's BOOTH_ARMS (x, y, z, side).  The cars keep clear of its island (web/src/main.js) and the arms swing up
+# for them (web/src/life.js BoothGates).
+BOOTH = dict(s=132.8, off=-0.34, island=[-0.85, 0.85, -6.0, 1.6])
+_bx, _by, _ba = along_raw(BOOTH['s'], BOOTH['off'])
+props.append(['guard_booth', round(_bx, 2), round(_by, 2), round(_ba, 3)])
+BOOTH['arms'] = []
+for _ax, _ay, _az, _sd in ((0.82, -1.5, 1.0, 1), (-0.82, -5.5, 1.0, -1)):
+    _px = _bx + _ax * math.cos(_ba + math.pi / 2) + _ay * math.cos(_ba + math.pi)
+    _py = _by + _ax * math.sin(_ba + math.pi / 2) + _ay * math.sin(_ba + math.pi)
+    BOOTH['arms'].append(dict(x=round(_px, 2), y=round(_py, 2), z=_az, dir=round(_ba + _sd * math.pi / 2, 3),
+                              s=round(BOOTH['s'] - _ay, 2), side=_sd))
+
 out = dict(
     origin=[LAT0, LON0],
     terrain=dict(near=dict(half=NEAR_HALF, step=NEAR_STEP, n=n_near, file='data/terrain_near.bin'),
@@ -1479,9 +1605,10 @@ out = dict(
                     gaps=[list(g) for g in GAPS], mouths=[list(MOUTH)], apron_paint=APRON_PAINT, **ROAD),
     amphitheater={k: (round(v, 3) if isinstance(v, float) else v) for k, v in AMPH.items()},
     buildings=buildings, trees=trees, shrubs=shrubs, props=props, cars=cars, banners=banners,
-    paths=paths_out, landmarks=LANDMARKS, statues=STATUES, spawn=SPAWN, markers=markers, daewoo_front=DAEWOO,
+    paths=paths_out, landmarks=LANDMARKS, statues=STATUES, spawn=SPAWN, markers=markers, daewoo_front=DAEWOO, daewoo_back=DAEWOO_BACK,
     centennial_block=CENT_BLOCK, colliders=[CENT_BLOCK['poly']],
 )
+out['baekyangro']['booth'] = BOOTH
 for p in (os.path.join(ROOT, 'data/campus.json'), os.path.join(ROOT, 'web/public/data/campus.json')):
     json.dump(out, open(p, 'w'), ensure_ascii=False, separators=(',', ':'))
 np.save(os.path.join(ROOT, 'data/terrain_near.npy'), Hn.astype(np.float32))

@@ -159,6 +159,55 @@ def barrel_roof(mb, cx, cy, L, W, ang, zt, rise=0.22, seg=12):
             mb.quad(P(x, y0, zt), P(x, y1, zt), P(x, y1, z1), P(x, y0, z0), 'concrete')
 
 
+# ----------------------------------------------------------------------------- rooftop features the outlines cannot say
+def observatory(mb, b, zt, st):
+    """과학관's observatory (reference/학교연혁_과학관.jpg, top right; reference/활천대_2009_연세춘추.jpg, far left): a
+    square white tower about 1.4 storeys over the roof near the east end of the east wing, carrying a silver dome
+    with an observing slit.  The tower stands back from the south face and is about 2.5 window bays across; the dome
+    nearly fills it (7.6 m across on a short drum), its top some 9.5 m over the main roof."""
+    fp = b['footprint']
+    e0, e1 = Vector(fp[0]), Vector(fp[1])                # the east face of the east wing (south -> north)
+    w = (Vector(fp[14]) - e0).normalized()               # along the wing, westwards
+    c = (e0 + e1) / 2 + w * 7.5                          # tower centre, 7.5 m in from the east face (aerial)
+    ang = math.atan2(w.y, w.x)
+    T, Ht = 9.0, 5.0                                     # tower side, height over the roof
+    zb = zt + Ht
+    mb.box((c.x, c.y, zt + Ht / 2), (T, T, Ht), st['wall'], rotz=ang, mats={'top': 'roof_flat'}, skip=('bottom',))
+    mb.box((c.x, c.y, zb + 0.12), (T + 0.3, T + 0.3, 0.24), 'concrete', rotz=ang, skip=('bottom',))   # coping
+    cs, sn = math.cos(ang), math.sin(ang)
+    L = lambda u, v, z: (c.x + u * cs - v * sn, c.y + u * sn + v * cs, z)     # u westwards, v southwards
+    for (u, v, nu, nv) in ((0, T / 2, 0, 1), (-T / 2, 0, -1, 0), (T / 2, 0, 1, 0)):            # a window: S, E, W faces
+        tu, tv = -nv, nu
+        p = lambda s, z, d=0.02: L(u + tu * s + nu * d, v + tv * s + nv * d, z)
+        mb.quad(p(-0.45, zt + 2.2), p(0.45, zt + 2.2), p(0.45, zt + 3.6), p(-0.45, zt + 3.6), st['glass'])
+    R, seg, rings = 3.8, 24, 7
+    mb.cylinder((c.x, c.y), R + 0.1, zb + 0.24, zb + 0.75, 'paint_white', seg=seg, cap_top=False)   # drum
+    za = zb + 0.75
+    # the dome: gores of the silver shell, with the slit (two gores wide, dark) running up over the top
+    for i in range(seg):
+        a0, a1 = 2 * math.pi * i / seg, 2 * math.pi * (i + 1) / seg
+        slit = i in (5, 6)                               # facing south-west
+        for j in range(rings):
+            t0, t1 = math.pi / 2 * j / rings, math.pi / 2 * (j + 1) / rings
+            q = lambda a, t: (c.x + R * math.cos(t) * math.cos(a + ang), c.y + R * math.cos(t) * math.sin(a + ang),
+                              za + R * math.sin(t))
+            mb.face([q(a0, t0), q(a1, t0), q(a1, t1), q(a0, t1)], 'metal_dark' if slit else 'lamp_housing',
+                    smooth='obs_dome' if not slit else False)
+    for i in range(0, seg, 2):                           # raised seams between the gores
+        a = 2 * math.pi * i / seg + ang
+        for j in range(rings):
+            t0, t1 = math.pi / 2 * j / rings, math.pi / 2 * (j + 1) / rings
+            r0, r1 = R + 0.03, R + 0.03
+            p0 = (c.x + r0 * math.cos(t0) * math.cos(a), c.y + r0 * math.cos(t0) * math.sin(a), za + r0 * math.sin(t0))
+            p1 = (c.x + r1 * math.cos(t1) * math.cos(a), c.y + r1 * math.cos(t1) * math.sin(a), za + r1 * math.sin(t1))
+            dx, dy = -math.sin(a) * 0.04, math.cos(a) * 0.04
+            mb.quad((p0[0] - dx, p0[1] - dy, p0[2]), (p0[0] + dx, p0[1] + dy, p0[2]),
+                    (p1[0] + dx, p1[1] + dy, p1[2]), (p1[0] - dx, p1[1] - dy, p1[2]), 'frame_silver')
+
+
+ROOF_EXTRAS = {222843398: observatory}
+
+
 def build_generic(b, rnd):
     style = b['style']
     st = dict(STYLE[style])
@@ -194,6 +243,8 @@ def build_generic(b, rnd):
     else:
         roof = 'roof_green' if (style == 'city' and rnd.random() < 0.6) else 'roof_flat'
         parapet_and_roof(mb, poly, zt, st, rnd, roof_mat=roof, clutter=style != 'city')
+        if b['id'] in ROOF_EXTRAS:
+            ROOF_EXTRAS[b['id']](mb, b, zt, st)
         if style == 'city':
             n = len(poly)
             cx = sum(p[0] for p in poly) / n
