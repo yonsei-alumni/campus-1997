@@ -781,19 +781,14 @@
  },
  "glass_door": {
   "color": [
-   0.03,
-   0.034,
-   0.038
+   0.05,
+   0.06,
+   0.065
   ],
-  "rough": 0.05,
+  "rough": 0.04,
   "metal": 0.0,
-  "env": 1.0,
-  "emissive": [
-   0.032,
-   0.025,
-   0.016
-  ],
-  "emissiveIntensity": 1.0
+  "env": 0.45,
+  "opacity": 0.3
  },
  "door_frame": {
   "color": [
@@ -803,6 +798,51 @@
   ],
   "rough": 0.42,
   "metal": 0.55,
+  "side": "double"
+ },
+ "hall_floor": {
+  "color": [
+   0.78,
+   0.74,
+   0.66
+  ],
+  "rough": 0.3,
+  "emissive": [
+   0.78,
+   0.72,
+   0.6
+  ],
+  "emissiveIntensity": 0.5,
+  "side": "double"
+ },
+ "hall_wall": {
+  "color": [
+   0.86,
+   0.83,
+   0.76
+  ],
+  "rough": 0.85,
+  "emissive": [
+   0.86,
+   0.8,
+   0.68
+  ],
+  "emissiveIntensity": 0.6,
+  "side": "double"
+ },
+ "hall_light": {
+  "color": [
+   1.0,
+   0.97,
+   0.9
+  ],
+  "rough": 0.3,
+  "emissive": [
+   1.0,
+   0.93,
+   0.78
+  ],
+  "emissiveIntensity": 2.2,
   "side": "double"
  }
 }

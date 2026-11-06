@@ -64,6 +64,15 @@ if want('landmarks'):
             ob.matrix_world = M @ ob.matrix_world
             ob.name = key + '_' + ob.name
             objs.append(ob)
+    # the Underwood statue's two low round steps are walked onto, not bumped into (the walker's ankle ray, 0.1 m,
+    # would otherwise stop at the first one: web/src/player.js WALL_RAY_H)
+    st = S['underwood_statue']
+    for r_, z_ in ((3.4, 0.14), (2.7, 0.28)):
+        for k in range(32):
+            a0, a1 = 2 * math.pi * k / 32, 2 * math.pi * (k + 1) / 32
+            landmarks.WALK_FACES.append([(st['pos'][0], st['pos'][1], st['h'] + z_),
+                                         (st['pos'][0] + r_ * math.cos(a0), st['pos'][1] + r_ * math.sin(a0), st['h'] + z_),
+                                         (st['pos'][0] + r_ * math.cos(a1), st['pos'][1] + r_ * math.sin(a1), st['h'] + z_)])
     objs.append(landmarks.walk_mesh().build())
     # where the entrance flights are, so the web app keeps the apron shrubs off the steps
     json.dump({'entrances': landmarks.ENTRANCES}, open(os.path.join(common.ROOT, 'web/public/data/entrances.json'), 'w'))

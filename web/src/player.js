@@ -14,9 +14,10 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 const RADIUS = 0.32, STEP = 0.55;
-// wall rays, above the feet: the two low ones catch kerbs, plinths, planter and flower-bed edges, the low ends of the
-// stair side walls; a face they hit is still a step when the walkable ground right behind it rises to the ray
-const WALL_RAY_H = [0.2, 0.42, 0.65, 1.3];
+// wall rays, above the feet: the low ones catch kerbs, plinths, planter and flower-bed edges down to ankle height
+// (0.1 m: stone edgings and shallow bases lower than 20 cm no longer let the feet through), the low ends of the stair
+// side walls; a face they hit is still a step when the walkable ground right behind it rises to the ray
+const WALL_RAY_H = [0.1, 0.2, 0.42, 0.65, 1.3];
 const LOW_RAY = 0.6;
 export const WALK = 2.4, RUN = 6.2, TURN = 2.3;
 

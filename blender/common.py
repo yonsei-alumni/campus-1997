@@ -30,6 +30,19 @@ def ground(x, y):
                  + _T[j + 1, i] * (1 - ax) * ay + _T[j + 1, i + 1] * ax * ay)
 
 
+def ground_top(x, y):
+    """The higher of the bilinear height and the terrain the web app draws: each 5 m cell is two triangles split along
+    (i+1, j)-(i, j+1) (web/src/terrain.js), which stand up to a few tens of cm over the bilinear surface on curved
+    slopes.  What a flight's foot and a porch must clear so that the grass never comes up through the stone."""
+    fx = min(max((x + _TH) / _TS, 0), _T.shape[1] - 1.001)
+    fy = min(max((y + _TH) / _TS, 0), _T.shape[0] - 1.001)
+    i, j = int(fx), int(fy)
+    ax, ay = fx - i, fy - j
+    a, b, c, d = _T[j, i], _T[j, i + 1], _T[j + 1, i], _T[j + 1, i + 1]
+    tri = a + (b - a) * ax + (c - a) * ay if ax + ay <= 1 else d + (c - d) * (1 - ax) + (b - d) * (1 - ay)
+    return max(float(tri), ground(x, y))
+
+
 # ----------------------------------------------------------------------------- scene
 _matcache = {}
 
