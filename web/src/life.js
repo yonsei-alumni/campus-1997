@@ -53,65 +53,88 @@ export class Path {
 }
 
 // ---------------------------------------------------------------- banners
+// 1997 aerial photo (reference/1997_백양로_항공사진.jpg): plain cloth strips about 0.8-0.9 m deep and 9-12 m long,
+// tied with ropes to the ginkgos and lamp posts on either side of the road (no poles of their own).
 const BANNER_STYLE = {
   blue: { bg: '#1d3f9a', fg: '#ffffff', edge: '#0d2463' },
-  white: { bg: '#f7f5ee', fg: '#1d2a6b', edge: '#c9c3b2', band: '#22348a' },
-  // 1997 photo: white cloth, blue lettering, a yellow strip along the bottom with small red print
+  // white cloth, blue lettering, a dark blue strip along the bottom with small white print (photo)
+  white: { bg: '#f7f5ee', fg: '#1d2a6b', edge: '#c9c3b2', band: '#22348a', bandFg: '#e8ecf7' },
+  // white cloth, blue lettering, a yellow strip along the bottom with small red print (photo)
   white_yellow: { bg: '#f7f5ee', fg: '#1d2a6b', edge: '#c9c3b2', band: '#f1cf2c', bandFg: '#b8261e' },
   yellow: { bg: '#ffd83a', fg: '#1d3f9a', edge: '#c9a400' },
 };
 const FONT = '"Do Hyeon", "Jua", sans-serif';
 
-function fitFont(x, text, size, maxW, min = 28) {
+function fitFont(x, text, size, maxW, min = 18) {
+  size = Math.round(size);
   x.font = `${size}px ${FONT}`;
   while (x.measureText(text).width > maxW && size > min) { size -= 2; x.font = `${size}px ${FONT}`; }
   return size;
 }
 
-// b: { text, sub?, marks?: ['경', '축'], color }
-function bannerTexture(b) {
+// the title as big as the cloth allows, its letters spread to fill the width (as the 1997 banners are lettered)
+function title(x, text, cx, cy, size, maxW, fill = 0.9) {
+  fitFont(x, text, size, maxW);
+  const w = x.measureText(text).width;
+  const chars = [...text];
+  if (w > maxW * fill || chars.length < 2) { x.fillText(text, cx, cy); return; }
+  const ws = chars.map((ch) => x.measureText(ch).width);
+  const gap = (maxW * fill - w) / (chars.length - 1);
+  let px = cx - (maxW * fill) / 2;
+  x.textAlign = 'left';
+  chars.forEach((ch, i) => { x.fillText(ch, px, cy); px += ws[i] + gap; });
+  x.textAlign = 'center';
+}
+
+// b: { text, sub?, marks?: ['경', '축'], color }; H: canvas height for a 2048 px wide strip (the cloth's aspect)
+function bannerTexture(b, H = 160) {
   const st = BANNER_STYLE[b.color] || BANNER_STYLE.white;
   const c = document.createElement('canvas');
-  c.width = 2048; c.height = 192;
+  c.width = 2048; c.height = H;
   const x = c.getContext('2d');
-  const W = c.width, H = c.height;
+  const W = c.width;
+  const e = Math.max(4, Math.round(H * 0.035));
   x.fillStyle = st.bg; x.fillRect(0, 0, W, H);
-  x.fillStyle = st.edge; x.fillRect(0, 0, W, 8); x.fillRect(0, H - 8, W, 8);
+  x.fillStyle = st.edge; x.fillRect(0, 0, W, e); x.fillRect(0, H - e, W, e);
   const marks = b.marks || null;
-  const padX = marks ? 230 : 70;
-  const bandH = st.band ? (b.color === 'white_yellow' ? 34 : 18) : 0;
-  if (bandH) { x.fillStyle = st.band; x.fillRect(padX - 30, H - 8 - bandH, W - 2 * (padX - 30), bandH); }
+  const R = H * 0.34;
+  const padX = marks ? H * 0.62 + R + H * 0.3 : H * 0.4;
+  const yellow = b.color === 'white_yellow';
+  const bandH = st.band ? Math.round(H * (yellow ? 0.24 : 0.16)) : 0;
+  const band0 = H - e - bandH;
+  if (bandH) { x.fillStyle = st.band; x.fillRect(padX - H * 0.2, band0, W - 2 * (padX - H * 0.2), bandH); }
   x.textAlign = 'center'; x.textBaseline = 'middle';
-  let mainY = (H - bandH) / 2 + 6;
-  if (b.sub && b.color !== 'white_yellow') {
-    // small line above the main text (who is holding the event)
-    fitFont(x, b.sub, 40, W * 0.55);
-    x.fillStyle = st.fg; x.fillText(b.sub, W / 2, 34);
-    mainY = 34 + (H - bandH - 34) / 2 + 12;
-  }
-  const big = b.sub && b.color === 'white_yellow' ? 96 : 112;
-  fitFont(x, b.text, big, W - 2 * padX);
   x.fillStyle = st.fg;
-  x.fillText(b.text, W / 2, b.sub && b.color === 'white_yellow' ? mainY - 22 : mainY);
-  if (b.sub && b.color === 'white_yellow') {
-    fitFont(x, b.sub, 40, W * 0.6);
-    x.fillStyle = st.fg; x.fillText(b.sub, W / 2, mainY + 42);
+  if (b.sub && !yellow) {
+    // a small line over the main text (who holds the event), as on the photo's front banner
+    fitFont(x, b.sub, H * 0.17, W * 0.5);
+    x.fillText(b.sub, W / 2, e + H * 0.11);
+    const top = e + H * 0.21;
+    title(x, b.text, W / 2, (top + band0) / 2 + H * 0.03, (band0 - top) * 1.05, W - 2 * padX, 0.97);
+  } else if (b.sub && yellow) {
+    // big title, the fields below it in smaller print, then the yellow strip
+    title(x, b.text, W / 2, e + H * 0.27, H * 0.5, W - 2 * padX);
+    fitFont(x, b.sub, H * 0.15, W * 0.6);
+    x.fillText(b.sub, W / 2, e + H * 0.6);
+  } else {
+    title(x, b.text, W / 2, (e + band0) / 2 + H * 0.03, (band0 - e) * 0.8, W - 2 * padX);
   }
-  if (bandH > 20 && st.bandFg) {
-    x.font = `22px ${FONT}`; x.fillStyle = st.bandFg;
-    x.fillText('일시 · 장소 · 주최  연세대학교', W / 2, H - 8 - bandH / 2 + 1);
+  if (bandH && st.bandFg) {
+    fitFont(x, '일시 · 장소 · 주최  연세대학교', bandH * 0.62, W * 0.5, 8);
+    x.fillStyle = st.bandFg;
+    x.fillText('일시 · 장소 · 주최  연세대학교', W / 2, band0 + bandH / 2 + 1);
   }
   if (marks) {
     // red circles with a white character at both ends (경 … 축)
     marks.forEach((m, i) => {
-      const cx = i ? W - 120 : 120, cy = H / 2;
-      x.fillStyle = '#d0232a'; x.beginPath(); x.arc(cx, cy, 66, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#ffffff'; x.font = `92px ${FONT}`; x.fillText(m, cx, cy + 6);
+      const cx = i ? W - H * 0.62 : H * 0.62, cy = H / 2;
+      x.fillStyle = '#d0232a'; x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#ffffff'; x.font = `${Math.round(R * 1.35)}px ${FONT}`; x.fillText(m, cx, cy + R * 0.08);
     });
   }
   // cloth wrinkles
   const g = x.createLinearGradient(0, 0, W, 0);
-  for (let i = 0; i <= 12; i++) g.addColorStop(i / 12, `rgba(0,0,0,${i % 2 ? 0.0 : 0.07})`);
+  for (let i = 0; i <= 12; i++) g.addColorStop(i / 12, `rgba(0,0,0,${i % 2 ? 0.0 : 0.06})`);
   x.fillStyle = g; x.fillRect(0, 0, W, H);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -119,41 +142,66 @@ function bannerTexture(b) {
   return t;
 }
 
-// banners can carry per-season texts ({seasons: {autumn: {text, color}}}): group.userData.setSeason swaps them
-export function makeBanners(banners, lib, groundAt) {
+// a thin rope between two points (three coords)
+const ROPE_GEO = new THREE.CylinderGeometry(0.012, 0.012, 1, 4, 1, true).translate(0, 0.5, 0);
+const _up = new THREE.Vector3(0, 1, 0);
+function rope(P, Q, mat) {
+  const d = Q.clone().sub(P);
+  const m = new THREE.Mesh(ROPE_GEO, mat);
+  m.position.copy(P);
+  m.scale.set(1, d.length(), 1);
+  m.quaternion.setFromUnitVectors(_up, d.normalize());
+  return m;
+}
+
+// banners can carry per-season texts ({seasons: {autumn: {text, color}}}): group.userData.setSeason swaps them.
+// b.a / b.b: top corners of the east / west end [x, y, z] (campus frame), b.depth: cloth depth, b.ties: where the
+// ropes of the east / west end are tied (a ginkgo trunk or a lamp post)
+export function makeBanners(banners, lib) {
   const group = new THREE.Group();
   group.name = 'banners';
   const cloths = [];
-  const poleMat = lib.get('metal_dark');
-  const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 6.6, 8);
+  const ropeMat = new THREE.MeshStandardMaterial({ color: 0xd9d5c9, roughness: 0.9 });
+  const V = (p) => new THREE.Vector3(p[0], p[2], -p[1]);
   for (const b of banners) {
-    const g = new THREE.Group();      // one banner (poles + cloth): hidden outside its season when it has `only`
+    const g = new THREE.Group();      // one banner (cloth + ropes): hidden outside its season when it has `only`
     group.add(g);
-    const A = new THREE.Vector3(b.a[0], 0, -b.a[1]), B = new THREE.Vector3(b.b[0], 0, -b.b[1]);
-    A.y = groundAt(b.a[0], b.a[1]); B.y = groundAt(b.b[0], b.b[1]);
-    for (const P of [A, B]) {
-      const pole = new THREE.Mesh(poleGeo, poleMat);
-      pole.position.set(P.x, P.y + 3.3, P.z);
-      pole.castShadow = true;
-      g.add(pole);
+    const A = V(b.a), B = V(b.b);     // east, west (top corners)
+    const dep = b.depth || 0.9;
+    const span = new THREE.Vector3().subVectors(A, B);
+    const len = Math.hypot(span.x, span.z);
+    // towards the gate (south): the side the text reads from
+    const nrm = new THREE.Vector3(-span.z, 0, span.x).normalize();
+    const N = 24;
+    const pos = [], uv = [], idx = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const p = B.clone().lerp(A, t);
+      p.y -= Math.sin(t * Math.PI) * 0.07;                 // the top hangs a little between the ties
+      p.addScaledVector(nrm, Math.sin(t * Math.PI * 3) * 0.04);
+      pos.push(p.x, p.y, p.z, p.x, p.y - dep, p.z);
+      uv.push(t, 1, t, 0);
+      if (i < N) { const k = 2 * i; idx.push(k, k + 1, k + 2, k + 2, k + 1, k + 3); }
     }
-    const len = A.distanceTo(B) - 0.2;
-    const geo = new THREE.PlaneGeometry(len, 1.35, 24, 1);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const u = pos.getX(i) / len + 0.5;
-      pos.setY(i, pos.getY(i) - Math.sin(u * Math.PI) * 0.35);
-      pos.setZ(i, Math.sin(u * Math.PI * 3) * 0.04);
-    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
-    cloths.push({ b, mat, g, key: null });
+    const texH = Math.max(96, Math.min(256, Math.round(2048 * dep / len)));
+    cloths.push({ b, mat, g, key: null, texH });
     const m = new THREE.Mesh(geo, mat);
-    const mid = A.clone().add(B).multiplyScalar(0.5);
-    m.position.set(mid.x, Math.max(A.y, B.y) + 5.6, mid.z);
-    m.rotation.y = -Math.atan2(A.z - B.z, A.x - B.x);   // readable from the gate side
     m.castShadow = true;
     g.add(m);
+    // two ropes from each end (top and bottom corner) to its tie
+    const ties = b.ties || [];
+    [[A, ties[0]], [B, ties[1]]].forEach(([P, tie]) => {
+      if (!tie) return;
+      const T = V(tie);
+      g.add(rope(P, T, ropeMat));
+      g.add(rope(P.clone().setY(P.y - dep), T, ropeMat));
+    });
   }
   group.userData.setSeason = (season) => {
     for (const c of cloths) {
@@ -163,7 +211,7 @@ export function makeBanners(banners, lib, groundAt) {
       if (key === c.key) continue;
       c.key = key;
       c.mat.map?.dispose();
-      c.mat.map = bannerTexture(spec);
+      c.mat.map = bannerTexture(spec, c.texH);
       c.mat.needsUpdate = true;
     }
   };

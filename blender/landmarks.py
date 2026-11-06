@@ -321,15 +321,39 @@ def centennial():
     c = (3.8, -207.6)            # drum centre
     R, HD = 25.9, 19.5           # drum radius / top
     seg = 96
+    # the dark porch (1997 photo, back-projected onto the podium's 백양로 face with the photo's camera): pitch black
+    # from ~3 m to ~46 m south of the north-west corner, up under the drum, whose ring overhangs it.  The podium wall
+    # steps back 5 m there; the podium roof runs on over the recess, and the drum stands on the podium roof
+    PS0, PS1, PD = 3.0, 46.0, 5.0
+    A_, B_ = Vector(fp[3]), Vector(fp[4])          # the 백양로 (west) face, north to south
+    tw = (B_ - A_).normalized()
+    nw = Vector((-tw.y, tw.x))                     # into the building
+    notch = [A_ + tw * PS0, A_ + tw * PS0 + nw * PD, A_ + tw * PS1 + nw * PD, A_ + tw * PS1]
+    fpn = fp[:4] + [(p.x, p.y) for p in notch] + fp[4:]
     # podium
     mb.prism(offset_poly(fp, 0.3), z0 - 4, z0 + 0.4, 'stone_granite', 'stone_granite')
-    mb.prism(fp, z0 + 0.4, z0 + HP, 'stone_ashlar', 'roof_flat')
+    for i in range(len(fpn)):
+        p, q = fpn[i], fpn[(i + 1) % len(fpn)]
+        inner = 4 <= i <= 6                          # the recess's two sides and its back
+        mb.face([(p[0], p[1], z0 + 0.4), (q[0], q[1], z0 + 0.4), (q[0], q[1], z0 + HP), (p[0], p[1], z0 + HP)],
+                'trim_black' if inner else 'stone_ashlar')
+    mb.face([(p[0], p[1], z0 + HP) for p in fp], 'roof_flat')
+    mb.face([(p.x, p.y, z0 + HP - 0.01) for p in notch], 'trim_black')                # the porch ceiling
     for zz in (3.2, 6.0):
-        mb.prism(offset_poly(fp, 0.04), z0 + zz, z0 + zz + 0.14, 'concrete_dark')
+        for i in range(len(fpn)):
+            if 4 <= i <= 6:
+                continue
+            p, q = Vector(fpn[i]), Vector(fpn[(i + 1) % len(fpn)])
+            d = (q - p).normalized()
+            o = Vector((d.y, -d.x)) * 0.04
+            mb.face([(*(p + o), z0 + zz), (*(q + o), z0 + zz), (*(q + o), z0 + zz + 0.14), (*(p + o), z0 + zz + 0.14)],
+                    'concrete_dark')
     mb.prism(offset_poly(fp, 0.12), z0 + HP, z0 + HP + 0.9, 'stone_ashlar', 'stone_ashlar')
-    # drum with incised horizontal joints above the podium
+    # drum with incised horizontal joints above the podium; where it overhangs the podium its underside is in shadow
     joints = [HP + 0.9 + k * 3.0 for k in range(1, 4)]
-    z = z0 + 0.4
+    z = z0 + HP
+    mb.cylinder(c, R, z0 + HP - 0.02, z0 + HP, 'concrete_dark', seg=seg, cap_top=False, cap_bot=True,
+                mat_cap='trim_black')
     for zj in joints + [HD - 1.2]:
         mb.cylinder(c, R, z, z0 + zj, 'stone_ashlar', seg=seg, cap_top=False)
         mb.cylinder(c, R - 0.1, z0 + zj, z0 + zj + 0.12, 'concrete_dark', seg=seg, cap_top=False)
@@ -349,27 +373,20 @@ def centennial():
     sh.box((0, 0, HD + 6.5 + 0.45), (19.4, 12.4, 0.9), 'stone_ashlar', skip=('bottom',))
     sh.face([(-3.0, -6.03, HD + 3.0), (3.0, -6.03, HD + 3.0), (3.0, -6.03, HD + 4.2), (-3.0, -6.03, HD + 4.2)], 'glass')
     sh.box((7.0, 3.0, HD + 8.0), (3.0, 3.0, 2.2), 'concrete', mats={'top': 'roof_flat'})
-    # deep dark portal in the podium's 백양로 (west) face, framed by projecting stone jambs and a lintel
-    a, bb = Vector((-11.05, -181.26)), Vector((-28.82, -256.68))
-    P, Le, t, n = edge_P(tuple(a), tuple(bb), z0)
-    s0, s1, zt, dep = Le * 0.5, Le * 0.5 + 17.0, 5.0, 1.4
-    mb.quad(P(s0, 0.4, 0.03), P(s1, 0.4, 0.03), P(s1, zt, 0.03), P(s0, zt, 0.03), 'glass')
-    for k in range(1, 6):          # mullions deep in the shadow
-        sm = s0 + (s1 - s0) * k / 6
-        mb.quad(P(sm - 0.08, 0.4, 0.05), P(sm + 0.08, 0.4, 0.05), P(sm + 0.08, zt, 0.05), P(sm - 0.08, zt, 0.05), 'frame_dark')
-    for sj in (s0, s1):
-        w = 1.1 if sj == s0 else -1.1
-        mb.quad(P(sj, 0.4, 0), P(sj, 0.4, dep), P(sj, zt + 1.2, dep), P(sj, zt + 1.2, 0), 'stone_ashlar')
-        mb.quad(P(sj - w, 0.4, dep), P(sj - w, 0.4, 0), P(sj - w, zt + 1.2, 0), P(sj - w, zt + 1.2, dep), 'stone_ashlar')
-        mb.quad(P(sj, 0.4, dep), P(sj - w, 0.4, dep), P(sj - w, zt + 1.2, dep), P(sj, zt + 1.2, dep), 'stone_ashlar')
-    mb.quad(P(s0 - 1.1, zt, dep), P(s1 + 1.1, zt, dep), P(s1 + 1.1, zt + 1.2, dep), P(s0 - 1.1, zt + 1.2, dep), 'stone_ashlar')
-    mb.quad(P(s0 - 1.1, zt, 0), P(s1 + 1.1, zt, 0), P(s1 + 1.1, zt, dep), P(s0 - 1.1, zt, dep), 'concrete_dark')
-    mb.quad(P(s0 - 1.1, zt + 1.2, dep), P(s1 + 1.1, zt + 1.2, dep), P(s1 + 1.1, zt + 1.2, 0), P(s0 - 1.1, zt + 1.2, 0), 'stone_ashlar')
-    # granite steps down to the forecourt
+    # in the porch: dark glass doors and their frames at the back, granite steps down from its floor to the forecourt
+    P, Le, t, n = edge_P(tuple(A_), tuple(B_), z0)              # d < 0: into the building
+    zt = HP - 1.4
+    mb.quad(P(PS0 + 0.3, 0.4, -PD + 0.03), P(PS1 - 0.3, 0.4, -PD + 0.03), P(PS1 - 0.3, zt, -PD + 0.03),
+            P(PS0 + 0.3, zt, -PD + 0.03), 'glass')
+    for k in range(1, 15):
+        sm = PS0 + (PS1 - PS0) * k / 15
+        mb.quad(P(sm - 0.08, 0.4, -PD + 0.05), P(sm + 0.08, 0.4, -PD + 0.05), P(sm + 0.08, zt, -PD + 0.05),
+                P(sm - 0.08, zt, -PD + 0.05), 'frame_dark')
+    mb.quad(P(PS0 + 0.3, zt, -PD + 0.05), P(PS1 - 0.3, zt, -PD + 0.05), P(PS1 - 0.3, zt + 0.2, -PD + 0.05),
+            P(PS0 + 0.3, zt + 0.2, -PD + 0.05), 'frame_dark')
     for k in range(3):
-        q = [P(s0 - 1.5, 0.4 - k * 0.15, dep + 0.4 + k * 0.6), P(s1 + 1.5, 0.4 - k * 0.15, dep + 0.4 + k * 0.6)]
-        mb.quad(P(s0 - 1.5, 0.4 - k * 0.15, dep + k * 0.6), P(s1 + 1.5, 0.4 - k * 0.15, dep + k * 0.6),
-                q[1], q[0], 'stone_granite')
+        q = [P(PS0, 0.4 - k * 0.15, 0.4 + k * 0.6), P(PS1, 0.4 - k * 0.15, 0.4 + k * 0.6)]
+        mb.quad(P(PS0, 0.4 - k * 0.15, k * 0.6), P(PS1, 0.4 - k * 0.15, k * 0.6), q[1], q[0], 'stone_granite')
     return [mb, sh]
 
 
@@ -1242,7 +1259,10 @@ def engineering():
     body = rect(L, W)
     mb.prism(offset_poly(body, 0.2), -4, 0.4, 'stone_granite')
     st = dict(generic.STYLE['modern'])
-    st.update(wall='plaster_white', alt='plaster_white', ww=0.86, bay=3.0, sill=1.05, head=0.5, mull=2)
+    # windows as in the 1997 aerial photo (reference/1997_백양로_항공사진.jpg): five rows on the 백양로 front, 14 wide
+    # sliding windows a row across the 65 m (a 4.7 m bay, narrow piers between them), and deep plain spandrels: the
+    # glass is under half the storey height
+    st.update(wall='plaster_white', alt='plaster_white', ww=0.88, bay=L / 14.0, sill=1.0, head=1.05, mull=1)
     for i in range(4):
         a, bb = body[i], body[(i + 1) % 4]
         P, Le, t, n = edge_P(a, bb)

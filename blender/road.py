@@ -50,6 +50,9 @@ def build():
     crossings = list(R.get('crossings', []))
     gaps = R.get('gaps', [])
     bump = R.get('bump')
+    # side-road mouths: on that side the verge, sidewalk and planting strip stop between s0 and s1 and the asphalt
+    # runs flush out to the terrain; their corners at the carriageway are rounded (radius r0 / r1)
+    mouths = [tuple(m) for m in R.get('mouths', [])]
     frames = []
     for k, (s, p) in enumerate(samples):
         q0 = samples[max(0, k - 1)][1]
@@ -70,12 +73,96 @@ def build():
     def in_gap(s, side):
         return any(sd == side and abs(s - g) < hw for g, sd, hw in gaps)
 
+    def fillet(o, r):
+        # how far the corner of radius r cuts back along the road at offset o
+        u = o - e_lane
+        return r - math.sqrt(max(0.0, r * r - (r - u) ** 2)) if 0 <= u < r else (r if u < 0 else 0.0)
+
+    def cut(m, o):
+        # the stretch [lo, hi] of road (arc length) where nothing stands at offset o
+        sd, s0, s1, r0, r1 = m
+        return s0 - fillet(o, r0), s1 + fillet(o, r1)
+
+    def mouth_at(sa, sb, side):
+        for m in mouths:
+            if m[0] == side and sb > m[1] - m[3] - 0.01 and sa < m[2] + m[4] + 0.01:
+                return m
+        return None
+
+    def mouth_segment(a, b, side, m):
+        """one 2 m step of the road beside a mouth: every band of the cross-section clipped to where it stands"""
+        sa, sb = a[0], b[0]
+        sgn = side
+
+        def P(s, off, dz):
+            t = (s - sa) / (sb - sa)
+            q = a[1].lerp(b[1], t) + a[3].lerp(b[3], t) * (off * sgn)
+            return (q.x, q.y, a[4] + (b[4] - a[4]) * t + dz)
+
+        def quad(q):
+            mb.face(q if side > 0 else [q[1], q[0], q[3], q[2]], q_mat[0])
+
+        q_mat = [None]
+        # (o0, o1, z, mat) bands standing beside the road, as in the plain cross-section
+        bands = [(e_lane, e_curb, VZ, 'curb'), (e_curb, e_verge - 0.2, VZ, 'dirt'), (e_verge - 0.2, e_verge, VZ, 'curb'),
+                 (e_verge, e_walk, WZ, 'pavers'), (e_walk, e_walk + 0.18, WZ + 0.05, 'curb'), (e_walk + 0.18, e_strip, WZ, 'dirt')]
+        for o0, o1, z, mat in bands:
+            k = max(1, int(math.ceil((o1 - o0) / 0.4)))
+            for i in range(k):
+                p0, p1 = o0 + (o1 - o0) * i / k, o0 + (o1 - o0) * (i + 1) / k
+                (l0, h0), (l1, h1) = cut(m, p0), cut(m, p1)
+                for (u0, v0), (u1, v1), edge in (((sa, min(sb, l0)), (sa, min(sb, l1)), 'end'),
+                                                 ((max(sa, h0), sb), (max(sa, h1), sb), 'start')):
+                    if u0 >= v0 - 1e-4 and u1 >= v1 - 1e-4:
+                        continue
+                    v0, v1 = max(u0, v0), max(u1, v1)
+                    q_mat[0] = mat
+                    quad([P(u0, p0, z), P(v0, p0, z), P(v1, p1, z), P(u1, p1, z)])
+                    # the kerb face where the band stops, towards the mouth
+                    e0, e1 = (v0, v1) if edge == 'end' else (u0, u1)
+                    if sa < e0 < sb or sa < e1 < sb:
+                        q_mat[0] = 'curb'
+                        f = [P(e0, p0, 0), P(e1, p1, 0), P(e1, p1, z), P(e0, p0, z)]
+                        quad(f if edge == 'end' else [f[1], f[0], f[3], f[2]])
+        # kerbs along the road (carriageway edge, verge, strip edges), where they stand; f faces the centre line
+        for off, z0_, z1_, outward in ((e_lane, 0, VZ, False), (e_verge, WZ, VZ, True), (e_walk, WZ, WZ + 0.05, False),
+                                       (e_strip, -0.8, WZ, True)):
+            lo, hi = cut(m, off)
+            for u, v in ((sa, min(sb, lo)), (max(sa, hi), sb)):
+                if v - u > 1e-3:
+                    q_mat[0] = 'curb'
+                    f = [P(u, off, z0_), P(v, off, z0_), P(v, off, z1_), P(u, off, z1_)]
+                    quad([f[1], f[0], f[3], f[2]] if outward else f)
+        # the flush asphalt of the mouth, out past the strip onto the terrain's own asphalt, with a skirt beneath
+        k = int(math.ceil((e_strip + 0.6 - e_lane) / 0.4))
+        for i in range(k):
+            p0, p1 = e_lane + (e_strip + 0.6 - e_lane) * i / k, e_lane + (e_strip + 0.6 - e_lane) * (i + 1) / k
+            (l0, h0), (l1, h1) = cut(m, p0), cut(m, p1)
+            u0, v0, u1, v1 = max(sa, l0), min(sb, h0), max(sa, l1), min(sb, h1)
+            if v0 - u0 < 1e-4 and v1 - u1 < 1e-4:
+                continue
+            v0, v1 = max(u0, v0), max(u1, v1)
+            q_mat[0] = 'asphalt'
+            quad([P(u0, p0, 0), P(v0, p0, 0), P(v1, p1, 0), P(u1, p1, 0)])
+        lo, hi = cut(m, e_strip + 0.6)
+        u, v = max(sa, lo), min(sb, hi)
+        if v - u > 1e-3:
+            q_mat[0] = 'asphalt'
+            f = [P(u, e_strip + 0.6, -0.8), P(v, e_strip + 0.6, -0.8), P(v, e_strip + 0.6, 0), P(u, e_strip + 0.6, 0)]
+            quad([f[1], f[0], f[3], f[2]])
+
     for a, b in zip(frames[:-1], frames[1:]):
         sm = (a[0] + b[0]) / 2
         cross = in_cross(sm)
         for side in (-1, 1):
             o = lambda v: v * side
             flip = side < 0
+            m_ = mouth_at(a[0], b[0], side)
+            if m_ is not None:
+                mb.face([pt(a, o(0), 0), pt(b, o(0), 0), pt(b, o(e_lane), 0), pt(a, o(e_lane), 0)] if not flip else
+                        [pt(b, o(0), 0), pt(a, o(0), 0), pt(a, o(e_lane), 0), pt(b, o(e_lane), 0)], 'asphalt')
+                mouth_segment(a, b, side, m_)
+                continue
 
             def band(o0, o1, z0, z1, mat):
                 q = [pt(a, o(o0), z0), pt(b, o(o0), z0), pt(b, o(o1), z1), pt(a, o(o1), z1)]
@@ -181,4 +268,19 @@ def build():
             for i in range(4):
                 a0, a1, b1, b0 = dia[i], dia[(i + 1) % 4], inner[(i + 1) % 4], inner[i]
                 marks.face([(v.x, v.y, h0 + 0.012) for v in (b0, b1, a1, a0)], 'paint_white')
+    # lane paint on the asphalt apron the side road opens into (draped on the terrain heights from build_campus)
+    for ln in R.get('apron_paint', []):
+        pts = [Vector(p) for p in ln['pts']]
+        dash = ln['kind'].endswith('_dash')
+        acc = 0.0
+        for p, q in zip(pts[:-1], pts[1:]):
+            d = (q - p)
+            seg = d.xy.length
+            mid = acc + seg / 2
+            acc += seg
+            if dash and (mid % 6.5) > 2.5:          # 2.5 m dashes, 4 m apart
+                continue
+            n = Vector((-d.y, d.x, 0)).normalized() * 0.075
+            marks.face([tuple(p - n + Vector((0, 0, 0.05))), tuple(q - n + Vector((0, 0, 0.05))),
+                        tuple(q + n + Vector((0, 0, 0.05))), tuple(p + n + Vector((0, 0, 0.05)))], 'paint_yellow')
     return [mb, marks], crossings

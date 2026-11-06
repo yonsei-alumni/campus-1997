@@ -246,7 +246,7 @@ async function main() {
       colliders.addCircle(S.court.pos[0] + Math.cos(S.court.rot) * d, S.court.pos[1] + Math.sin(S.court.rot) * d, 0.3);
     }
   }
-  const banners = makeBanners(campus.banners, lib, groundAt);
+  const banners = makeBanners(campus.banners, lib);
   scene.add(banners);
   scene.add(makeBoard(campus.landmarks.find((l) => l.id === 'events'), groundAt));
   // Quaternius CC0 people (blender/characters.py)
