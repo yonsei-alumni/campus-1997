@@ -568,7 +568,8 @@ def walk_mesh():
 
 
 def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8, tread=0.36, flare=0.35,
-                 cheek=0.0, cheek_mat=None, newel=False, rail=False, ground=-1.2, zbot=-0.15, gfn=None, maxrise=0.18):
+                 cheek=0.0, cheek_mat=None, newel=False, rail=False, ground=-1.2, zbot=-0.15, gfn=None, maxrise=0.18,
+                 rail_mat='metal_dark'):
     """A straight entrance flight in a builder's local frame, going down towards -y from the wall at y_face.
     zl: top of the landing in front of the door; n risers (rise = (zl - ground_level) / n, ground_level ~ -0.15);
     each tread is a solid block down to `ground`, the lowest ones a little wider (flare) like the real granite steps.
@@ -626,10 +627,10 @@ def stair_flight(mb, x, y_face, width, zl, n=8, mat='stone_granite', landing=1.8
             for j in range(nr):
                 t0, t1 = j / nr, (j + 1) / nr
                 mb.quad((xr - 0.025, yb + (ya - yb) * t0, hb + (ha - hb) * t0), (xr + 0.025, yb + (ya - yb) * t0, hb + (ha - hb) * t0),
-                        (xr + 0.025, yb + (ya - yb) * t1, hb + (ha - hb) * t1), (xr - 0.025, yb + (ya - yb) * t1, hb + (ha - hb) * t1), 'metal_dark')
+                        (xr + 0.025, yb + (ya - yb) * t1, hb + (ha - hb) * t1), (xr - 0.025, yb + (ya - yb) * t1, hb + (ha - hb) * t1), rail_mat)
             for yy in (yb, ya):
                 zz = hb + (ha - hb) * ((yy - yb) / (ya - yb))
-                mb.box((xr, yy, zz - 0.45), (0.06, 0.06, 0.9), 'metal_dark')
+                mb.box((xr, yy, zz - 0.45), (0.06, 0.06, 0.9), rail_mat)
     note_entrance(mb, width / 2 + flare + cheek + 0.6, y_face + 1.2, y_foot - 1.0, x)
     return y_foot
 
@@ -776,10 +777,10 @@ def vestibule(mb, P, s0, s1, zf, zc, d0, depth, lights=2):
                 P(sm - 0.35, zc - 0.03, dd + 0.35), 'hall_light')
 
 
-def shopfront(mb, P, s0, s1, z0, z1, d, bays=6, door_h=2.35):
+def shopfront(mb, P, s0, s1, z0, z1, d, bays=6, door_h=2.35, frame='frame_silver'):
     """A modern aluminium-framed glass screen filling [s0, s1] x [z0, z1] at depth d of a wall P: fixed lights, a pair
     of glass doors in the middle bay(s), a transom bar over them (대우관's door under its podium arch)."""
-    G, F = 'glass_door', 'frame_silver'
+    G, F = 'glass_door', frame
     mb.quad(P(s0, z0, d), P(s1, z0, d), P(s1, z1, d), P(s0, z1, d), G)
     f0, f1 = d, d + 0.08
     zt = z0 + door_h
@@ -2335,7 +2336,210 @@ def yongjae():
     return out
 
 
+# ============================================================================= 정구장 (tennis courts)
+def tennis():
+    """The two fenced blocks of courts south-west of 공학관 (tools/build_campus.py TENNIS; 1990/1995 maps no. 47, the
+    1995 aerial photo): red clay to the west, green hard courts east of them, each block a level pad on the slope with
+    a low kerb, three courts side by side (doubles courts 10.97 x 23.77 m with their singles lines), nets on posts, and
+    a 3.6 m chain-link fence on steel posts round the block."""
+    T = CAMPUS.get('statues', {}).get('tennis')
+    if not T:
+        return []
+    out = []
+    for k, pd in enumerate(T['pads']):
+        mb = MeshBuilder('lm_tennis_%d' % k)
+        mb.xf = local_frame(T['o'][0], T['o'][1], T['rot'], pd['h'])
+        (u0, u1), (v0, v1) = pd['u'], pd['v']
+        surf = 'court_clay' if pd['kind'] == 'clay' else 'court_hard'
+        z = 0.08
+        mb.box(((u0 + u1) / 2, (v0 + v1) / 2, (z - 1.5) / 2), (u1 - u0, v1 - v0, z + 1.5), surf, skip=('bottom',),
+               mats={'sides': 'concrete'})
+        mb.box(((u0 + u1) / 2, (v0 + v1) / 2, (z + 0.12 - 1.5) / 2), (u1 - u0 + 0.5, v1 - v0 + 0.5, z + 0.12 + 1.5),
+               'concrete', skip=('bottom', 'top'))                                           # kerb round the pad
+        lw = 0.05
+
+        def line(x0, y0, x1, y1):
+            dx, dy = x1 - x0, y1 - y0
+            n = math.hypot(dx, dy) or 1
+            ox, oy = -dy / n * lw / 2, dx / n * lw / 2
+            mb.face([(x0 + ox, y0 + oy, z + 0.01), (x0 - ox, y0 - oy, z + 0.01), (x1 - ox, y1 - oy, z + 0.01),
+                     (x1 + ox, y1 + oy, z + 0.01)], 'paint_white')
+        n_ = pd['courts']
+        cw = (u1 - u0) / n_
+        cy = (v0 + v1) / 2
+        for i in range(n_):
+            cx = u0 + cw * (i + 0.5)
+            hw, hs, hl, sv = 10.97 / 2, 8.23 / 2, 23.77 / 2, 6.40
+            for x in (-hw, -hs, hs, hw):
+                line(cx + x, cy - hl, cx + x, cy + hl)
+            for y in (-hl, hl):
+                line(cx - hw, cy + y, cx + hw, cy + y)
+            for y in (-sv, sv):
+                line(cx - hs, cy + y, cx + hs, cy + y)
+            line(cx, cy - sv, cx, cy + sv)
+            for y in (-hl, hl):                                       # centre marks
+                line(cx, cy + y, cx, cy + y + (0.1 if y < 0 else -0.1))
+            # the net: posts 0.914 m outside the doubles lines, the cord 1.07 m up sagging to 0.914 at the strap
+            px = hw + 0.914
+            for sg in (-1, 1):
+                mb.cylinder((cx + sg * px, cy), 0.04, z, z + 1.07, 'metal_green', seg=8)
+            for j in range(8):
+                xa, xb = -px + 2 * px * j / 8, -px + 2 * px * (j + 1) / 8
+                ha = 1.07 - 0.156 * (1 - (xa / px) ** 2)
+                hb = 1.07 - 0.156 * (1 - (xb / px) ** 2)
+                mb.face([(cx + xa, cy, z + 0.03), (cx + xb, cy, z + 0.03), (cx + xb, cy, z + hb - 0.06), (cx + xa, cy, z + ha - 0.06)], 'net_mesh')
+                mb.face([(cx + xa, cy, z + ha - 0.07), (cx + xb, cy, z + hb - 0.07), (cx + xb, cy, z + hb), (cx + xa, cy, z + ha)], 'paint_white')
+                mb.face([(cx + xa, cy, z + ha), (cx + xb, cy, z + hb), (cx + xb, cy, z + hb - 0.07), (cx + xa, cy, z + ha - 0.07)], 'paint_white')
+        # the fence: posts every 3 m round the pad, rails top and bottom, chain-link between
+        H = 3.6
+        ring = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+        for (xa, ya), (xb, yb) in zip(ring, ring[1:] + ring[:1]):
+            Ls = math.hypot(xb - xa, yb - ya)
+            m = max(1, int(round(Ls / 3.0)))
+            for j in range(m + 1):
+                x, y = xa + (xb - xa) * j / m, ya + (yb - ya) * j / m
+                if j < m:
+                    mb.cylinder((x, y), 0.045, z - 0.1, z + H, 'metal_green', seg=6)
+            for zz in (z + 0.1, z + H - 0.05):
+                mb.box(((xa + xb) / 2, (ya + yb) / 2, zz), (abs(xb - xa) + 0.05, abs(yb - ya) + 0.05, 0.05), 'metal_green')
+            mb.face([(xa, ya, z + 0.05), (xb, yb, z + 0.05), (xb, yb, z + H), (xa, ya, z + H)], 'fence_mesh')
+        out.append(mb)
+    return out
+
+
+# ============================================================================= 광복관 (법과대학)
+# 1997's 광복관 was neither the red-brick block the generic builder made of it nor today's six-storey granite hall (its
+# 2000s rebuilding, reference/학교연혁_광복관.jpg).  The 1990 and 1995 campus maps (reference/1990_캠퍼스_지도.png and
+# 1995_캠퍼스_지도.jpg, no. 7) draw an L of three storeys under a hipped roof, the long south front in rows of square
+# windows; the 1995 aerial photo (reference/1995_캠퍼스_항공사진_남쪽에서.jpg) shows it pale behind the library under a grey
+# hipped roof, the north arm a storey higher where it meets the south one, a chimney there.  The 1996 graduation-album
+# photos of 경영학과 and 법학과 on its front steps (2022 재상봉 기념문집 pp. 194-195; reference/재상봉_기념집_고증.md) give the
+# front: speckled grey granite between flat granite pilasters, the main floor raised over a half-sunk basement with
+# barred windows, three bays of bronze-framed glass doors and screens between the pilasters, a black lantern on each,
+# barred windows beside them, and a broad granite flight of ten or eleven risers the width of the three bays with
+# stainless steel handrails, a band of square lattice panels on the basement wall either side.  The door is where OSM's
+# walk and steps up from the library reach the south front, some 19 m from its west end.
+KB = dict(fh=3.7, bay=4.25, door_s=19.0, floors_s=3, floors_n=4, lift=1.75)
+
+
+def kwangbok():
+    b = bld(468614722)
+    fp = [Vector(p) for p in b['footprint']]
+    mb = MeshBuilder('lm_kwangbok')
+    tS = (fp[2] - fp[1]).normalized()
+    nS = Vector((tS.y, -tS.x))
+    tE = (fp[3] - fp[2]).normalized()
+    dS, wN = (fp[0] - fp[1]).length, (fp[3] - fp[4]).length
+    X, Y = fp[2] + tE * dS, fp[2] - tS * wN            # the south arm's hidden NE corner; where the north arm meets the front
+    F = KB['fh']
+    pd = fp[1] + tS * KB['door_s']
+    zm = min(ground(*(pd + nS * k + tS * u)) for k in (3.5, 7.0) for u in (-5.0, 0.0, 5.0)) + KB['lift']
+    zS, zN = zm + KB['floors_s'] * F, zm + KB['floors_n'] * F
+    WALL, PIL = 'granite_light', 'stone_granite'
+
+    def lantern(P, s, z, ang):
+        c = Vector(P(s, z, 0.44))
+        mb.box((c.x, c.y, z), (0.24, 0.24, 0.38), 'globe', rotz=ang)
+        for dz in (-0.21, 0.22):
+            mb.box((c.x, c.y, z + dz), (0.32, 0.32, 0.07), 'metal_dark', rotz=ang)
+        mb.box((c.x, c.y, z + 0.32), (0.1, 0.1, 0.14), 'metal_dark', rotz=ang)
+        k = Vector(P(s, z + 0.12, 0.3))
+        mb.box((k.x, k.y, z + 0.12), (0.05, 0.3, 0.05), 'metal_dark', rotz=ang)
+
+    def facade(a, b_, ztop, z_from=None, door=False, bars=False):
+        P, L, t, n = edge_P(a, b_)
+        ang = math.atan2(t.y, t.x)
+        nb = max(1, int(round(L / KB['bay'])))
+        bw = L / nb
+        z_lo = zm if z_from is None else z_from
+        k0 = max(0, min(nb - 3, int(round(KB['door_s'] / bw - 1.5)))) if door else -9
+        if z_from is None:
+            # the basement storey: granite down into the ground, a pale water table, low barred windows clear of it
+            flat_wall(mb, P, 0, L, zm - 5.0, zm - 0.3, PIL)
+            bar(mb, P, 0, zm - 0.15, L, zm - 0.15, 0.3, 0.0, 0.08, 'stone_trim', ends=True)
+            for k in range(nb):
+                sc = (k + 0.5) * bw
+                if door and k0 - 2 <= k <= k0 + 4:
+                    continue
+                w = bw * 0.46
+                if max(ground(*P(sc + u, 0, 1.0)[:2]) for u in (-w / 2, w / 2)) > zm - 1.6:
+                    continue
+                zb0, zb1 = zm - 1.45, zm - 0.55
+                mb.quad(P(sc - w / 2, zb0, 0.01), P(sc + w / 2, zb0, 0.01), P(sc + w / 2, zb1, 0.01), P(sc - w / 2, zb1, 0.01), 'glass')
+                for j in range(1, 9):
+                    s = sc - w / 2 + w * j / 9
+                    bar(mb, P, s, zb0, s, zb1, 0.025, 0.02, 0.05, 'metal_dark')
+            if door:
+                # square lattice panels on the basement wall either side of the flight
+                for s0_, s1_ in ((max(0.0, (k0 - 2) * bw), k0 * bw - 0.2), ((k0 + 3) * bw + 0.2, min(L, (k0 + 5) * bw))):
+                    za, zb = zm - 1.15, zm - 0.35
+                    m = max(1, int((s1_ - s0_) / 0.4))
+                    for j in range(m + 1):
+                        s = s0_ + (s1_ - s0_) * j / m
+                        bar(mb, P, s, za, s, zb, 0.06, 0.0, 0.05, 'stone_trim')
+                    for z in (za, (za + zb) / 2, zb):
+                        bar(mb, P, s0_, z, s1_, z, 0.06, 0.0, 0.05, 'stone_trim')
+        nfl = int(round((ztop - z_lo) / F))
+        for f in range(nfl):
+            zf = z_lo + f * F
+            for k in range(nb):
+                s0, s1 = k * bw, (k + 1) * bw
+                if f == 0 and k0 <= k < k0 + 3:
+                    continue
+                window_grid(mb, P, L, zf, 1, F, bw, WALL, ww=0.6, sill=0.95, head=0.75, depth=0.22, frame='frame_dark',
+                            mull=2, s_start=s0, s_end=s1)
+                if bars and f == 0 and z_from is None:
+                    w = bw * 0.6
+                    for j in range(1, 14):
+                        s = s0 + (bw - w) / 2 + w * j / 14
+                        bar(mb, P, s, zf + 0.95, s, zf + F - 0.75, 0.025, 0.02, 0.05, 'metal_dark')
+        if door:
+            for k in range(k0, k0 + 3):
+                s0, s1 = k * bw, (k + 1) * bw
+                o0, o1, zo = s0 + 0.42, s1 - 0.42, zm + 3.3
+                flat_wall(mb, P, s0, o0, zm, zm + F, WALL)
+                flat_wall(mb, P, o1, s1, zm, zm + F, WALL)
+                flat_wall(mb, P, o0, o1, zo, zm + F, WALL)
+                mb.quad(P(o1, zo, 0), P(o0, zo, 0), P(o0, zo, -0.4), P(o1, zo, -0.4), PIL)
+                mb.quad(P(o0, zm, -0.4), P(o0, zo, -0.4), P(o0, zo, 0), P(o0, zm, 0), PIL)
+                mb.quad(P(o1, zm, 0), P(o1, zo, 0), P(o1, zo, -0.4), P(o1, zm, -0.4), PIL)
+                shopfront(mb, P, o0, o1, zm, zo, -0.4, bays=3, door_h=2.45, frame='panel_bronze')
+                vestibule(mb, P, o0, o1, zm, zo, -0.42, 4.5, lights=2)
+            for k in range(k0, k0 + 4):
+                lantern(P, k * bw, zm + 2.75, ang)
+        # flat granite pilasters at the bay lines, a cornice under the eaves
+        for k in range(nb + 1):
+            s = min(max(k * bw, 0.35), L - 0.35)
+            bar(mb, P, s, (zm - 0.3) if z_from is None else z_from, s, ztop - 0.3, 0.7, 0.0, 0.2, PIL, ends=True)
+        bar(mb, P, 0, ztop - 0.22, L, ztop - 0.22, 0.44, 0.0, 0.34, 'stone_trim', ends=True)
+        if door:
+            # the flight: from the landing in front of the glass down to the forecourt, stainless rails both sides
+            sc = (k0 + 1.5) * bw
+            o = P(sc, zm, 0)
+            mb.xf = Matrix.Translation(Vector(o)) @ Matrix.Rotation(ang, 4, 'Z')
+            stair_flight(mb, 0.0, 0.0, 3 * bw - 0.3, 0.0, mat='stone_step', landing=2.4, tread=0.33, flare=0.0, rail=True,
+                         rail_mat='frame_silver', gfn=local_ground(mb), maxrise=0.165)
+            mb.xf = Matrix.Identity(4)
+
+    facade(fp[0], fp[1], zS)
+    facade(fp[1], Y, zS, door=True, bars=True)
+    facade(Y, fp[2], zN, bars=True)
+    facade(fp[2], fp[3], zN)
+    facade(fp[3], fp[4], zN)
+    facade(fp[4], fp[5], zN)
+    facade(fp[5], Y, zN, z_from=zS)               # the north arm's west wall over the south arm's roof
+    facade(fp[5], fp[0], zS)
+    # hipped grey roofs over the two arms (the north arm's, higher, takes in the corner), soffits under the eaves
+    for poly, z, rise in (([fp[1], fp[2], X, fp[0]], zS, 2.7), ([Y, fp[2], fp[3], fp[4]], zN, 3.2)):
+        hip_roof(mb, [tuple(p) for p in poly], z, rise, 'roof_slate', eave=0.55)
+        q = offset_poly([tuple(p) for p in poly], 0.55)
+        mb.face([(p[0], p[1], z) for p in q][::-1], 'stone_trim')
+    c = (fp[2] + Y) / 2 + tE * 6.0 - tS * 3.0                   # chimney
+    mb.box((c.x, c.y, zN + 2.4), (1.1, 0.8, 4.8), PIL, rotz=math.atan2(tS.y, tS.x))
+    return [mb]
+
+
 BUILDERS = {'library': library, 'union': union, 'centennial': centennial, 'underwood': underwood,
             'stimson': stimson, 'appenzeller': appenzeller, 'auditorium': auditorium, 'chapel': chapel,
             'engineering': engineering, 'hanok': hanok, 'yongjae': yongjae, 'none': lambda: [],
-            'daewoo': daewoo, 'daewoo_annex': daewoo_annex, 'yeonhui': yeonhui}
+            'daewoo': daewoo, 'daewoo_annex': daewoo_annex, 'yeonhui': yeonhui, 'kwangbok': kwangbok}

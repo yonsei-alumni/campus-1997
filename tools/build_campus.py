@@ -58,7 +58,7 @@ B = {
     1451926793: ('modern', 5, '제1공학관'), 1451926787: ('modern', 5, '제1공학관'),
     256932940: ('modern', 6, '제2공학관'),
     224955691: ('modern', 5, '제3공학관 (공사중)'), 324328471: ('white', 2, '별동연구동'),
-    222843398: ('white', 6, '과학관'), 468614722: ('brick', 3, '광복관'),
+    222843398: ('white', 6, '과학관'), 468614722: ('lm:kwangbok', 4, '광복관'),   # (blender/landmarks.py kwangbok)
     256933753: ('white', 5, '백양관'),          # (OSM: 경영학교실단) the old 상경대학 hall, 백양관 since 1996
     421415366: ('gym', 2, '체육관'), 421415365: ('white', 4, '체육교육관'),
     # humanities / north campus
@@ -269,6 +269,32 @@ if _inside.any():
     _soft = ndimage.gaussian_filter(ndimage.binary_dilation(_inside, iterations=1).astype(float), 1.0)
     Hn = Hn * (1 - _soft) + float(Hn[_inside].mean()) * _soft
 
+# --- 정구장 (tennis courts), 1997.  The 1990 and 1995 campus maps (reference/1990_캠퍼스_지도.png, 1995_캠퍼스_지도.jpg)
+# have 47 정구장 by the main road south-west of 공학관, and the 1995 aerial photo (reference/1995_캠퍼스_항공사진_남쪽에서.jpg)
+# shows two fenced blocks of courts there between the road's tree row and the engineering halls: red clay courts to the
+# west, green hard courts east of them, a little higher up the slope.  공학원 (2000s, left out) stands on them now, in
+# the block between the service roads that is empty in the game.  Sized from the photo against 백양로 (22 m from
+# planting strip to planting strip): ~50 m across each block; three courts each, their long axes up the slope.
+TENNIS = dict(o=[-222.0, -392.0], rot=math.radians(-13.0),
+              pads=[dict(kind='clay', u=[-64.0, -14.0], v=[8.0, 44.0], courts=3),
+                    dict(kind='hard', u=[-8.0, 43.0], v=[8.0, 44.0], courts=3)])
+
+
+def tennis_poly(pd, pad=0.0):
+    c_, s_ = math.cos(TENNIS['rot']), math.sin(TENNIS['rot'])
+    (u0, u1), (v0, v1) = pd['u'], pd['v']
+    return Polygon([(TENNIS['o'][0] + u * c_ - v * s_, TENNIS['o'][1] + u * s_ + v * c_)
+                    for u, v in ((u0 - pad, v0 - pad), (u1 + pad, v0 - pad), (u1 + pad, v1 + pad), (u0 - pad, v1 + pad))])
+
+
+for _pd in TENNIS['pads']:          # each block a level pad on the slope, banked into the ground round it
+    _inside = shapely.contains_xy(tennis_poly(_pd, 6.0), X, Y)        # (a 5 m grid cell past the kerb, or it pokes through)
+    _pd['h'] = round(float(Hn[shapely.contains_xy(tennis_poly(_pd), X, Y)].mean()), 2)
+    _soft = ndimage.gaussian_filter(ndimage.binary_dilation(_inside, iterations=1).astype(float), 1.0)
+    _soft[_inside] = 1.0
+    Hn = Hn * (1 - _soft) + _pd['h'] * _soft
+print('tennis pads', [p_['h'] for p_ in TENNIS['pads']])
+
 # --- old 노천극장 (1997): bowl carved into the hillside east of the stage
 AMPH = dict(cx=160.0, cy=163.0, arena_rx=18.0, arena_ry=14.0, rows=15, row_d=1.6, row_h=0.45,
             rot=math.radians(45))      # local -x (stage / open side) faces SW, downhill; seats climb toward 안산
@@ -352,6 +378,14 @@ FORECOURTS = [  # OSM way, outward front direction (None: the recess edge footpr
     (324328422, None, 30.0, dict(face=((-11.05, -181.26), (-28.82, -256.68)), max_half=40.0, blend=8.0, level='corner',
                                          inside=7.0)),              # (and under the 5 m deep porch)
 ]
+# 광복관 (blender/landmarks.py kwangbok): the 1996 album photos show a level gravel forecourt at the foot of its broad
+# flight (ten or eleven risers up to the raised main floor), where the 5 m grid had the slope from the west run
+# across the front, burying the west half of the flight.  Level the 28 m of front round the door (19 m along it).
+_kbp = list(footprint(ways[468614722]).exterior.coords)
+_kb0, _kb1 = np.array(_kbp[1]), np.array(_kbp[2])
+_kbt = (_kb1 - _kb0) / np.linalg.norm(_kb1 - _kb0)
+FORECOURTS.append((468614722, None, 12.0, dict(face=(tuple(_kb0 + _kbt * 5.0), tuple(_kb0 + _kbt * 33.0)), max_half=14.0,
+                                                blend=10.0, inside=1.0)))
 FIXED = np.zeros(X.shape, bool)       # grid nodes a later harmonic fill must keep: the level aprons themselves
 # 백주년기념관's low front block (issue #9).  In the 1997 aerial photo the hall's south-west corner is not the podium's
 # corner but a lower block standing out in front of it, its long face towards the camera (the south face) with a wide
@@ -1226,6 +1260,87 @@ for k in range(9):
     rr_ = FOUNTAIN['r'] + 9.5 + (k % 3) * 0.8
     shrubs.append(['azalea_red', round(_fx + rr_ * math.cos(a_), 2), round(_fy + rr_ * math.sin(a_), 2),
                    round(rng2.uniform(0.9, 1.1), 2), round(rng2.uniform(0, 6.28), 2)])
+# --- front doors of the procedural halls (blender/generic.py builds them).  Every hall had one, and the outlines alone
+# gave the generic halls none: walls of windows all round.  The 1996 graduation-album photos (2022 재상봉 기념문집,
+# 「25년 전 우리는」; reference/재상봉_기념집_고증.md) show what they were like: 과학관's and 백주년기념관's broad granite
+# flights with low side walls and steel handrails, 백주년기념관's and 음악관's aluminium-framed glass doors and screens
+# (음악관's under a deep canopy), 빌링슬리관's Tudor-arched door in its rubble wall under a stone hood.  Where: on the
+# face the walks lead to.  OSM marks no entrances here, but its footways end at the doors; so the door goes where a
+# walk comes closest, kept off the uphill side (where the ground stands above the floor the door would be buried)
+# and away from other buildings, and the trees and shrubs that had been scattered on its steps step aside.
+ENTRY_STYLES = ('modern', 'white', 'stone', 'brick', 'tile', 'stone_pale', 'gym', 'house')
+# where the photos say otherwise: 과학관's door is in the middle of its east wing's south front, over the courtyard
+# (1995 aerial photo: a broad flight up from the car park there; OSM's two short flights below it), three bays of
+# glass under a long canopy at the top of a wide granite flight with side walls (the 1996 album photos of 생물학과,
+# 생화학과 and 지질학과 on it); its walls cream, as in the aerial photo.  (point near the door, door options)
+ENTRY_AT = {222843398: ((-242.7, 13.8), dict(span=3, canopy=3.0))}
+_walks = [LineString(p_['pts']) for p_ in paths_out if len(p_['pts']) > 1] + [bline]
+_walk_u = unary_union(_walks)
+_bp_all = [Polygon(b_['footprint']) for b_ in buildings]
+ENTRY_ZONES = []
+
+
+def _entry(b, poly):
+    cs = list(poly.exterior.coords)[:-1]
+    if not Polygon(cs).exterior.is_ccw:
+        cs = cs[::-1]
+    best = None
+    others = [q for q in _bp_all if q is not poly and q.distance(poly) < 30]
+    for i in range(len(cs)):
+        (ax, ay), (bx_, by_) = cs[i], cs[(i + 1) % len(cs)]
+        Le = math.hypot(bx_ - ax, by_ - ay)
+        if Le < 5.5:
+            continue
+        tx, ty = (bx_ - ax) / Le, (by_ - ay) / Le
+        nx, ny = ty, -tx                                          # outward (CCW outline)
+        for s_ in np.arange(2.4, Le - 2.4 + 1e-6, 0.8):
+            px_, py_ = ax + tx * s_, ay + ty * s_
+            q = Point(px_ + nx * 3.0, py_ + ny * 3.0)
+            if poly.contains(q) or any(o.distance(q) < 3.0 for o in others):
+                continue
+            rise = max(ground_h(px_ + nx * k, py_ + ny * k) for k in (1.0, 3.0)) - b['base']
+            if rise > 0.7 and b['id'] not in ENTRY_AT:
+                continue
+            fall = b['base'] - ground_h(px_ + nx * 6.0, py_ + ny * 6.0)
+            # (a walk usually runs the length of a front, so the middle of the longest front it passes wins)
+            sc_ = min(_walk_u.distance(q), 12.0) + 0.25 * abs(s_ - Le / 2) - 0.04 * Le + 2.0 * max(0.0, rise) \
+                + 0.4 * max(0.0, fall - 1.8)
+            if b['id'] in ENTRY_AT:
+                sc_ = math.hypot(px_ - ENTRY_AT[b['id']][0][0], py_ - ENTRY_AT[b['id']][0][1])
+            if best is None or sc_ < best[0]:
+                best = (sc_, px_, py_, nx, ny)
+    return best
+
+
+n_entry = 0
+# 광복관's broad front flight (blender/landmarks.py kwangbok: three bays of glass 19 m along the south front)
+_kb = next(b_ for b_ in buildings if b_['id'] == 468614722)['footprint']
+_ka, _kb2 = np.array(_kb[1]), np.array(_kb[2])
+_kt = (_kb2 - _ka) / np.linalg.norm(_kb2 - _ka)
+_kn = np.array([_kt[1], -_kt[0]])
+_kc = _ka + _kt * 19.0
+ENTRY_ZONES.append(Polygon([tuple(_kc - _kt * 10), tuple(_kc + _kt * 10), tuple(_kc + _kt * 10 + _kn * 16), tuple(_kc - _kt * 10 + _kn * 16)]))
+for b, bp in zip(buildings, _bp_all):
+    if b['style'] not in ENTRY_STYLES:
+        continue
+    e_ = _entry(b, bp)
+    if not e_:
+        continue
+    _, px_, py_, nx, ny = e_
+    b['entry'] = dict(p=[round(px_, 2), round(py_, 2)], n=[round(nx, 4), round(ny, 4)], **ENTRY_AT.get(b['id'], (0, {}))[1])
+    hw_ = (3.4 if b['style'] in ('modern', 'gym') else 2.6) * b['entry'].get('span', 1)
+    tx, ty = -ny, nx                                              # along the wall
+    ENTRY_ZONES.append(Polygon([(px_ - tx * hw_, py_ - ty * hw_), (px_ + tx * hw_, py_ + ty * hw_),
+                                (px_ + tx * hw_ + nx * 8.0, py_ + ty * hw_ + ny * 8.0),
+                                (px_ - tx * hw_ + nx * 8.0, py_ - ty * hw_ + ny * 8.0)]))
+    n_entry += 1
+_ez = unary_union(ENTRY_ZONES + [tennis_poly(pd_, 2.5) for pd_ in TENNIS['pads']])     # (and off the tennis courts)
+_nt = len(trees)
+trees[N_ROWS:] = [t_ for t_ in trees[N_ROWS:] if not _ez.contains(Point(t_[1], t_[2]))]
+_ns = len(shrubs)
+shrubs = [s_ for s_ in shrubs if not _ez.contains(Point(s_[1], s_[2]))]
+print('hall doors', n_entry, '- trees moved off them', _nt - len(trees), 'shrubs', _ns - len(shrubs))
+
 # shrubs around building aprons
 for b, bp in zip(buildings, bpolys):
     if b['style'] == 'city':
@@ -1235,7 +1350,9 @@ for b, bp in zip(buildings, bpolys):
     for k in range(nshr):
         p = ring.interpolate(rng.uniform(0, ring.length))
         if not blocked(p.x, p.y, 1.2) and not ball.contains(p) and not any(z.contains(p) for z in GARDEN_ZONES) and rng.random() < 0.55:
-            shrubs.append(['bush', round(p.x, 2), round(p.y, 2), round(rng.uniform(0.7, 1.3), 2), round(rng.uniform(0, 6.28), 2)])
+            sh_ = ['bush', round(p.x, 2), round(p.y, 2), round(rng.uniform(0.7, 1.3), 2), round(rng.uniform(0, 6.28), 2)]
+            if not _ez.contains(p):              # (drawn all the same, so the rest of the campus keeps its random draws)
+                shrubs.append(sh_)
 print('trees', len(trees), 'shrubs', len(shrubs))
 
 # ---------------------------------------------------------------------------
@@ -1461,7 +1578,9 @@ def on_carriageway(x, y):
     return bline.distance(Point(x, y)) < E_CURB + 0.3 and bline.project(Point(x, y)) < L - 1
 n0 = (len(props), len(cars), len(trees), len(shrubs))
 props = [p for p in props if not on_carriageway(p[1], p[2])]
-cars = [c for c in cars if not on_carriageway(c[1], c[2])]
+# (nor on the halls' front steps: benches, bins and phone boxes stood beside the doors, not in them)
+props = [p for p in props if p[0] in ('lamp_arm', 'guard_booth') or not _ez.contains(Point(p[1], p[2]))]
+cars = [c for c in cars if not on_carriageway(c[1], c[2]) and not _ez.contains(Point(c[1], c[2]))]
 trees = [t for t in trees if not on_carriageway(t[1], t[2])]
 shrubs = [t for t in shrubs if not on_carriageway(t[1], t[2])]
 print('removed from carriageway (props, cars, trees, shrubs):',
@@ -1531,8 +1650,10 @@ STATUES = dict(
     fountain=dict(pos=FOUNTAIN['pos'], r=FOUNTAIN['r'], rot=0.0),     # (the column's arms face the compass points)
     gate=dict(pos=[round(GATE[0], 2), round(GATE[1] + 4, 2)], rot=math.radians(-14)),
 )
+_tn = dict(TENNIS, rot=round(TENNIS['rot'], 5))
 for v in STATUES.values():
     v['h'] = round(ground_h(*v['pos']), 2)
+STATUES['tennis'] = _tn                 # (its pads carry their own levels)
 
 _sx, _sy, _ = along_raw(30, E_VERGE + ROAD['walk'] * 0.5)        # on the west sidewalk just inside the gate
 SPAWN = dict(pos=[round(_sx, 1), round(_sy, 1)], yaw=math.radians(-14))
@@ -1606,7 +1727,8 @@ out = dict(
     amphitheater={k: (round(v, 3) if isinstance(v, float) else v) for k, v in AMPH.items()},
     buildings=buildings, trees=trees, shrubs=shrubs, props=props, cars=cars, banners=banners,
     paths=paths_out, landmarks=LANDMARKS, statues=STATUES, spawn=SPAWN, markers=markers, daewoo_front=DAEWOO, daewoo_back=DAEWOO_BACK,
-    centennial_block=CENT_BLOCK, colliders=[CENT_BLOCK['poly']],
+    centennial_block=CENT_BLOCK, colliders=[CENT_BLOCK['poly']] +
+    [[[round(x_, 2), round(y_, 2)] for x_, y_ in list(tennis_poly(pd_, 0.1).exterior.coords)[:-1]] for pd_ in TENNIS['pads']],
 )
 out['baekyangro']['booth'] = BOOTH
 for p in (os.path.join(ROOT, 'data/campus.json'), os.path.join(ROOT, 'web/public/data/campus.json')):

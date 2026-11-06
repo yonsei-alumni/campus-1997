@@ -128,7 +128,10 @@ async function main() {
   // the smoothed surface of every entrance flight (blender/landmarks.py walk_mesh): invisible, only walked on
   const stairWalk = [];
   lms.scene.updateMatrixWorld(true);
-  lms.scene.traverse((o) => { if (o.isMesh && /walk_stairs/.test(o.name + ((o.parent && o.parent.name) || ''))) stairWalk.push(o); });
+  bld.scene.updateMatrixWorld(true);
+  for (const sc of [lms.scene, bld.scene]) {     // (the procedural halls' front steps are in the buildings file)
+    sc.traverse((o) => { if (o.isMesh && /walk_stairs/.test(o.name + ((o.parent && o.parent.name) || ''))) stairWalk.push(o); });
+  }
   for (const o of stairWalk) { o.material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }); o.removeFromParent(); }
   const roadMeshes = [];
   road.scene.traverse((o) => { if (o.isMesh) { o.receiveShadow = true; roadMeshes.push(o); } });

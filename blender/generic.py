@@ -11,17 +11,20 @@ STYLE = {
     'stone':  dict(wall='stone_rubble', alt='stone_rubble', glass='glass', frame='frame_white', bay=3.0, ww=0.42, sill=0.9, head=0.7, band=False, depth=0.32, mull=1, trim='stone_trim'),
     'house':  dict(wall='plaster_cream', alt='brick_red', glass='glass', frame='frame_white', bay=3.0, ww=0.45, sill=0.95, head=0.65, band=False, depth=0.18, mull=1),
     'gym':    dict(wall='concrete', alt='concrete', glass='glass', frame='frame_dark', bay=4.5, ww=0.8, sill=4.6, head=0.4, band=False, depth=0.2, mull=3),
-    # 1997 halls from the university's building photos (yonsei.ac.kr/sc/349): red brick (광복관 · 알렌관 ·
-    # 언어연구교육원), tan tile (국제학사), pale stone with a slate roof (빌링슬리관)
+    # 1997 halls from the university's building photos (yonsei.ac.kr/sc/349): red brick (알렌관 · 언어연구교육원;
+    # 광복관, once here, was granite: blender/landmarks.py kwangbok), tan tile (국제학사), pale grey rubble with dressed-stone trim and a slate roof (빌링슬리관: the 1996
+    # 의류환경학과 album photo on its front, reference/재상봉_기념집_고증.md)
     'brick':  dict(wall='brick_red', alt='concrete', glass='glass', frame='frame_white', bay=3.0, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.22, mull=1, trim='stone_trim'),
     'tile':   dict(wall='tile_facade', alt='concrete', glass='glass', frame='frame_silver', bay=3.2, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.2, mull=1),
-    'stone_pale': dict(wall='stone_white', alt='stone_white', glass='glass', frame='frame_dark', bay=3.0, ww=0.45, sill=0.9, head=0.7, band=False, depth=0.3, mull=1, trim='stone_trim'),
+    'stone_pale': dict(wall='stone_rubble_gray', alt='stone_rubble_gray', glass='glass', frame='frame_dark', bay=3.0, ww=0.45, sill=0.9, head=0.7, band=False, depth=0.3, mull=1, trim='stone_trim'),
     'city':   dict(wall='brick_red', alt='plaster_cream', glass='glass', frame='frame_silver', bay=3.0, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.15, mull=1),
 }
 FH = {'modern': 3.8, 'white': 3.6, 'stone': 4.2, 'house': 3.4, 'gym': 6.5, 'city': 3.0, 'brick': 3.6, 'tile': 3.4, 'stone_pale': 4.0}
 
 
-def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground_floor_shop=False):
+def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground_floor_shop=False, door=None):
+    """door: (s along the edge, style, options) -- the ground-floor bay(s) there are left open for porch() to fill"""
+    a2, b2 = a, b
     a, b = Vector((*a, 0)), Vector((*b, 0))
     t = b - a
     L = t.length
@@ -43,11 +46,24 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
         return
     bw = L / bays
     zt = z0 + nfloors * fh
+    kd = min(bays - 1, max(0, int(door[0] / bw))) if door else -1
+    span = min(bays, door[2].get('span', 1)) if door else 1
+    if span > 1:
+        kd = min(bays - span, max(0, kd - span // 2))
+    fd = 0
+    if door:
+        # on a slope the door is on the storey the ground in front of it reaches (과학관's courtyard front)
+        pm = a + t * ((kd + span / 2) * bw) + n * 1.5
+        fd = max(0, min(nfloors - 1, int((ground(pm.x, pm.y) + 0.3 - z0) / fh)))
     for f in range(nfloors):
         zf = z0 + f * fh
         shop = ground_floor_shop and f == 0
         for k in range(bays):
             s0, s1 = k * bw, (k + 1) * bw
+            if f == fd and kd <= k < kd + span:
+                if k == kd:
+                    porch(mb, a2, b2, s0, s0 + span * bw, zf, fh, st, door[1], door[2])
+                continue
             mid = a + t * ((s0 + s1) / 2) + n * 0.6
             g = ground(mid.x, mid.y)
             sill = 0.25 if shop else st['sill']
@@ -94,6 +110,145 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
             mb.quad(P(0, zb, 0), P(L, zb, 0), P(L, zb, 0.14), P(0, zb, 0.14), st['alt'])
     if z1 > zt:
         mb.quad(P(0, zt), P(L, zt), P(L, z1), P(0, z1), wall)
+
+
+# ----------------------------------------------------------------------------- front doors
+# What the hall doors were like, from the 1996 graduation-album photos of the departments on their halls' steps
+# (2022 재상봉 기념문집 「25년 전 우리는」, reference/재상봉_기념집_고증.md): the postwar halls a pair or four leaves of
+# aluminium-framed glass under a transom (백주년기념관, 음악관), a flat concrete canopy over them (음악관's deep one), a
+# granite flight down to the walk with low granite side walls and steel handrails once it is high (과학관,
+# 백주년기념관); the old stone halls a
+# Tudor-arched door deep in the wall, dark steel-framed glass over a solid lower panel, rubble cheek walls with a pale
+# coping (아펜젤러관, 빌링슬리관 -- whose arch carries a stone hood moulding); the houses a plain door and a step or two.
+ENTRY = {
+    'modern':     dict(kind='glass', w=3.0, h=2.6, top=0.6, canopy=2.2, rec=0.45, step='stone_step', side='stone_granite'),
+    'white':      dict(kind='glass', w=2.6, h=2.5, top=0.5, canopy=1.8, rec=0.4, step='stone_step', side='stone_granite'),
+    'tile':       dict(kind='glass', w=2.6, h=2.5, top=0.5, canopy=1.6, rec=0.35, step='stone_step', side='stone_granite'),
+    'brick':      dict(kind='glass', w=2.4, h=2.5, top=0.5, canopy=1.6, rec=0.4, step='stone_step', side='stone_trim'),
+    'gym':        dict(kind='glass', w=3.6, h=2.7, top=0.9, canopy=2.6, rec=0.5, step='stone_step', side='stone_granite'),
+    'stone':      dict(kind='arch', w=1.9, spring=2.35, rec=0.6, step='stone_step', side='stone_rubble', hood=False),
+    'stone_pale': dict(kind='arch', w=2.3, spring=2.5, rec=0.7, step='stone_step', side='stone_rubble', hood=True),
+    'house':      dict(kind='house', w=1.0, h=2.1, canopy=1.0, rec=0.15, step='concrete', side='concrete'),
+}
+DOORS = []            # world-space zones of the generic halls' flights (merged into web/public/data/entrances.json)
+
+
+def porch(mb, a, b, s0, s1, zf, fh, st, style, opts=None):
+    """Fill the ground-floor bay [s0, s1] of the wall a->b with the hall's front door: the wall round a recessed
+    opening, its glazing and a lit hall behind it (the shells have no rooms), a canopy or stone hood, and the flight
+    down to the ground in front (walkable, landmarks.stair_flight)."""
+    import landmarks as LM
+    opts = opts or {}
+    E = dict(ENTRY[style])
+    span = opts.get('span', 1)
+    if span > 1:                     # a door of several bays (과학관): glass the width of the bays less a pier each side
+        E['w'] = (s1 - s0) - 1.2
+        E['canopy'] = opts.get('canopy', E.get('canopy', 2.0))
+    P, L, t, n = LM.edge_P(a, b)
+    wall = st['wall']
+    sc = (s0 + s1) / 2
+    w = min(E['w'], s1 - s0 - 0.5)
+    o0, o1 = sc - w / 2, sc + w / 2
+    zt = zf + fh
+    g = max(ground(*P(sc + u, 0, k)[:2]) for u in (-w / 2, 0.0, w / 2) for k in (0.6, 1.6))
+    zd = max(zf + 0.12, g + (0.16 if style == 'house' else 0.32))     # threshold: a riser or two over the ground
+    if E['kind'] == 'arch':
+        zs = zd + E['spring']
+        apex = max(z for _, z in LM.arch_points(o0, o1, zs, 'tudor', 14))
+        zd = min(zd, zt - 0.35 - (apex - zd))
+        zs = zd + E['spring']
+        zo = max(z for _, z in LM.arch_points(o0, o1, zs, 'tudor', 14))
+    else:
+        # (a door on rising ground gets lower, rather than cutting into the storey above)
+        top = E.get('top', 0.0)
+        zd = min(zd, zt - 0.25 - 2.15 - top)
+        zo = zd + min(E['h'], zt - 0.25 - zd - top) + top
+    rec = E['rec']
+    # wall round the opening, and the reveals
+    LM.flat_wall(mb, P, s0, o0, zf, zt, wall)
+    LM.flat_wall(mb, P, o1, s1, zf, zt, wall)
+    LM.flat_wall(mb, P, o0, o1, zf, zd, wall)
+    rv = st.get('trim', wall) if E['kind'] != 'glass' else 'concrete'
+    if E['kind'] == 'arch':
+        LM.arch_fill(mb, P, o0, o1, zs, zt, rec, wall, 'tudor', 14, intrados_mat='stone_trim')
+        for s, sg in ((o0, 1), (o1, -1)):
+            q = [P(s, zd, 0), P(s, zd, -rec), P(s, zs, -rec), P(s, zs, 0)]
+            mb.face(q if sg < 0 else q[::-1], 'stone_trim')
+        LM.glazed_door(mb, P, o0, o1, zd, zs, 'tudor', -rec, style='panel')
+        # dressed stone round the arch (and, on 빌링슬리관, the hood moulding over it)
+        pts = LM.arch_points(o0 - 0.22, o1 + 0.22, zs, 'tudor', 14)
+        for (sa, za), (sb, zb) in zip(pts, pts[1:]):
+            LM.bar(mb, P, sa, za, sb, zb, 0.26, 0.0, 0.05, 'stone_trim')
+        for s in (o0 - 0.11, o1 + 0.11):
+            LM.bar(mb, P, s, zd, s, zs, 0.22, 0.0, 0.05, 'stone_trim')
+        if E['hood']:
+            hp = LM.arch_points(o0 - 0.45, o1 + 0.45, zs + 0.05, 'tudor', 14)
+            for (sa, za), (sb, zb) in zip(hp, hp[1:]):
+                LM.bar(mb, P, sa, za + 0.12, sb, zb + 0.12, 0.16, 0.0, 0.16, 'stone_trim', ends=True)
+            for s, sg in ((o0 - 0.45, -1), (o1 + 0.45, 1)):                 # label stops
+                LM.bar(mb, P, s, zs + 0.17, s + sg * 0.35, zs + 0.17, 0.16, 0.0, 0.16, 'stone_trim', ends=True)
+        LM.vestibule(mb, P, o0, o1, zd, zo + 0.05, -rec - 0.03, 2.4, lights=1)
+    else:
+        mb.quad(P(o0, zo, 0), P(o1, zo, 0), P(o1, zt, 0), P(o0, zt, 0), wall)
+        mb.quad(P(o1, zo, 0), P(o0, zo, 0), P(o0, zo, -rec), P(o1, zo, -rec), rv)        # head
+        for s, sg in ((o0, 1), (o1, -1)):
+            q = [P(s, zd, 0), P(s, zd, -rec), P(s, zo, -rec), P(s, zo, 0)]
+            mb.face(q if sg < 0 else q[::-1], rv)
+        if E['kind'] == 'house':
+            mb.quad(P(o0, zd, -rec), P(o1, zd, -rec), P(o1, zo, -rec), P(o0, zo, -rec), 'wood_dark')
+            LM.bar(mb, P, o1 - 0.12, zd + 0.95, o1 - 0.12, zd + 1.05, 0.05, -rec, -rec + 0.06, 'frame_silver', ends=True)
+        else:
+            LM.shopfront(mb, P, o0, o1, zd, zo, -rec, bays=4 * span, door_h=min(E['h'], zo - zd - top) - 0.15)
+            LM.vestibule(mb, P, o0, o1, zd, zo, -rec - 0.03, 2.8, lights=1)
+        # a flat canopy over the door: a cantilevered slab with a thin fascia
+        cd = E['canopy']
+        ang = math.atan2(t.y, t.x)
+        zc = zo + 0.12
+        c = P(sc, zc + 0.11, cd / 2)
+        mb.box(c, (w + (1.6 if style != 'house' else 0.5), cd, 0.22), 'concrete', rotz=ang)
+        if style != 'house':
+            c2 = P(sc, zc + 0.27, cd - 0.05)
+            mb.box(c2, (w + 1.6, 0.1, 0.12), 'concrete_dark', rotz=ang)
+    # the flight down to the ground: in a frame at the door (local -y outwards, x along the wall, z from the sill)
+    ang = math.atan2(t.y, t.x)
+    o = P(sc, zd, 0)
+    mb.xf = Matrix.Translation(Vector(o)) @ Matrix.Rotation(ang, 4, 'Z')
+    gfn = LM.local_ground(mb)
+    drop = -min(gfn(u, -k) for u in (-w / 2, 0, w / 2) for k in (2.0, 3.5))
+    fw = w + (0.9 if style != 'house' else 0.5)
+    big = drop > 0.95
+    n0 = len(LM.ENTRANCES)
+    LM.stair_flight(mb, 0.0, 0.0, fw, 0.0, landing=1.6 if style != 'house' else 1.0, tread=0.34, flare=0.25 if big else 0.1,
+                    cheek=0.32 if big and style != 'house' else 0.0, cheek_mat=E['side'], newel=big and E['kind'] == 'arch',
+                    rail=drop > 1.3 and E['kind'] == 'glass', gfn=gfn, mat=E['step'], maxrise=0.17)
+    DOORS.extend(LM.ENTRANCES[n0:])
+    del LM.ENTRANCES[n0:]
+    mb.xf = Matrix.Identity(4)
+
+
+def entry_edge(poly, entry):
+    """the edge of poly (CCW) that the door point of build_campus.py lies on, and how far along it"""
+    if not entry:
+        return None
+    p, nn = Vector(entry['p']), Vector(entry['n'])
+    best = None
+    for i in range(len(poly)):
+        a, b = Vector(poly[i]), Vector(poly[(i + 1) % len(poly)])
+        t = b - a
+        L = t.length
+        if L < 3.0:
+            continue
+        t /= L
+        n = Vector((t.y, -t.x))
+        if n.dot(nn) < 0.8:
+            continue
+        d = abs((p - a).dot(n))
+        s = (p - a).dot(t)
+        if d > 4.0 or s < -1.0 or s > L + 1.0:
+            continue
+        if best is None or d < best[0]:
+            best = (d, i, min(max(s, 1.5), L - 1.5))
+    return best and (best[1], best[2])
 
 
 def parapet_and_roof(mb, poly, zt, st, rnd, roof_mat='roof_flat', clutter=True):
@@ -206,6 +361,7 @@ def observatory(mb, b, zt, st):
 
 
 ROOF_EXTRAS = {222843398: observatory}
+WALL = {222843398: 'plaster_cream'}          # 과학관: cream in the 1995 aerial photo (reference/1995_캠퍼스_항공사진_남쪽에서.jpg)
 
 
 def build_generic(b, rnd):
@@ -223,6 +379,8 @@ def build_generic(b, rnd):
         st['frame'] = 'frame_silver'
     elif style == 'white' and rnd.random() < 0.3:
         st['wall'] = 'plaster_cream'
+    if b['id'] in WALL:
+        st['wall'] = WALL[b['id']]
     pitched = style in ('stone', 'house', 'stone_pale')
     if pitched or style == 'gym':
         cx, cy, L, W, ang = min_area_rect(poly)
@@ -232,9 +390,10 @@ def build_generic(b, rnd):
     if style == 'gym':
         nf, fh = 1, nf * fh
     shop = style == 'city' and rnd.random() < 0.45
+    door = entry_edge(poly, b.get('entry')) if style in ENTRY else None
     for i in range(len(poly)):
         wall_edge(mb, poly[i], poly[(i + 1) % len(poly)], z0, zt if pitched else zt + 0.9, nf, fh, st, rnd,
-                  ground_floor_shop=shop)
+                  ground_floor_shop=shop, door=(door[1], style, b['entry']) if door and door[0] == i else None)
     if pitched:
         hip_roof(mb, cx, cy, L, W, ang, zt, rnd.choice(['roof_slate', 'roof_giwa']) if style == 'house' else 'roof_slate',
                  pitch=0.55 if style == 'house' else 0.75)

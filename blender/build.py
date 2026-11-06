@@ -37,6 +37,9 @@ if want('buildings'):
         ob['name_ko'] = b['name']
         ob['bid'] = str(b['id'])
         objs.append(ob)
+    # the halls' front flights (generic.porch): walked on like the landmarks' (web/src/main.js looks for 'walk_stairs')
+    objs.append(landmarks.walk_mesh().build())
+    json.dump(generic.DOORS, open(os.path.join(common.ROOT, 'data', 'entrances_generic.json'), 'w'))
     stats['buildings'] = tri_count(objs)
     export_glb(objs, os.path.join(OUT, 'campus_buildings.glb'))
 
@@ -52,7 +55,7 @@ if want('landmarks'):
             ob['name_ko'] = b['name']
             ob['bid'] = str(b['id'])
             objs.append(ob)
-    for mb in landmarks.amphitheater() + landmarks.basketball_court() + landmarks.fountain():
+    for mb in landmarks.amphitheater() + landmarks.basketball_court() + landmarks.fountain() + landmarks.tennis():
         objs.append(mb.build())
     # statues and the gate are modelled in their own frame (front = -Y) and placed by object transform
     # (a MeshBuilder's xf only affects vertices added after it is set)
@@ -75,7 +78,9 @@ if want('landmarks'):
                                          (st['pos'][0] + r_ * math.cos(a1), st['pos'][1] + r_ * math.sin(a1), st['h'] + z_)])
     objs.append(landmarks.walk_mesh().build())
     # where the entrance flights are, so the web app keeps the apron shrubs off the steps
-    json.dump({'entrances': landmarks.ENTRANCES}, open(os.path.join(common.ROOT, 'web/public/data/entrances.json'), 'w'))
+    _gp = os.path.join(common.ROOT, 'data', 'entrances_generic.json')
+    _gen = json.load(open(_gp)) if os.path.exists(_gp) else []
+    json.dump({'entrances': landmarks.ENTRANCES + _gen}, open(os.path.join(common.ROOT, 'web/public/data/entrances.json'), 'w'))
     stats['landmarks'] = tri_count(objs)
     export_glb(objs, os.path.join(OUT, 'campus_landmarks.glb'))
 
