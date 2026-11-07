@@ -141,7 +141,7 @@ PC 브라우저에서 모바일 화면을 시험하려면 주소 끝에 `?touch`
   1997년 현수막은 항공 사진에서 읽은 글귀(“㉢ 창립 7주년 기념 세미나 및 학부모 초빙 행사 ㉧”, “기술고등고시 설명회” …)이고, 10월에는 연고전 응원 현수막이 줄지어 걸립니다(고증 2.5).
   천은 길가 나무에 묶인 귀퉁이 사이에서 처지고, 묶은 자리에서 부채꼴 주름이 지며, 바람에 천천히 너울거립니다(`web/src/life.js`).
   나무 줄기와 잎은 카메라 가까이에 오면 디더링으로 비쳐 보여서 3인칭 시야를 가리지 않습니다.
-- **렌더링**: three.js PBR, 지형 스플랫 셰이더(잔디/아스팔트/보도블록/흙, 그리고 마른 잔디 층 `ground_dry.png`), HDRI 하늘과 환경광, 4K 그림자,
+- **렌더링**: three.js PBR, 지형 스플랫 셰이더(잔디/아스팔트/보도블록/흙, 그리고 마른 잔디 층 `ground_dry.png`), HDRI 하늘과 환경광(해 원반은 지우고 그 빛은 그림자가 드는 직사광으로), 4K 그림자,
   N8AO 앰비언트 오클루전, AgX 톤매핑.
   해는 움직이지 않으므로 건물·나무·소품 그림자는 그림자 범위가 옮겨 갈 때만 다시 그려 캐시해 두고, 매 프레임에는 가까운 사람과 차의 그림자만 그 위에 그립니다(`web/src/shadows.js`).
   사람은 단색 부품을 정점 색 메시 하나로 합쳐 한 명당 draw call 1번으로 그리고, 화면 밖이면 그리지 않습니다.
@@ -157,7 +157,7 @@ python3 tools/fetch_terrain.py near && python3 tools/fetch_terrain.py far
 .venv/bin/python tools/prepare_web_textures.py    # PBR 텍스처 -> web/public
 blender -b --factory-startup --python blender/build.py            # 모든 GLB 빌드
 blender -b --factory-startup --python blender/build.py -- blend   # + 편집용 assets_src/yonsei1997_campus.blend
-blender -b --factory-startup --python blender/sky_bake.py         # 하늘 텍스처, 태양 방향
+blender -b --factory-startup --python blender/sky_bake.py         # 하늘 텍스처, 태양 방향, 해를 지운 환경광
 blender -b --factory-startup --python blender/characters.py       # 사람 14명 + 리그 2개 (assets_src/quaternius/ 필요)
 ```
 

@@ -77,9 +77,11 @@ async function main() {
   const lib = new MaterialLibrary(matDefs);
   lib.setSeason(season);
 
-  // environment lighting from the CC0 Poly Haven HDRI (same sky as the backdrop)
+  // Environment lighting from the CC0 Poly Haven HDRI (same sky as the backdrop) with its sun's disc taken out
+  // (blender/sky_bake.py): left in, the disc was ~70 % of the light an upward face got from the environment, and as
+  // no shadow map stops the environment, the shade under trees and buildings was lit by the sun all the same.
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const hdr = await new RGBELoader().loadAsync(versioned('assets/hdri/env_1k.hdr'));
+  const hdr = await new RGBELoader().loadAsync(versioned('assets/hdri/env_1k_nosun.hdr'));
   hdr.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = pmrem.fromEquirectangular(hdr).texture;
   scene.environmentIntensity = 0.75;
@@ -88,21 +90,34 @@ async function main() {
   // sun direction from the HDRI's brightest texel (three equirect convention)
   const phi = (skyMeta.sun_u - 0.5) * Math.PI * 2, el = (skyMeta.sun_v - 0.5) * Math.PI;
   const sunDir = new THREE.Vector3(Math.cos(el) * Math.cos(phi), Math.sin(el), Math.cos(el) * Math.sin(phi)).normalize();
-  const sun = new THREE.DirectionalLight(0xfff1dc, 3.1);
+  // The disc's light shines from the DirectionalLight instead, so the shadow maps (on phones the baked sun shadow)
+  // and the clouds take all of the sun. sky.json sun_E is what the disc threw on a face turned to it (linear); three's
+  // PMREM had spread it over a lobe narrower than the cosine law, so that an upward face got only ~70 % of it: 0.7
+  // keeps the sunlit ground as bright as it was. 3.1 -> 3.9: what the hemisphere light below no longer gives a floor.
+  const sunRGB = new THREE.Color(0xfff1dc).multiplyScalar(3.9)
+    .add(new THREE.Color().fromArray(skyMeta.sun_E).multiplyScalar(scene.environmentIntensity * 0.7));
+  const sunI = Math.max(sunRGB.r, sunRGB.g, sunRGB.b);
+  const sun = new THREE.DirectionalLight(sunRGB.clone().multiplyScalar(1 / sunI), sunI);
   sun.castShadow = true;
   sun.shadow.mapSize.set(4096, 4096);
   const SH = 125;
   Object.assign(sun.shadow.camera, { left: -SH, right: SH, top: SH, bottom: -SH, near: 10, far: 900 });
   sun.shadow.bias = -0.0002;
   sun.shadow.normalBias = 0.05;
+  // where the sun stands (shadows.js moves it along with the shadow frustum; phones, which draw no shadow maps, had
+  // three's default overhead light: the ground got all of the sun and no wall any)
+  sun.position.copy(sunDir).multiplyScalar(420);
   scene.add(sun, sun.target);
   // static casters cached, only people and cars redrawn each frame (src/shadows.js)
   const shadows = new SunShadows(renderer, scene, sun, sunDir);
-  // sky above, and below the light the sunlit paving and lawns throw back up: walls facing away from the sun (the
-  // fronts of 학생회관, 대강당 and 백주년기념관 on 백양로 face west, the sun is in the south-east) stay a light grey as in
-  // the photos instead of a dark blue-grey. (Floors take the sky's colour from it, but the sun outshines that: the
-  // sunlit ground, the trees and the sky look as before.)
-  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0xc4b090, 1.25));
+  // The hemisphere light is the light the sunlit paving and lawns throw back: walls facing away from the sun (the
+  // fronts of 학생회관, 대강당 and 백주년기념관 on 백양로 face west, the sun is in the south-east) stay a light grey as
+  // in the photos instead of a dark blue-grey, and soffits and porch ceilings see the ground. Its sky side is back to
+  // a faint fill (the sky itself is the environment's): shade on the ground keeps only the sky's light, as dark as in
+  // the photos. A wall (half sky side, half ground side) gets what it got before.
+  const hemiSky = new THREE.Color(0xcfe0ff).multiplyScalar(0.35);
+  const hemiGround = new THREE.Color(0xcfe0ff).add(new THREE.Color(0xc4b090)).multiplyScalar(1.25).sub(hemiSky);
+  scene.add(new THREE.HemisphereLight(hemiSky, hemiGround, 1));
 
   setupAtmosphere(sunDir);        // cloud shadows and the fog's sun side
   const sky = makeSky(skyMeta);

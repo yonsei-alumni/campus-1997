@@ -712,10 +712,9 @@ function atmosEdit(sh) {
     .replace('#include <fog_vertex>', '#include <fog_vertex>\nvY97World = (mvPosition.xyz - viewMatrix[3].xyz) * mat3(viewMatrix);');
   sh.fragmentShader = sh.fragmentShader
     .replace('#include <common>', `#include <common>\nvarying vec3 vY97World;\n${ATMOS_GLSL}`)
-    // The cloud factor rides on the sun's colour wherever three's light loop (or a patched copy of it) fetches it, and
-    // on the sky light: the HDRI holds the sun too (70 % of what it throws on the ground), which a cloud also hides.
-    // Wrappers + macros, so the chunks stay untouched. Only in the fogged main scene: the impostor and portrait
-    // renders (no fog) must not bake a cloud in.
+    // The cloud factor rides on the sun's colour wherever three's light loop (or a patched copy of it) fetches it: all
+    // of the sun, since the environment map has no sun in it (main.js). A wrapper + macro, so the chunks stay
+    // untouched. Only in the fogged main scene: the impostor and portrait renders (no fog) must not bake a cloud in.
     .replace('#include <lights_pars_begin>', `#include <lights_pars_begin>
 #ifdef USE_FOG
 float y97CloudPx = -1.0;
@@ -726,15 +725,6 @@ void y97DirectionalLightInfo( const in DirectionalLight directionalLight, out In
   light.color *= y97CloudHere();
 }
 #define getDirectionalLightInfo y97DirectionalLightInfo
-#endif
-#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV ) && defined( STANDARD )
-float y97SkySun() { return 1.0 - 0.7 * (1.0 - y97CloudHere()); }
-vec3 y97IBLIrradiance( const in vec3 normal ) { return getIBLIrradiance( normal ) * y97SkySun(); }
-vec3 y97IBLRadiance( const in vec3 viewDir, const in vec3 normal, const in float roughness ) {
-  return getIBLRadiance( viewDir, normal, roughness ) * y97SkySun();
-}
-#define getIBLIrradiance y97IBLIrradiance
-#define getIBLRadiance y97IBLRadiance
 #endif
 #endif`)
     .replace('#include <fog_fragment>', `#ifdef USE_FOG
