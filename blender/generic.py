@@ -16,7 +16,8 @@ STYLE = {
     # 의류환경학과 album photo on its front, reference/고증.md)
     'brick':  dict(wall='brick_red', alt='concrete', glass='glass', frame='frame_white', bay=3.0, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.22, mull=1, trim='stone_trim'),
     'tile':   dict(wall='tile_facade', alt='concrete', glass='glass', frame='frame_silver', bay=3.2, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.2, mull=1),
-    'stone_pale': dict(wall='stone_rubble_gray', alt='stone_rubble_gray', glass='glass', frame='frame_dark', bay=3.0, ww=0.45, sill=0.9, head=0.7, band=False, depth=0.3, mull=1, trim='stone_trim'),
+    # (빌링슬리관 only) a group of three tall lights a bay, 4.1 m: window_group; ww is the group's share of the bay
+    'stone_pale': dict(wall='stone_rubble_gray', alt='stone_rubble_gray', glass='glass', frame='wood_dark', bay=4.1, ww=0.62, sill=1.0, head=0.75, band=False, depth=0.3, mull=1, trim='stone_trim', lights=3),
     'city':   dict(wall='brick_red', alt='plaster_cream', glass='glass', frame='frame_silver', bay=3.0, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.15, mull=1),
 }
 FH = {'modern': 3.8, 'white': 3.6, 'stone': 4.2, 'house': 3.4, 'gym': 6.5, 'city': 3.0, 'brick': 3.6, 'tile': 3.4, 'stone_pale': 4.0}
@@ -72,6 +73,9 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
             if g > zf + sill - 0.15 or (f == 0 and st is STYLE['gym'] and False):
                 mb.quad(P(s0, zf), P(s1, zf), P(s1, zf + fh), P(s0, zf + fh), wall)
                 continue
+            if st.get('lights'):                # three lights in one dressed-stone frame (빌링슬리관)
+                window_group(mb, P, s0, s1, zf, fh, st)
+                continue
             ww = bw * (0.92 if shop else st['ww'])
             w0 = s0 + (bw - ww) / 2
             w1 = w0 + ww
@@ -121,15 +125,16 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
 # granite flight down to the walk with low granite side walls and steel handrails once it is high (과학관,
 # 백주년기념관); the old stone halls a
 # Tudor-arched door deep in the wall, dark steel-framed glass over a solid lower panel, rubble cheek walls with a pale
-# coping (아펜젤러관, 빌링슬리관 -- whose arch carries a stone hood moulding); the houses a plain door and a step or two.
+# coping (아펜젤러관, 빌링슬리관 -- whose door is in a shallow porch, a bay and a half wide, under a low gable coped with
+# dressed stone); the houses a plain door and a step or two.
 ENTRY = {
     'modern':     dict(kind='glass', w=3.0, h=2.6, top=0.6, canopy=2.2, rec=0.45, step='stone_step', side='stone_granite'),
     'white':      dict(kind='glass', w=2.6, h=2.5, top=0.5, canopy=1.8, rec=0.4, step='stone_step', side='stone_granite'),
     'tile':       dict(kind='glass', w=2.6, h=2.5, top=0.5, canopy=1.6, rec=0.35, step='stone_step', side='stone_granite'),
     'brick':      dict(kind='glass', w=2.4, h=2.5, top=0.5, canopy=1.6, rec=0.4, step='stone_step', side='stone_trim'),
     'gym':        dict(kind='glass', w=3.6, h=2.7, top=0.9, canopy=2.6, rec=0.5, step='stone_step', side='stone_granite'),
-    'stone':      dict(kind='arch', w=1.9, spring=2.35, rec=0.6, step='stone_step', side='stone_rubble', hood=False),
-    'stone_pale': dict(kind='arch', w=2.3, spring=2.5, rec=0.7, step='stone_step', side='stone_rubble', hood=True),
+    'stone':      dict(kind='arch', w=1.9, spring=2.35, rec=0.6, step='stone_step', side='stone_rubble'),
+    'stone_pale': dict(kind='arch', w=2.3, spring=2.5, rec=0.7, step='stone_step', side='stone_rubble', porch=0.6),
     'house':      dict(kind='house', w=1.0, h=2.1, canopy=1.0, rec=0.15, step='concrete', side='concrete'),
 }
 MUSIC_CANOPY = 3.6    # 음악관's canopy: how far it reaches out over the landing
@@ -189,10 +194,63 @@ def lamp5(mb, x, y, z):
 DOORS = []            # world-space zones of the generic halls' flights (merged into web/public/data/entrances.json)
 
 
+def window_group(mb, P, s0, s1, zf, fh, st):
+    """One bay [s0, s1] of a storey of 빌링슬리관's wall (the 1996 album photo, reference/빌링슬리관_현관_1996.jpg; and
+    reference/학교연혁_빌링슬리관_옛생활과학관.jpg): three tall lights side by side in one dressed-stone frame, stone
+    mullions between them, a lintel over them and a sill running on past them, each light a dark wooden sash with a
+    meeting rail."""
+    import landmarks as LM
+    wall, trim, frame, d, n = st['wall'], st.get('trim', 'stone_trim'), st['frame'], st['depth'], st['lights']
+    mw = 0.2                                             # stone mullion
+    gw = (s1 - s0) * st['ww']
+    w0 = (s0 + s1 - gw) / 2
+    w1 = w0 + gw
+    zs, zh = zf + st['sill'], zf + fh - st['head']
+    LM.wall_holes(mb, P, s0, s1, zf, zf + fh, wall, [(w0, w1, zs, zh)])
+    LM.reveal(mb, P, w0, w1, zs, zh, d, trim)
+    lw = (gw - (n - 1) * mw) / n
+    for k in range(1, n):
+        c = w0 + k * (lw + mw) - mw / 2
+        LM.bar(mb, P, c, zs, c, zh, mw, -d, 0.0, trim)
+    fw, zm = 0.08, zs + (zh - zs) * 0.6
+    for k in range(n):
+        a = w0 + k * (lw + mw)
+        b = a + lw
+        # the sash frame in the glass's own plane (one standing in front would shade the glass's corners in the
+        # occlusion bake, blender/bake.py), a room behind each light, the meeting rail across it
+        LM.wall_holes(mb, P, a, b, zs, zh, frame, [(a + fw, b - fw, zs + fw, zh - fw)], d=-d)
+        mb.quad(P(a + fw, zs + fw, -d), P(b - fw, zs + fw, -d), P(b - fw, zh - fw, -d), P(a + fw, zh - fw, -d),
+                st['glass'], panes=(1, 1))
+        mb.quad(P(a + fw, zm - 0.045, -d + 0.04), P(b - fw, zm - 0.045, -d + 0.04), P(b - fw, zm + 0.045, -d + 0.04),
+                P(a + fw, zm + 0.045, -d + 0.04), frame)
+    # the dressed stone standing a little proud of the rubble
+    for s in (w0 - 0.1, w1 + 0.1):
+        LM.bar(mb, P, s, zs, s, zh, 0.2, 0.0, 0.04, trim)
+    LM.bar(mb, P, w0 - 0.24, zh + 0.13, w1 + 0.24, zh + 0.13, 0.26, 0.0, 0.06, trim, ends=True)
+    LM.bar(mb, P, w0 - 0.32, zs - 0.07, w1 + 0.32, zs - 0.07, 0.14, 0.0, 0.12, trim, ends=True)
+
+
+def porch_gable(mb, P, Pw, fa, fb, sc, zb, zw, zg, proj, s0, s1, zt, wall):
+    """빌링슬리관's porch over [fa, fb] (P: its face, proj m out from the hall's wall Pw): the low gable over its face, the
+    dressed-stone coping along it that turns level at the ends and roofs the porch back to the wall, its sides, and the
+    hall's wall from the eaves zw up to the storey's top zt"""
+    import landmarks as LM
+    k = 0.35                                     # the level returns of the coping at the eaves
+    mb.face([P(fa + k, zw), P(fb - k, zw), P(sc, zg)], wall)
+    m, ex = (zg - zw) / (sc - fa - k), 0.05      # (the slopes run on a little past the apex, closing the joint)
+    for sa, za, sb, zb_, ends in ((fa - 0.1, zw, fa + k + 0.1, zw, True), (fa + k, zw, sc + ex, zg + m * ex, False),
+                                  (sc - ex, zg + m * ex, fb - k, zw, False), (fb - k - 0.1, zw, fb + 0.1, zw, True)):
+        LM.bar(mb, P, sa, za, sb, zb_, 0.22, -proj, 0.08, 'stone_trim', ends=ends)
+    mb.quad(P(fa, zb, -proj), P(fa, zb, 0), P(fa, zw, 0), P(fa, zw, -proj), wall)          # sides
+    mb.quad(P(fb, zb, 0), P(fb, zb, -proj), P(fb, zw, -proj), P(fb, zw, 0), wall)
+    if zw < zt:
+        LM.flat_wall(mb, Pw, s0, s1, zw, zt, wall)
+
+
 def porch(mb, a, b, s0, s1, zf, fh, st, style, opts=None):
     """Fill the ground-floor bay [s0, s1] of the wall a->b with the hall's front door: the wall round a recessed
-    opening, its glazing and a lit hall behind it (the shells have no rooms), a canopy or stone hood, and the flight
-    down to the ground in front (walkable, landmarks.stair_flight)."""
+    opening, its glazing and a lit hall behind it (the shells have no rooms), a canopy (or 빌링슬리관's gabled porch),
+    and the flight down to the ground in front (walkable, landmarks.stair_flight)."""
     import landmarks as LM
     opts = opts or {}
     E = dict(ENTRY[style])
@@ -206,6 +264,14 @@ def porch(mb, a, b, s0, s1, zf, fh, st, style, opts=None):
     w = min(E['w'], s1 - s0 - 0.5)
     o0, o1 = sc - w / 2, sc + w / 2
     zt = zf + fh
+    fa, fb, zb = s0, s1, zf                     # the face the door is in
+    proj = E.get('porch', 0.0)
+    if proj:
+        # 빌링슬리관 (the 1996 album photo): the door is in a porch standing out from the wall, wider than the bay by
+        # half a pier each side; the door, its flight and the dressed stone go on the porch's face
+        Pw = P
+        P = lambda s, z, d=0.0: Pw(s, z, d + proj)
+        fa, fb, zb = s0 - 0.3, s1 + 0.3, zf - 1.0
     g = max(ground(*P(sc + u, 0, k)[:2]) for u in (-w / 2, 0.0, w / 2) for k in (0.6, 1.6))
     zd = max(zf + 0.12, g + (0.16 if style == 'house' else 0.32))     # threshold: a riser or two over the ground
     if E['kind'] == 'arch':
@@ -220,29 +286,30 @@ def porch(mb, a, b, s0, s1, zf, fh, st, style, opts=None):
         zd = min(zd, zt - 0.25 - 2.15 - top)
         zo = zd + min(E['h'], zt - 0.25 - zd - top) + top
     rec = E['rec']
+    zw = zt                                     # the top of the face round the door
+    if proj:
+        # the porch's gable: its eaves over the arch's dressed stone, its apex under the sill of the window above
+        zw = zo + 0.5
+        zg = max(zw + 0.15, min(zw + 0.25 * ((fb - fa) / 2 - 0.35), zt + st['sill'] - 0.35))
     # wall round the opening, and the reveals
-    LM.flat_wall(mb, P, s0, o0, zf, zt, wall)
-    LM.flat_wall(mb, P, o1, s1, zf, zt, wall)
-    LM.flat_wall(mb, P, o0, o1, zf, zd, wall)
+    LM.flat_wall(mb, P, fa, o0, zb, zw, wall)
+    LM.flat_wall(mb, P, o1, fb, zb, zw, wall)
+    LM.flat_wall(mb, P, o0, o1, zb, zd, wall)
     rv = st.get('trim', wall) if E['kind'] != 'glass' else 'concrete'
     if E['kind'] == 'arch':
-        LM.arch_fill(mb, P, o0, o1, zs, zt, rec, wall, 'tudor', 14, intrados_mat='stone_trim')
+        LM.arch_fill(mb, P, o0, o1, zs, zw, rec, wall, 'tudor', 14, intrados_mat='stone_trim')
         for s, sg in ((o0, 1), (o1, -1)):
             q = [P(s, zd, 0), P(s, zd, -rec), P(s, zs, -rec), P(s, zs, 0)]
             mb.face(q if sg < 0 else q[::-1], 'stone_trim')
         LM.glazed_door(mb, P, o0, o1, zd, zs, 'tudor', -rec, style='panel')
-        # dressed stone round the arch (and, on 빌링슬리관, the hood moulding over it)
+        # dressed stone round the arch
         pts = LM.arch_points(o0 - 0.22, o1 + 0.22, zs, 'tudor', 14)
-        for (sa, za), (sb, zb) in zip(pts, pts[1:]):
-            LM.bar(mb, P, sa, za, sb, zb, 0.26, 0.0, 0.05, 'stone_trim')
+        for (sa, za), (sb, zb_) in zip(pts, pts[1:]):
+            LM.bar(mb, P, sa, za, sb, zb_, 0.26, 0.0, 0.05, 'stone_trim')
         for s in (o0 - 0.11, o1 + 0.11):
             LM.bar(mb, P, s, zd, s, zs, 0.22, 0.0, 0.05, 'stone_trim')
-        if E['hood']:
-            hp = LM.arch_points(o0 - 0.45, o1 + 0.45, zs + 0.05, 'tudor', 14)
-            for (sa, za), (sb, zb) in zip(hp, hp[1:]):
-                LM.bar(mb, P, sa, za + 0.12, sb, zb + 0.12, 0.16, 0.0, 0.16, 'stone_trim', ends=True)
-            for s, sg in ((o0 - 0.45, -1), (o1 + 0.45, 1)):                 # label stops
-                LM.bar(mb, P, s, zs + 0.17, s + sg * 0.35, zs + 0.17, 0.16, 0.0, 0.16, 'stone_trim', ends=True)
+        if proj:
+            porch_gable(mb, P, Pw, fa, fb, sc, zb, zw, zg, proj, s0, s1, zt, wall)
         LM.vestibule(mb, P, o0, o1, zd, zo + 0.05, -rec - 0.03, 2.4, lights=1)
     else:
         mb.quad(P(o0, zo, 0), P(o1, zo, 0), P(o1, zt, 0), P(o0, zt, 0), wall)

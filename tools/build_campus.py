@@ -426,6 +426,14 @@ SCI_T = np.array([-SCI_N[1], SCI_N[0]])
 _sf = SCI_DOOR + SCI_N * 1.6                         # the head of the flight (the plaza runs in under it)
 FORECOURTS.append((222843398, None, 20.0, dict(face=(tuple(_sf - SCI_T * 8.8), tuple(_sf + SCI_T * 8.8)), max_half=8.8,
                                                 blend=8.0, side_blend=3.0, level=58.9, inside=0.0)))
+# 빌링슬리관's south front (its door: ENTRY_AT).  The 5 m grid ran the slope from the north-west across it, 3.7 m
+# along the 45 m front, so the door in its middle stood 1.6 m under the ground and the west half of the ground floor
+# was buried.  reference/학교연혁_빌링슬리관_옛생활과학관.jpg, from the lawn at the west end, shows the ground floor
+# standing on a level lawn all along the front: level it at the floor (its south-east corner), a riser or two under
+# the threshold, banking back up into the hill at the west end.
+BILL_FRONT = ((14.11, 417.87), (57.73, 406.29))      # the south front, west -> east (the outside to the right)
+FORECOURTS.append((245623193, None, 12.0, dict(face=BILL_FRONT, max_half=23.0, blend=10.0, side_blend=9.0,
+                                                level=68.85, inside=2.0)))
 
 
 def level_forecourt(wid, front, depth, blend=18.0, side_blend=7.0, max_half=20.0, level=None, face=None, inside=2.0):
@@ -1386,8 +1394,14 @@ ENTRY_STYLES = ('modern', 'white', 'stone', 'brick', 'tile', 'stone_pale', 'gym'
 # Its flight is as wide as the photos (16 m: fifteen risers down to the levelled car park, FORECOURTS), with the
 # five-globe lamp at its head.  음악관 (기악과's photo): a deep canopy on two round white columns over four bays of
 # aluminium-framed glass, white tile walls and tiled planters either side of three granite steps, blue window frames.
+# 빌링슬리관: in the middle of its long south front, under a window group (the 1996 album photo of 의류환경학과:
+# the arched door between equal piers, a group of three lights over it).  The 1994 campus map draws the arched door
+# there, in the middle between the gabled end bays with a walk running south from it; and OSM's footway from the south
+# ends there too, 22.6 m along the 45.1 m front (the door had gone to the short east end, the slope having buried this
+# front: FORECOURTS).
 ENTRY_AT = {222843398: ((-242.7, 13.8), dict(span=3, canopy=3.0, stair_w=16.0, lamp5=True, floor=2)),
-            429077789: ((144.08, -11.73), dict(span=2, music=True))}
+            429077789: ((144.08, -11.73), dict(span=2, music=True)),
+            245623193: ((35.93, 412.08), dict(floor=0))}
 _walks = [LineString(p_['pts']) for p_ in paths_out if len(p_['pts']) > 1] + [bline]
 _walk_u = unary_union(_walks)
 _bp_all = [Polygon(b_['footprint']) for b_ in buildings]
