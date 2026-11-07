@@ -175,7 +175,7 @@ export class SunMap {
     if (!m || !m.isMeshStandardMaterial || this.patched.has(m)) return;
     this.patched.add(m);
     // (a define, not an edit of its own: a baked copy replays its original's edits, this one among them)
-    if (this.walls && mode === 1 && m.userData.baked) m.defines = { ...m.defines, SUN_WALL: '' };
+    if (this.walls && mode === 1 && m.userData.baked && !m.userData.wallLeaf) m.defines = { ...m.defines, SUN_WALL: '' };
     // on the shared patch stack (materials.js), so a patch added later (the atmosphere's, from main.js) stacks on it
     // instead of replacing it
     patchShaderOwn(m, `sun${mode}`, (sh) => editShader(sh, this.uniforms, mode));

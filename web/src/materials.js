@@ -479,6 +479,7 @@ export class MaterialLibrary {
     if (!v) {
       v = bakedCopy(m);
       v.vertexColors = false;
+      v.userData.wallLeaf = true;      // (its bake is wind, not shade: no SUN_WALL, bakedshadow.js)
       wallWind(v);
       this.leafMats.push(v);
       this.bakedMats.set(key, v);
