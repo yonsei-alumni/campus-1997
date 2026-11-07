@@ -90,7 +90,9 @@ const PATCHES = new WeakMap();
 export function patchShader(m, key, edit) {
   if (!PATCHES.has(m)) PATCHES.set(m, []);
   const list = PATCHES.get(m);
-  if (list.some((p) => p.key === key)) return;        // once per material (an instanced copy shares its original's list)
+  // once per material: an instanced copy shares its original's list, a baked copy replays the original's edits (its
+  // entry's key names them all)
+  if (list.some((p) => p.key.split('|').includes(key))) return;
   list.push({ key, edit });
   m.onBeforeCompile = (sh) => { for (const p of list) p.edit(sh); };
   m.customProgramCacheKey = () => list.map((p) => p.key).join('|');
@@ -392,8 +394,11 @@ export class MaterialLibrary {
       const weather = (this.defs[m.name]?.weather ?? 0) * age;
       const own = PATCHES.get(m);
       // the original's edits, looked up at compile time, then ours
+      // (one the copy was given itself as well, by whichever came first - the baked sun shadow's, from main.js - is
+      // not replayed from the original)
+      const mine = () => PATCHES.get(v).slice(1).map((p) => p.key);
       PATCHES.set(v, [{ get key() { return (PATCHES.get(m) || []).map((p) => p.key).join('|'); },
-        edit: (sh) => { for (const p of PATCHES.get(m) || []) p.edit(sh); } }]);
+        edit: (sh) => { const own = mine(); for (const p of PATCHES.get(m) || []) if (!own.includes(p.key)) p.edit(sh); } }]);
       if (!own) PATCHES.set(m, []);
       const { uBakeAO, uTerrain, uTerrainGrid } = this.uniforms;
       v.userData.uWeather = { value: weather };
