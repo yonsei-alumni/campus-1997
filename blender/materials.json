@@ -4,6 +4,17 @@
   "tex": "old_stone_wall",
   "tile": 3.2,
   "tint": [
+   1.25,
+   1.25,
+   1.22
+  ],
+  "sat": 0.6,
+  "rough": 0.9
+ },
+ "stone_rubble_brown": {
+  "tex": "old_stone_wall",
+  "tile": 3.2,
+  "tint": [
    0.98,
    0.95,
    0.9
@@ -14,19 +25,20 @@
   "tex": "concrete_wall_008",
   "tile": 1.6,
   "tint": [
-   1.05,
-   1.0,
-   0.92
+   2.18,
+   2.2,
+   2.3
   ],
+  "sat": 0.5,
   "rough": 0.8
  },
  "stone_granite": {
   "tex": "granite_tile",
   "tile": 2.0,
   "tint": [
-   1.35,
-   1.32,
-   1.28
+   3.69,
+   3.62,
+   3.5
   ],
   "rough": 0.6
  },
@@ -34,20 +46,22 @@
   "tex": "concrete_wall_008",
   "tile": 4.0,
   "tint": [
-   1.05,
-   1.03,
-   1.0
+   2.26,
+   2.32,
+   2.46
   ],
+  "sat": 0.35,
   "rough": 0.85
  },
  "concrete_warm": {
   "tex": "concrete_wall_008",
   "tile": 4.0,
   "tint": [
-   1.1,
-   1.02,
-   0.95
+   2.3,
+   2.28,
+   2.35
   ],
+  "sat": 0.5,
   "rough": 0.85
  },
  "concrete_dark": {
@@ -64,9 +78,9 @@
   "tex": "white_plaster_02",
   "tile": 3.0,
   "tint": [
-   1.0,
-   1.0,
-   0.98
+   2.61,
+   2.84,
+   3.34
   ],
   "rough": 0.85
  },
@@ -74,9 +88,9 @@
   "tex": "white_plaster_02",
   "tile": 3.0,
   "tint": [
-   1.0,
-   0.93,
-   0.8
+   2.61,
+   2.6,
+   2.55
   ],
   "rough": 0.85
  },
@@ -94,9 +108,9 @@
   "tex": "red_bricks_02",
   "tile": 1.6,
   "tint": [
-   1.0,
-   0.95,
-   0.92
+   1.6,
+   1.01,
+   0.89
   ],
   "rough": 0.85
  },
@@ -104,9 +118,9 @@
   "tex": "rectangular_facade_tiles",
   "tile": 1.5,
   "tint": [
-   1.45,
-   1.4,
-   1.35
+   6.3,
+   4.74,
+   3.06
   ],
   "rough": 0.5
  },
@@ -648,9 +662,9 @@
   "tex": "concrete_wall_008",
   "tile": 3.0,
   "tint": [
-   1.3,
-   1.29,
-   1.31
+   2.78,
+   2.76,
+   2.72
   ],
   "sat": 0.12,
   "rough": 0.75
@@ -659,11 +673,11 @@
   "tex": "concrete_slab_wall",
   "tile": 3.4,
   "tint": [
-   1.08,
-   1.05,
-   1.06
+   1.71,
+   1.6,
+   1.48
   ],
-  "sat": 0.35,
+  "sat": 0.8,
   "rough": 0.8
  },
  "hedge_azalea_red": {
@@ -739,9 +753,9 @@
   "tex": "granite_tile",
   "tile": 1.2,
   "tint": [
-   2.35,
-   2.3,
-   2.25
+   7.82,
+   7.65,
+   7.36
   ],
   "sat": 0.3,
   "rough": 0.7
@@ -750,9 +764,9 @@
   "tex": "concrete_slab_wall",
   "tile": 2.2,
   "tint": [
-   1.28,
-   1.27,
-   1.25
+   1.88,
+   1.9,
+   1.9
   ],
   "sat": 0.25,
   "rough": 0.75

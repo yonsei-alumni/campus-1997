@@ -10,12 +10,19 @@ const draco = new DRACOLoader().setDecoderPath('draco/');
 export const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
 export const loadGLB = (url) => new Promise((res, rej) => gltfLoader.load(versioned(url), res, undefined, rej));
 
+// A building that keeps its own shade of a shared material (the GLB names only the shared one): 연희관's rubble is
+// the warm red-brown of reference/연희관_정면_2023.jpg, the other stone halls' the greyer stone of 핀슨관 · 성암관
+const OWN = [[/^lm_yeonhui/, { stone_rubble: 'stone_rubble_brown' }]];
+const ownMats = (o) => OWN.find(([re]) => re.test(o.name) || re.test(o.parent?.name ?? ''))?.[1];
+
 // Our own GLBs carry material *names*; replace them with the shared library materials.
 export function bindMaterials(root, lib, keepUnknown = false) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
-    const out = mats.map((m) => (lib.defs[m.name] || !keepUnknown ? lib.get(m.name) : m));
+    const own = ownMats(o);                        // (the loaded materials are shared between meshes: rename nothing)
+    const out = mats.map((m) => (own?.[m.name] ?? ((lib.defs[m.name] || !keepUnknown) ? m.name : null)))
+      .map((n, i) => (n ? lib.get(n) : mats[i]));
     o.material = Array.isArray(o.material) ? out : out[0];
   });
 }
