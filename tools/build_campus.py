@@ -4,7 +4,7 @@ Inputs : data/raw/osm_campus.json (Overpass), data/terrain.json, data/terrain_fa
 Outputs: data/campus.json                (used by Blender build + web)
          web/public/data/campus.json     (same, for the browser)
          web/public/data/terrain_near.bin / terrain_far.bin (Float32, row-major south->north)
-         web/public/assets/textures/ground_splat.png
+         web/public/assets/textures/ground_splat.png, ground_dry.png, ground_leaves.png
          data/debug_map.png              (top-down sanity check)
 
 Local frame: x = east (m), y = north (m), origin lat 37.5640 / lon 126.9380.
@@ -1724,6 +1724,63 @@ trees = [t for t in trees if not on_carriageway(t[1], t[2])]
 shrubs = [t for t in shrubs if not on_carriageway(t[1], t[2])]
 print('removed from carriageway (props, cars, trees, shrubs):',
       n0[0] - len(props), n0[1] - len(cars), n0[2] - len(trees), n0[3] - len(shrubs))
+
+# ---------------------------------------------------------------------------
+# Fallen leaves (issue #18): where October's ginkgo leaves and April's cherry petals lie.  An RGB mask over the
+# splat's rectangle at 1 m like ground_dry.png: R ginkgo, G cherry (the young cherries blossom too: their leaf
+# material is the cherry's), B the other broadleaves in October (zelkova, oak, maple, cherry).  Thick under the crown,
+# thinning past its edge and dragged LEAF_DRIFT m east by the (assumed) west wind; on a carriageway thin in the middle,
+# where the cars sweep it, and full in the gutters.  web/src/terrain.js lays the month's carpet from it, and
+# web/src/litter.js the same on 백양로's own road mesh (its asphalt and pavers).
+CROWN_RX = {'ginkgo': 2.05, 'zelkova': 6.0, 'cherry': 4.3, 'maple': 3.2, 'oak': 5.0,
+            'zelkova_young': 2.9, 'cherry_young': 2.2}          # crown radii, blender/vegetation.py SPECIES rx
+LEAF_CH = {'ginkgo': (0,), 'cherry': (1, 2), 'cherry_young': (1, 2), 'zelkova': (2,), 'zelkova_young': (2,),
+           'oak': (2,), 'maple': (2,)}
+LEAF_DRIFT = 2.5
+LEAF_SPREAD = 3.2                     # m past the crown's edge the carpet thins out
+LEAF_STREW = 5.0                      # ... and a few strewn leaves this much farther (out onto the road)
+LW, LH = int((SPLAT['x1'] - SPLAT['x0']) / DRY_RES), int((SPLAT['y1'] - SPLAT['y0']) / DRY_RES)
+
+
+def _ss(a, b, x):
+    t_ = np.clip((x - a) / (b - a), 0.0, 1.0)
+    return t_ * t_ * (3 - 2 * t_)
+
+
+_lv = np.zeros((LH, LW, 3), np.float32)
+for _sp, _tx, _ty, _sc, _ in trees:
+    if _sp not in LEAF_CH:
+        continue
+    _R = CROWN_RX[_sp] * _sc
+    _pad = _R + LEAF_DRIFT + LEAF_SPREAD + LEAF_STREW + 0.5
+    _c0, _c1 = max(0, int((_tx - _pad - SPLAT['x0']) / DRY_RES)), min(LW, int((_tx + _pad - SPLAT['x0']) / DRY_RES) + 1)
+    _r0, _r1 = max(0, int((SPLAT['y1'] - _ty - _pad) / DRY_RES)), min(LH, int((SPLAT['y1'] - _ty + _pad) / DRY_RES) + 1)
+    if _c0 >= _c1 or _r0 >= _r1:
+        continue
+    _dx = (SPLAT['x0'] + (np.arange(_c0, _c1) + 0.5) * DRY_RES - _tx)[None, :]
+    _dy = (SPLAT['y1'] - (np.arange(_r0, _r1) + 0.5) * DRY_RES - _ty)[:, None]
+    _t = np.clip(_dx / LEAF_DRIFT, 0.0, 1.0)                  # along the drift, trunk -> downwind
+    _d = np.hypot(_dx - _t * LEAF_DRIFT, _dy)
+    _v = np.maximum(1 - _ss(0.6 * _R, _R + LEAF_SPREAD, _d), 0.4 * (1 - _ss(_R, _R + LEAF_SPREAD + LEAF_STREW, _d)))
+    _v *= 1 - 0.35 * _t
+    for _ch in LEAF_CH[_sp]:
+        _blk = _lv[_r0:_r1, _c0:_c1, _ch]
+        _lv[_r0:_r1, _c0:_c1, _ch] = 1 - (1 - _blk) * (1 - _v)   # overlapping crowns pile up
+# the cars sweep the middle of a carriageway: the splat's asphalt (side roads, aprons) by the distance to its edge ...
+_ad = ndimage.distance_transform_edt(spl[..., 0] > 127) * SPLAT['res']
+_ad = _ad.reshape(LH, int(DRY_RES / SPLAT['res']), LW, int(DRY_RES / SPLAT['res'])).mean((1, 3))
+_sweep = 1 - 0.7 * _ss(1.0, 2.6, _ad)
+# ... and 백양로's own carriageway (drawn as pavers in the splat, under the road mesh) by the distance to its centre line
+_gx, _gy = np.meshgrid(SPLAT['x0'] + (np.arange(LW) + 0.5) * DRY_RES, SPLAT['y1'] - (np.arange(LH) + 0.5) * DRY_RES)
+_bb = bline.buffer(E_CURB + 1).bounds
+_in = (_gx > _bb[0]) & (_gx < _bb[2]) & (_gy > _bb[1]) & (_gy < _bb[3])
+_bd = np.full(_gx.shape, 1e9, np.float32)
+_bd[_in] = shp_distance(bline, shp_points(_gx[_in], _gy[_in]))
+_sweep *= np.where(_bd < E_CURB, 0.25 + 0.75 * _ss(E_CURB - 1.8, E_CURB - 0.4, _bd), 1.0)
+_lv = ndimage.gaussian_filter(_lv, (0.8, 0.8, 0)) * _sweep[..., None]
+Image.fromarray(np.clip(_lv * 255, 0, 255).astype(np.uint8), 'RGB').save(
+    os.path.join(ROOT, 'web/public/assets/textures/ground_leaves.png'), optimize=True)
+print('leaf mask: ginkgo %.0f, cherry %.0f, broadleaf %.0f m2' % tuple((_lv > 0.3).sum((0, 1)) * DRY_RES ** 2))
 
 LANDMARKS = [
     dict(id='gate', name='정문', pos=[-106, -410], r=22, photo=None,

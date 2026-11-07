@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { loadTex, shrinkImage, pcss } from './materials.js';
 import { MOBILE, mulberry, placeMatrix, versioned } from './util.js';
 import { ATMOS, ATMOS_GLSL } from './materials.js';
+import { LITTER_GLSL } from './litter.js';
 
 export class Heightfield {
   constructor(data, half, step, n) {
@@ -84,7 +85,10 @@ export function makeNearTerrain(hf, campus, lib) {
     dD: { value: T('raked_dirt/diff.jpg') }, dN: { value: T('raked_dirt/nor.jpg', false) },
     fD: { value: T('forest_ground_04/diff.jpg') },
     uGrass: lib.uniforms.uGrass,
+    // the month's fallen leaves (litter.js): shared with 백양로's road materials, over the same rectangle
+    uLeaf: lib.uniforms.uLeaf, uLitter: lib.uniforms.uLitter, uLeafRect: lib.uniforms.uLeafRect, uFall: lib.uniforms.uFall,
   };
+  uniforms.uLeafRect.value.set(S.x0, S.y0, S.x1, S.y1);
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
@@ -100,7 +104,8 @@ export function makeNearTerrain(hf, campus, lib) {
         uniform vec4 uRect; uniform vec3 uGrass;
         vec3 gTN; float gRough;
         vec3 nrm(sampler2D t, vec2 uv) { return texture2D(t, uv).xyz * 2.0 - 1.0; }
-        float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }`)
+        float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+        ${LITTER_GLSL}`)
       .replace('#include <map_fragment>', `
         vec2 wp = vec2(vWPos.x, -vWPos.z);                 // campus x=east, y=north
         vec2 suv = vec2((wp.x - uRect.x) / (uRect.z - uRect.x), (uRect.w - wp.y) / (uRect.w - uRect.y));
@@ -139,9 +144,14 @@ export function makeNearTerrain(hf, campus, lib) {
           grass = mix(grass, worn, smoothstep(0.0, 0.6, dry));
         }
         vec3 albedo = grass * wg + asph * wa + pav * wpv + dirt * wd;
+        // fallen leaves / petals of the month on top, flat: the ground's relief pressed down under them
+        vec3 litCol;
+        float litCov = litter(wp, litCol);
+        albedo = mix(albedo, litCol, litCov);
         diffuseColor.rgb *= albedo;
         gTN = nrm(gN, ug) * wg + nrm(aN, ua) * wa * 0.45 + nrm(pN, up) * wpv + nrm(dN, ud) * wd;
-        gRough = 0.98 * wg + 0.92 * wa + 0.85 * wpv + 1.0 * wd;
+        gTN *= 1.0 - 0.75 * litCov;
+        gRough = mix(0.98 * wg + 0.92 * wa + 0.85 * wpv + 1.0 * wd, 0.8, litCov);
       `)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = gRough;')
       .replace('#include <normal_fragment_maps>', `

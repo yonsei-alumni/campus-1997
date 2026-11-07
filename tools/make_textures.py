@@ -2,6 +2,7 @@
 
 Outputs (web/public/assets/textures):
   leaf_<species>[_<season>].png   2x2 atlas of leaf-cluster cards, RGBA (alpha-tested)
+  litter_ginkgo.png               fallen ginkgo leaves, seamless tile, alpha = each leaf's rank
   sign_shops.png                  4x4 atlas of 1997 Sinchon storefront signboards
   sign_gate.png                   延世大學校 gate plaque
 Run: .venv/bin/python tools/make_textures.py
@@ -267,6 +268,43 @@ atlas('boxwood', 'boxwood', [(45, 82, 32), (55, 95, 36), (38, 70, 28)])
 atlas('azalea', 'azalea', [(55, 90, 35), (65, 100, 40)], flowers=((225, 60, 150), 380, (0.045, 0.06)))
 atlas('azalea_summer', 'azalea', [(55, 90, 35), (65, 100, 40)])
 atlas('azalea_red', 'azalea', [(50, 85, 32), (60, 95, 38)], flowers=((200, 32, 48), 300, (0.04, 0.055)))
+
+
+# Fallen ginkgo leaves (issue #18): a seamless tile of the autumn atlas's leaves lying flat on the ground (0.8 m of
+# ground per tile in web/src/litter.js).  Its alpha is each leaf's rank, not its coverage: the shader shows the leaves
+# whose rank clears the carpet's thinness there, so a few strewn leaves and a full carpet come from the one tile.
+# Higher ranks lie on top, so a thin strew is whole leaves.
+def litter(name, kind, palette, n, size, seed=0):
+    if ONLY and name not in ONLY:
+        return
+    rnd = random.Random(seed)
+    S = CELL * SS
+    img = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    rank = Image.new('L', (S, S), 0)
+    d, dk = ImageDraw.Draw(img), ImageDraw.Draw(rank)
+    shape_fn = {'ginkgo': shape_ginkgo}[kind]
+    leaves = sorted((rnd.uniform(0.14, 1.0), rnd.uniform(0, S), rnd.uniform(0, S), rnd.uniform(0, 2 * math.pi),
+                     rnd.uniform(*size) * S, rnd.choice(palette), rnd.random()) for _ in range(n))
+    for r, x, y, a, sz, col, sd in leaves:
+        shape = shape_fn(random.Random(sd))
+        pts, stem = shape
+        for ox in (-S, 0, S):                   # wrap round the edges: the tile repeats seamlessly
+            for oy in (-S, 0, S):
+                cx, cy = x + ox, y + oy
+                if not (-2 * sz < cx < S + 2 * sz and -2 * sz < cy < S + 2 * sz):
+                    continue
+                draw_leaf(d, shape, cx, cy, a, sz, col, random.Random(sd))     # (same colour on every copy)
+                dk.polygon(rot(pts, a, cx, cy, sz), fill=int(r * 255))
+                dk.line([rot([(0, 0)], a, cx, cy, sz)[0], rot([(0, stem)], a, cx, cy, sz)[0]], fill=int(r * 255),
+                        width=max(1, int(sz * 0.05)))
+    img.putalpha(rank)
+    out = finish(img)
+    out.save(os.path.join(OUT, f'{name}.png'), optimize=True)
+    print('litter', name, 'cover %.2f' % (np.array(out)[..., 3] > 30).mean())
+
+
+litter('litter_ginkgo', 'ginkgo', [(240, 200, 40), (230, 185, 30), (250, 215, 70), (215, 170, 30), (200, 180, 50),
+                                   (236, 196, 52), (190, 150, 40), (175, 130, 45)], 1500, (0.036, 0.052), seed=18)
 
 if ONLY:
     raise SystemExit(0)

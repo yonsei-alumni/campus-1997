@@ -1,6 +1,7 @@
 // Shared PBR material library, built from data/materials.json (same file Blender uses).
 import * as THREE from 'three';
 import { MOBILE, versioned, mulberry } from './util.js';
+import { FALL, LITTER_MATS, litterUniforms, litterEdit } from './litter.js';
 
 const texLoader = new THREE.TextureLoader();
 const cache = new Map();
@@ -257,6 +258,7 @@ export class MaterialLibrary {
     this.leafMats = [];
     this.season = 'summer';
     this.uniforms = { uGrass: { value: new THREE.Color(...SEASONS.summer.grass) }, uWindT: windTime };
+    Object.assign(this.uniforms, litterUniforms(loadTex));     // the month's fallen leaves (litter.js)
   }
 
   // three keeps one compiled-program slot per material. One drawn both by plain meshes and by InstancedMeshes (the
@@ -315,6 +317,7 @@ export class MaterialLibrary {
           diffuseColor *= sampledDiffuseColor;`);
       }
       if (name.startsWith('bark')) foliage(m, 0.0, 0);         // trunks and branches bend with the leaves, no flutter
+      if (LITTER_MATS.has(name)) patchShader(m, 'litter', litterEdit(this.uniforms));
     } else if (d.leaf) {
       const species = d.leaf;
       m = new THREE.MeshStandardMaterial({
@@ -370,6 +373,7 @@ export class MaterialLibrary {
   setSeason(season) {
     this.season = season;
     this.uniforms.uGrass.value.setRGB(...SEASONS[season].grass);
+    this.uniforms.uFall.value.fromArray(FALL[season]);
     for (const m of this.leafMats) {
       const t = loadTex(leafUrl(m.userData.species, season, m.userData.young), { repeat: m.userData.opaque });
       m.map = t;
