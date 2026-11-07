@@ -52,7 +52,10 @@ h1 span { color: var(--ink); font-size: .72em; }
 .season-pick button { border: 2px solid var(--ink); background: #fff; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 700; }
 .season-pick button.on { background: var(--yellow); }
 /* hero picker */
-.pick-label { margin: 2px 0 6px; font-weight: 700; font-size: 14px; }
+.pick-label { display: block; margin: 2px 0 6px; font-weight: 700; font-size: 14px; }
+#place-pick { display: block; width: 100%; margin: 0 0 14px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; color: var(--ink);
+  padding: 8px 12px; font: 700 15px var(--font); cursor: pointer; }
+#place-pick:disabled { opacity: .45; cursor: progress; }
 #hero-pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 14px; min-height: 40px; }
 #hero-pick button { border: 2px solid #d9d3c3; background: linear-gradient(180deg, #e6f4f2, #fdf8e1); border-radius: 10px; padding: 4px 2px 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 #hero-pick button.on { border-color: var(--blue); box-shadow: 0 0 0 2px var(--yellow) inset; }
@@ -144,8 +147,9 @@ body.birds #blabels { display: none; }
 #news h2 { font-family: var(--title); font-weight: 400; color: var(--mint-ink); margin: 0 0 10px; padding-right: 60px; }
 #news h2 small { font-family: var(--font); font-size: 13px; color: #5c6572; margin-left: 6px; }
 #news section { border-top: 1px dashed #d9d3c3; padding: 10px 0 4px; }
-#news h3 { margin: 0 0 4px; font-size: 15px; color: var(--ink); }
-#news h3 span { display: inline-block; background: var(--yellow); border-radius: 4px; padding: 0 6px; margin-right: 6px; font-size: 13px; }
+#news h3 { margin: 0 0 2px; font-size: 16px; color: var(--ink); }
+#news .cat { margin-top: 8px; }
+#news h4 { display: inline-block; margin: 0 0 4px; background: var(--yellow); border-radius: 4px; padding: 0 6px; font-size: 12.5px; color: var(--ink); }
 #news li > ul { margin-top: 2px; font-size: 13px; }
 #news ul { margin: 0; padding-left: 20px; line-height: 1.6; font-size: 14px; color: #34404f; }
 #news .close { position: absolute; top: 14px; right: 14px; border: 0; background: var(--ink); color: #fff; border-radius: 8px; padding: 7px 12px; font-weight: 700; }

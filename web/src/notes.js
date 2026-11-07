@@ -13,27 +13,33 @@ export function renderItems(items) {
   return ul;
 }
 
-// one dated entry: <section id="2026-11-06"><h3><span>2026년 11월 6일</span>title</h3><ul>…</ul><figure class="shot">…
-// heading: the title's tag; link: the title is a #date link to itself; src: maps each capture's URL
+// one dated entry: { date, groups: [{ category, items, images: [{ src, alt }] }] } →
+// <section id="2026-11-06"><h3>2026년 11월 6일</h3><div class="cat"><h4>건물</h4><ul>…</ul><figure class="shot">…</div>…
+// heading: the date's tag (each category gets the next level); link: the date is a #date link to itself; src: maps each capture's URL
 export function noteSection(n, { heading = 'h3', link = false, src = (u) => u } = {}) {
   const sec = document.createElement('section');
   sec.id = n.date;
   const h = document.createElement(heading);
-  const date = document.createElement('span');
   const [y, m, d] = n.date.split('-').map(Number);
+  const date = link ? h.appendChild(Object.assign(document.createElement('a'), { href: '#' + n.date })) : h;
   date.textContent = `${y}년 ${m}월 ${d}일`;
-  const title = link ? h.appendChild(Object.assign(document.createElement('a'), { href: '#' + n.date })) : h;
-  title.append(date, n.title || '');
-  sec.append(h, renderItems(n.items));
-  for (const im of n.images || []) {
-    const fig = document.createElement('figure');
-    fig.className = 'shot';
-    const img = document.createElement('img');
-    img.src = src(im.src); img.alt = im.alt || ''; img.loading = 'lazy';
-    const cap = document.createElement('figcaption');
-    cap.textContent = im.alt || '';
-    fig.append(img, cap);
-    sec.appendChild(fig);
+  sec.appendChild(h);
+  const sub = 'h' + (Number(heading[1]) + 1);
+  for (const g of n.groups) {
+    const cat = document.createElement('div');
+    cat.className = 'cat';
+    cat.append(Object.assign(document.createElement(sub), { textContent: g.category }), renderItems(g.items));
+    for (const im of g.images || []) {
+      const fig = document.createElement('figure');
+      fig.className = 'shot';
+      const img = document.createElement('img');
+      img.src = src(im.src); img.alt = im.alt || ''; img.loading = 'lazy';
+      const cap = document.createElement('figcaption');
+      cap.textContent = im.alt || '';
+      fig.append(img, cap);
+      cat.appendChild(fig);
+    }
+    sec.appendChild(cat);
   }
   return sec;
 }

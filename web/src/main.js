@@ -19,6 +19,7 @@ import { setupNews } from './news.js';
 import { WalkLabels } from './labels.js';
 import { FountainWater } from './water/fountain.js';
 import { Basketball } from './hoops.js';
+import { startPlaces } from './places.js';
 import { $, MOBILE, versioned, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
 const canvas = $('#view');
@@ -323,6 +324,15 @@ async function main() {
     pickEl.appendChild(b);
   }
   pickHero(heroId);
+  // where to start walking (title card): 정문, the memory spots, then every named building at its front door
+  const places = startPlaces(campus, entrances.entrances || [], (x, y, r) => colliders.resolve(x, y, r));
+  const placeEl = $('#place-pick');
+  for (const group of ['추억 장소', '건물']) {
+    const og = Object.assign(document.createElement('optgroup'), { label: group });
+    places.forEach((p, i) => { if (p.group === group) og.appendChild(new Option(p.name, i)); });
+    placeEl.appendChild(og);
+  }
+  placeEl.disabled = false;
   progress('준비 완료!');
   $('#loadfill').style.width = '100%';
   $('#loadtext').textContent = '1997년 5월, 백양로에 도착했습니다.';
@@ -370,7 +380,11 @@ async function main() {
     const how = MOBILE ? '화면 왼쪽을 누른 채 밀어서 걸어요' : '↑↓(W·S)로 걷고 ←→(A·D)로 방향을 바꿔요';
     ui.toast(`${how} · ${where ? `${where}에서 출발해요` : '정문에서 백양로를 따라 걸어 보세요'}`, 5000);
   };
-  $('#start').addEventListener('click', () => startWalk());
+  $('#start').addEventListener('click', () => {
+    const p = places[placeEl.value];         // '' → 정문 (the walker already stands at the spawn)
+    if (p) { player.teleport(p.x, p.y, p.yaw); forest.update(camera.position, true); }
+    startWalk(p ? (p.front ? `${p.name} 앞` : p.name) : null);
+  });
   $('#resume').addEventListener('click', resume);
   const setFilm = (v) => { $('#opt-film').checked = v; post.setFilm(v); document.body.classList.toggle('film', v); bird.labels({ filmOn: v }); };
   const toggleFilm = () => setFilm(!$('#opt-film').checked);
@@ -445,8 +459,8 @@ async function main() {
       bird.enter({ player: null });
     }
     ui.setPrompt(null);
-    ui.toast(MOBILE ? '캠퍼스 둘러보기 · 한 손가락으로 밀고 두 손가락으로 확대·회전, 이름표를 누르면 그곳으로 가요'
-      : '캠퍼스 둘러보기 · 방향키(WASD)로 날고 이름표를 누르면 그곳으로 가요', 4000);
+    ui.toast(MOBILE ? '캠퍼스 위로 날아가기 · 한 손가락으로 밀고 두 손가락으로 확대·회전, 이름표를 누르면 그곳으로 가요'
+      : '캠퍼스 위로 날아가기 · 방향키(WASD)로 날고 이름표를 누르면 그곳으로 가요', 4000);
   };
   const leaveBird = () => {
     if (!bird.active) return;
@@ -561,7 +575,7 @@ async function main() {
       ui.drawMinimap(bird.cur.x, bird.cur.y, bird.mapYaw);
       if (tAcc - lastPlace > 0.25) {
         lastPlace = tAcc;
-        ui.setPlace(`둘러보기 · ${ui.placeName(bird.cur.x, bird.cur.y, onRoad(bird.cur.x, bird.cur.y))}`);
+        ui.setPlace(`하늘에서 · ${ui.placeName(bird.cur.x, bird.cur.y, onRoad(bird.cur.x, bird.cur.y))}`);
       }
     } else if (started) {
       ui.drawMinimap(player.x, player.y, player.yaw);
