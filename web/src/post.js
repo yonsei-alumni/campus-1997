@@ -1,4 +1,4 @@
-// Post-processing: N8AO ambient occlusion -> SMAA -> small bloom -> "1997 film" grade -> tone mapping/sRGB output.
+// Post-processing: N8AO ambient occlusion -> TAA -> small bloom -> "1997 film" grade -> tone mapping/sRGB output.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -8,18 +8,27 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { N8AOPass } from 'n8ao';
 import { MOBILE } from './util.js';
+import { DITHER } from './materials.js';
 
 const FilmShader = {
   uniforms: {
-    tDiffuse: { value: null }, tBloom: { value: null }, uBloom: { value: 0 },
+    tDiffuse: { value: null }, tBloom: { value: null }, uBloom: { value: 0 }, uSharp: { value: 0 },
     uTime: { value: 0 }, uFilm: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) },
   },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: `
-    uniform sampler2D tDiffuse, tBloom; uniform float uTime, uFilm, uBloom; uniform vec2 uRes; varying vec2 vUv;
+    uniform sampler2D tDiffuse, tBloom; uniform float uTime, uFilm, uBloom, uSharp; uniform vec2 uRes; varying vec2 vUv;
     float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + uTime*7.0) * 43758.5453); }
     void main(){
       vec4 c = texture2D(tDiffuse, vUv);
+      if (uSharp > 0.0) {
+        // TAA leaves a softness of about a pixel: give it back, held within the cross round the pixel (no halos)
+        vec2 e = 1.0 / uRes;
+        vec3 a = texture2D(tDiffuse, vUv + vec2(e.x, 0.0)).rgb, b = texture2D(tDiffuse, vUv - vec2(e.x, 0.0)).rgb;
+        vec3 u = texture2D(tDiffuse, vUv + vec2(0.0, e.y)).rgb, d = texture2D(tDiffuse, vUv - vec2(0.0, e.y)).rgb;
+        vec3 s = c.rgb + uSharp * (c.rgb - (a + b + u + d) * 0.25);
+        c.rgb = clamp(s, min(c.rgb, min(min(a, b), min(u, d))), max(c.rgb, max(max(a, b), max(u, d))));
+      }
       // the bloom is added here (linear, before the grade and the tone mapping) instead of in a full-screen pass of its own
       vec3 bl = uBloom > 0.0 ? texture2D(tBloom, vUv).rgb * uBloom : vec3(0.0);
       c.rgb += bl;
@@ -155,7 +164,7 @@ class Bloom extends Pass {
     this.quad.render(renderer);
   }
   render(renderer, writeBuffer, readBuffer) {
-    this.prefilter.uniforms.tSrc.value = readBuffer.texture;
+    this.prefilter.uniforms.tSrc.value = this.src ?? readBuffer.texture;
     this._draw(renderer, this.prefilter, this.half);
     this._draw(renderer, this.down, this.quarter);
     this._draw(renderer, this.blurH, this.quarter2);
@@ -164,6 +173,150 @@ class Bloom extends Pass {
   }
 }
 const BLOOM = 0.2;
+const SHARP = 0.6;
+
+// Temporal anti-aliasing (the HQ path's, instead of SMAA, which kept the still frame's edges smooth but not a moving
+// one's: alpha-tested leaf edges switched pixels on and off from frame to frame and whole crowns crawled as you walked).
+// The projection is shifted by a sub-pixel Halton offset every frame (begin), so an edge covers a different share of
+// each pixel each frame, and the resolve blends the frame into a history reprojected through the depth (the camera's
+// motion; both views unjittered, so a still view reads the history in place): edges settle to their coverage.
+//  - the pixel's own value is the 3x3 neighbourhood weighted by each sample's distance from the pixel centre (each
+//    was drawn the jitter off it): the image does not swim with the jitter
+//  - without motion vectors, what moves by itself (people, cars, swaying leaves) is held to the frame's 3x3
+//    neighbourhood: variance clipping in YCoCg, on tone-mapped values so the bright sky does not outweigh the leaves
+//  - history read with a 5-tap Catmull-Rom; a moving view (which resamples it every frame) takes more of the new
+//    frame; the film pass gives back the remaining softness (SHARP)
+//  - the foliage's near-camera dither runs through its thresholds frame by frame (materials.js DITHER): a smooth fade
+const HALTON = Array.from({ length: 8 }, (_, i) => {
+  const h = (b, n) => { let f = 1, r = 0; for (n += 1; n > 0; n = Math.floor(n / b)) { f /= b; r += f * (n % b); } return r; };
+  return [h(2, i) - 0.5, h(3, i) - 0.5];
+});
+const TaaFS = /* glsl */`
+  uniform sampler2D tCur, tHist, tDepth;
+  uniform mat4 uReproj;               // this frame's clip -> the previous frame's (both unjittered)
+  uniform vec2 uTexel, uJitter;
+  uniform float uReset;
+  uniform vec2 uBlend;                // the current frame's share: still, and moving 8 px a frame or more
+  varying vec2 vUv;
+  vec3 tm(vec3 c) { return c / (1.0 + max(c.r, max(c.g, c.b))); }
+  vec3 itm(vec3 c) { return c / max(1.0 - max(c.r, max(c.g, c.b)), 1e-4); }
+  vec3 ycocg(vec3 c) { return vec3(dot(c, vec3(0.25, 0.5, 0.25)), dot(c, vec3(0.5, 0.0, -0.5)), dot(c, vec3(-0.25, 0.5, -0.25))); }
+  vec3 rgb(vec3 y) { return vec3(y.x + y.y - y.z, y.x + y.z, y.x - y.y - y.z); }
+  vec3 cur(vec2 o) { return ycocg(tm(max(texture2D(tCur, vUv + o * uTexel).rgb, 0.0))); }
+  // the history at uv, Catmull-Rom from 5 bilinear taps (the corners of the 4x4 kernel left out)
+  vec3 hist(vec2 uv) {
+    vec2 res = 1.0 / uTexel, p = uv * res, c = floor(p - 0.5) + 0.5, f = p - c;
+    vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f)), w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f)), w3 = f * f * (-0.5 + 0.5 * f);
+    vec2 w12 = w1 + w2, t0 = (c - 1.0) * uTexel, t3 = (c + 2.0) * uTexel, t12 = (c + w2 / w12) * uTexel;
+    vec3 s = texture2D(tHist, vec2(t12.x, t0.y)).rgb * w12.x * w0.y
+           + texture2D(tHist, vec2(t0.x, t12.y)).rgb * w0.x * w12.y
+           + texture2D(tHist, t12).rgb * w12.x * w12.y
+           + texture2D(tHist, vec2(t3.x, t12.y)).rgb * w3.x * w12.y
+           + texture2D(tHist, vec2(t12.x, t3.y)).rgb * w12.x * w3.y;
+    float w = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+    return max(s / w, 0.0);
+  }
+  void main() {
+    // the 3x3 neighbourhood: its mean and spread, and the pixel's own value from it, weighted by each sample's
+    // distance from the pixel centre (each was drawn uJitter off it: Blackman-Harris as a Gaussian) so the image
+    // does not swim with the jitter; the nearest depth of the cross: an edge moves with the thing in front
+    vec3 m1 = vec3(0.0), m2 = vec3(0.0), c = vec3(0.0);
+    float d = 1.0, cw = 0.0;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+      vec2 o = vec2(float(i), float(j));
+      vec3 s = cur(o);
+      m1 += s; m2 += s * s;
+      vec2 q = o + uJitter;
+      float w = exp(-2.29 * dot(q, q));
+      c += s * w; cw += w;
+      if (i == 0 || j == 0) d = min(d, texture2D(tDepth, vUv + o * uTexel).r);
+    }
+    c /= cw;
+    m1 /= 9.0;
+    vec3 sd = sqrt(max(m2 / 9.0 - m1 * m1, 0.0)) * 1.25;
+    vec4 p = uReproj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+    vec2 puv = p.xy / p.w * 0.5 + 0.5;
+    if (uReset > 0.5 || any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) {
+      gl_FragColor = vec4(itm(rgb(c)), 1.0);         // (nothing to reproject: a new view, or just come into it)
+      return;
+    }
+    vec3 h = ycocg(tm(hist(puv)));
+    // clip the history towards the neighbourhood's mean, into its box
+    vec3 e = h - m1, r = abs(e) / max(sd, vec3(1e-5));
+    float k = max(r.x, max(r.y, r.z));
+    if (k > 1.0) h = m1 + e / k;
+    // a moving view resamples the history every frame (each time a little softer): a larger share of the new frame
+    float a = mix(uBlend.x, uBlend.y, smoothstep(0.5, 8.0, length((puv - vUv) / uTexel)));
+    gl_FragColor = vec4(itm(rgb(mix(h, c, a))), 1.0);
+  }`;
+
+class TAA extends Pass {
+  constructor() {
+    super();
+    this.needsSwap = false;            // the next passes read this.texture (Post wires them)
+    const opt = { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+    this.rt = [new THREE.WebGLRenderTarget(1, 1, opt), new THREE.WebGLRenderTarget(1, 1, opt)];
+    this.cur = 0;
+    this.frame = 0;
+    this.reset = true;
+    this.material = new THREE.ShaderMaterial({
+      uniforms: { tCur: { value: null }, tHist: { value: null }, tDepth: { value: null }, uReproj: { value: new THREE.Matrix4() },
+        uTexel: { value: new THREE.Vector2() }, uJitter: { value: new THREE.Vector2() }, uReset: { value: 1 }, uBlend: { value: new THREE.Vector2(0.1, 0.2) } },
+      vertexShader: quadVS, fragmentShader: TaaFS, depthTest: false, depthWrite: false,
+    });
+    this.quad = new FullScreenQuad(this.material);
+    this.prevVP = new THREE.Matrix4();
+    this.vp = new THREE.Matrix4();
+    this.saved = new THREE.Matrix4();
+    this.size = new THREE.Vector2(1, 1);
+    this.prevPos = new THREE.Vector3(1e9, 0, 0);
+    this.onOutput = null;
+  }
+  get texture() { return this.rt[this.cur].texture; }
+  setSize(w, h) {
+    for (const rt of this.rt) rt.setSize(w, h);
+    this.size.set(w, h);
+    this.material.uniforms.uTexel.value.set(1 / w, 1 / h);
+    this.reset = true;
+  }
+  // before the scene is drawn: shift the projection by this frame's sub-pixel offset (undone by end())
+  begin(camera) {
+    const [jx, jy] = HALTON[this.frame % HALTON.length];
+    DITHER.value = (this.frame++ * 0.6180339887) % 1;
+    this.saved.copy(camera.projectionMatrix);
+    camera.updateMatrixWorld();
+    // (a jump - teleport, bird's-eye view - starts the history over)
+    if (camera.position.distanceTo(this.prevPos) > 6) this.reset = true;
+    this.prevPos.copy(camera.position);
+    const P = camera.projectionMatrix;
+    P.elements[8] += (2 * jx) / this.size.x;
+    P.elements[9] += (2 * jy) / this.size.y;
+    this.material.uniforms.uJitter.value.set(jx, jy);     // (the pixel then shows what lies jx, jy px off its centre)
+    camera.projectionMatrixInverse.copy(P).invert();
+    // the history is an unjittered image: reproject from this frame's unjittered view (a still view reads it in place)
+    this.vp.multiplyMatrices(this.saved, camera.matrixWorldInverse);
+    this.material.uniforms.uReproj.value.multiplyMatrices(this.prevVP, this.vp.invert());
+  }
+  end(camera) {
+    camera.projectionMatrix.copy(this.saved);
+    camera.projectionMatrixInverse.copy(this.saved).invert();
+    this.prevVP.multiplyMatrices(this.saved, camera.matrixWorldInverse);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    const u = this.material.uniforms;
+    const prev = this.cur;
+    this.cur = 1 - this.cur;
+    u.tCur.value = readBuffer.texture;
+    u.tHist.value = this.rt[prev].texture;
+    u.tDepth.value = this.depth();
+    u.uReset.value = this.reset ? 1 : 0;
+    this.reset = false;
+    renderer.setRenderTarget(this.rt[this.cur]);
+    this.quad.render(renderer);
+    this.onOutput?.(this.texture);
+  }
+}
 
 export class Post {
   constructor(renderer, scene, camera) {
@@ -183,14 +336,20 @@ export class Post {
     this.ao.autoDetectTransparency = false;
     this.ao.configuration.transparencyAware = false;
     this.render = new RenderPass(scene, camera);
-    // The N8AO path has no MSAA (below), so it gets SMAA, and the small bloom; not on phones, where every full-screen
-    // pass counts (the RenderPass path keeps its 4x MSAA and goes without bloom)
-    this.smaa = MOBILE ? null : hdrSMAA(size.x, size.y);
+    // The N8AO path has no MSAA (below), so it gets TAA (SMAA when set so: setAA('smaa'), made when first asked for),
+    // and the small bloom; not on phones, where every full-screen pass counts (the RenderPass path keeps its 4x MSAA
+    // and goes without bloom)
+    this.smaa = null;
+    this.taa = MOBILE ? null : new TAA();
     this.bloom = MOBILE ? null : new Bloom();
     this.film = new ShaderPass(FilmShader);
     this.film.uniforms.tBloom.value = this.bloom?.texture ?? null;
+    if (this.taa) this.taa.depth = () => this.ao.beautyRenderTarget.depthTexture;   // (N8AO draws the scene)
+    if (this.taa) this.taa.onOutput = (t) => { this.film.uniforms.tDiffuse.value = t; if (this.bloom) this.bloom.src = t; };
     this.output = new OutputPass();
+    this.camera = camera;
     this.hq = true;
+    this.aa = 'taa';
     this._build();
   }
   _build() {
@@ -204,13 +363,27 @@ export class Post {
     }
     c.passes.length = 0;
     c.addPass(this.hq ? this.ao : this.render);
-    if (this.hq && this.smaa) c.addPass(this.smaa);
-    if (this.hq && this.bloom) c.addPass(this.bloom);
+    const taa = this.hq && this.taa && this.aa === 'taa';
+    const { width: w, height: h } = c.renderTarget1;      // (a pass left out of the list missed the resizes meanwhile)
+    if (this.hq && !MOBILE && this.aa === 'smaa') {
+      this.smaa ??= hdrSMAA(w, h);
+      this.smaa.setSize(w, h);
+      c.addPass(this.smaa);
+    }
+    if (taa) { this.taa.setSize(w, h); c.addPass(this.taa); }
+    if (this.hq && this.bloom) { this.bloom.setSize(w, h); c.addPass(this.bloom); }
+    if (this.bloom) this.bloom.src = null;            // (set by the TAA pass each frame)
     c.addPass(this.film);
     c.addPass(this.output);
+    // with TAA the bloom and the film read its history target (no copy into the composer's buffers)
+    this.film.textureID = taa ? 'tTaa' : 'tDiffuse';
     this.film.uniforms.uBloom.value = this.hq && this.bloom ? BLOOM : 0;
+    this.film.uniforms.uSharp.value = taa ? SHARP : 0;
+    this.taaOn = taa;
+    DITHER.value = 0;
   }
   setHQ(v) { this.hq = v; this._build(); }
+  setAA(v) { this.aa = v; this._build(); }
   setFilm(v) { this.film.uniforms.uFilm.value = v ? 1 : 0; }
   setSize(w, h) {
     this.composer.setSize(w, h);
@@ -218,6 +391,10 @@ export class Post {
   }
   draw(t) {
     this.film.uniforms.uTime.value = t;
-    this.composer.render();
+    if (this.taaOn) {
+      this.taa.begin(this.camera);
+      this.composer.render();
+      this.taa.end(this.camera);
+    } else this.composer.render();
   }
 }

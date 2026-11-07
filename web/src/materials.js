@@ -208,16 +208,21 @@ function wallWind(m) {
 
 // Foliage: a touch of wrap lighting / translucency so canopies don't go black, and a dithered fade
 // close to the camera so the third-person camera never looks through a wall of leaves or a trunk; the wind (sway).
+// With TAA on (post.js) the dither runs through its thresholds frame by frame, so the history blends it into a smooth
+// fade instead of a fixed screen-door pattern; 0 otherwise (a still pattern does not crawl).
+export const DITHER = { value: 0 };
 function foliage(m, glow = 0.09, flutter = 0.03) {
   sway(m, flutter);
   patchShader(m, `foliage${glow}`, (sh) => {
+    sh.uniforms.uDither = DITHER;
     sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uDither;')
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         {
           float camD = length(vViewPosition);
           float keep = smoothstep(1.2, 3.4, camD);
           vec2 q = floor(gl_FragCoord.xy);
-          float dither = fract(dot(q, vec2(0.0671, 0.00584)) * 52.98);
+          float dither = fract(dot(q, vec2(0.0671, 0.00584)) * 52.98 + uDither);
           if (keep < 0.999 && dither > keep) discard;
         }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
