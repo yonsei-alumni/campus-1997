@@ -7,9 +7,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadGLB } from './world.js';
 
 export const PEOPLE = {
-  'man-tee': '흰 티 · 청바지 새내기',
-  'man-check': '버건디 셔츠 복학생',
-  'man-cheer': '응원단 파란 점퍼',
+  'man-tee': '흰 티 · 청바지',
+  'man-check': '버건디 셔츠',
+  'man-cheer': '파란 점퍼',
   'man-hoodie': '남색 후드티',
   'man-grey': '갈색 염색 머리',
   'man-blazer': '콤비 재킷',

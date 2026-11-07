@@ -17,6 +17,7 @@ import { SunShadows } from './shadows.js';
 import { TouchControls } from './touch.js';
 import { setupNews } from './news.js';
 import { WalkLabels } from './labels.js';
+import { Bubbles } from './talk.js';
 import { FountainWater } from './water/fountain.js';
 import { Basketball } from './hoops.js';
 import { startPlaces } from './places.js';
@@ -271,6 +272,9 @@ async function main() {
     .map(([x, y]) => [x, y, groundAt(x, y)]);
   const crowd = new Crowd(scene, cast, [...STUDENTS, ...STUDENTS, 'man-professor', 'man-staff', 'woman-staff'], paths, groups, MOBILE ? 40 : 110);
   for (const p of crowd.people) shadows.addDynamic(p.a.holder);
+  // small talk over their heads; what they say follows the month (crowd.season)
+  crowd.season = season;
+  crowd.bubbles = new Bubbles($('#bubbles'), camera);
   const lanes = [];
   // one lane each way on the 1997 two-lane road (right-hand traffic); both bend out round the guard booth's island
   // on the centre line (tools/build_campus.py BOOTH, which stands a little east of it)
@@ -335,12 +339,13 @@ async function main() {
   placeEl.disabled = false;
   progress('준비 완료!');
   $('#loadfill').style.width = '100%';
-  $('#loadtext').textContent = '1997년 5월, 백양로에 도착했습니다.';
+  $('#loadtext').textContent = '1997년, 백양로에 도착했습니다.';
   $('#start').disabled = false;
   $('#tour-start').disabled = false;
 
   const setSeason = (v) => {
     season = v;
+    crowd.season = v;
     safeSet('y97-season', v);
     lib.setSeason(v);
     banners.userData.setSeason(v);
@@ -564,6 +569,7 @@ async function main() {
     sky.position.copy(camera.position);
     forest.update(focus);
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
+    crowd.bubbles.update(tAcc, started && !bird.active);
     traffic.update(dt, started ? player : NOBODY, focus);
     gates.update(dt, traffic);
     fountainWater?.update(dt, camera);

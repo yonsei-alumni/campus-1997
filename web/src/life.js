@@ -1,7 +1,8 @@
 // Campus life: 1997 banners (현수막) across 백양로, students walking, cars on the road.
 import * as THREE from 'three';
 import { mulberry, wrapAngle } from './util.js';
-import { play, locomotion } from './characters.js';
+import { play, locomotion, gesturing } from './characters.js';
+import { kindOf, meeting, chatter, hello, excuse, lineTime } from './talk.js';
 
 // ---------------------------------------------------------------- polyline helpers (campus frame)
 const _a = new THREE.Vector2(), _b = new THREE.Vector2();
@@ -253,7 +254,12 @@ export function makeBanners(banners, lib) {
 // ---------------------------------------------------------------- students (Quaternius people, sim-office style)
 // Walkers follow paths at their own pace and stop when you are in the way; groups stand and chat, nodding now and
 // then. Far away people (and the drivers of far cars) leave the scene and their animation is not updated.
+// Small talk (talk.js): two walkers coming towards each other near the view now and then stop, face each other, wave
+// and trade a line or two; groups talk among themselves and greet you; a walker you block asks to get by.
 const FAR2 = 190 * 190;
+const TALK_NEAR2 = 45 * 45;        // talk only where it can be seen
+const MAX_TALKS = 4;               // conversations at once round the view
+const height = (id) => (id.startsWith('woman') ? 1.61 : 1.73);
 
 export class Crowd {
   constructor(scene, cast, ids, paths, groups, count, rndSeed = 3) {
@@ -265,14 +271,19 @@ export class Crowd {
       const a = cast.make(pick());
       const path = paths[Math.floor(rnd() * paths.length)];
       const p = { a, path, s: rnd() * path.length, dir: rnd() < 0.5 ? 1 : -1, speed: 1.15 + rnd() * 0.4, side: (rnd() - 0.5) * 0.8,
-        heading: 0, walking: true, gestureAt: 5 + rnd() * 30, tick: i & 1 };
+        heading: 0, walking: true, gestureAt: 5 + rnd() * 30, tick: i & 1,
+        kind: kindOf(a.id), top: height(a.id), x: 1e9, y: 1e9, fx: 0, fy: 0,
+        chatUntil: 0, chatAfter: 2 + rnd() * 10, face: null, blockedT: 0, excuseAfter: 0 };
       a.mixer.setTime(rnd() * 2);
       scene.add(a.holder);
       this.people.push(p);
     }
     // standing groups (친구들과 수다): 2-4 people round a point, facing the middle
+    this.groups = [];
     for (const [gx, gy, h] of groups) {
       const n = 2 + Math.floor(rnd() * 3);
+      const g = { people: [], next: 4 + rnd() * 14, busyUntil: 0, greetAfter: 0, near: false };
+      this.groups.push(g);
       for (let k = 0; k < n; k++) {
         const ang = (k / n) * Math.PI * 2 + rnd() * 0.4;
         const x = gx + Math.cos(ang) * 0.85, y = gy + Math.sin(ang) * 0.85;
@@ -282,12 +293,22 @@ export class Crowd {
         const heading = Math.atan2(gx - x, -(gy - y));
         a.holder.rotation.y = heading;
         scene.add(a.holder);
-        this.people.push({ a, walking: false, heading, home: heading, gestureAt: 3 + rnd() * 20, tick: k & 1, x, y });
+        const p = { a, walking: false, heading, home: heading, gestureAt: 3 + rnd() * 20, tick: k & 1, x, y,
+          kind: kindOf(a.id), top: height(a.id), group: g };
+        g.people.push(p);
+        this.people.push(p);
       }
     }
     this.v = new THREE.Vector2();
     this.d = new THREE.Vector2();
     this.frame = 0;
+    this.season = 'summer';        // main.js keeps it on the month picked
+    this.bubbles = null;           // talk.js Bubbles (main.js); without it people still stop and wave, silently
+    this.talks = [];               // end times of the conversations going on
+    this.cues = [];                // gestures timed to the lines: { at, p }
+    this.scanT = 0;
+    this.excuseAt = 0;             // the next time a blocked walker may speak up
+    this._near = [];
   }
   // circles the player collides with (one reused circle per person: this runs every frame)
   movers(px, py, out = []) {
@@ -316,7 +337,11 @@ export class Crowd {
         const tx = player.x - v.x, ty = player.y - v.y, td = Math.hypot(tx, ty);
         const ahead = (tx * d.x + ty * d.y) / (td || 1);
         const blocked = td < 1.3 && ahead > 0.2;
-        if (!blocked) {
+        const halt = t < p.chatUntil || gesturing(a);       // talking: stand still facing the other
+        if (halt) {
+          const o = p.face?.a.holder.position;
+          if (o) want = Math.atan2(o.x - hp.x, o.z - hp.z);
+        } else if (!blocked) {
           speed = p.speed;
           p.s += p.dir * speed * dt;
           if (p.s > p.path.length) { p.s = p.path.length; p.dir = -1; }
@@ -325,6 +350,15 @@ export class Crowd {
           want = Math.atan2(d.x, -d.y);
         } else want = Math.atan2(tx, -ty);
         hp.set(v.x - d.y * p.side, p.path.h(p.s), -(v.y + d.x * p.side));
+        p.x = hp.x; p.y = -hp.z; p.fx = d.x; p.fy = d.y;
+        // blocked for a moment: ask to get by (not everyone, and not all at once on a busy sidewalk)
+        if (blocked && !halt) {
+          p.blockedT += dt;
+          if (p.blockedT > 1.1 && t > p.excuseAfter) {
+            p.excuseAfter = t + 60;
+            if (t > this.excuseAt && Math.random() < 0.6) { this.excuseAt = t + 10; this.say(p, excuse(p.kind, this.season), t); }
+          }
+        } else p.blockedT = 0;
       } else {
         const tx = player.x - p.x, ty = player.y - p.y;
         want = Math.hypot(tx, ty) < 2.6 ? Math.atan2(tx, -ty) : p.home;      // turn to greet you
@@ -344,6 +378,88 @@ export class Crowd {
       // distant people animate at half rate
       if (far < 70 * 70) a.mixer.update(dt);
       else if ((this.frame & 1) === p.tick) a.mixer.update(dt * 2);
+    }
+    for (let i = this.cues.length - 1; i >= 0; i--) {
+      const c = this.cues[i];
+      if (t < c.at) continue;
+      if (c.p.a.holder.parent) playGesture(c.p.a, 'emote-yes');
+      this.cues.splice(i, 1);
+    }
+    this.scanT -= dt;
+    if (this.scanT <= 0) { this.scanT = 0.2; this.socialize(t, player, camPos); }
+  }
+
+  // one line over p's head, now
+  say(p, text, t) { this.bubbles?.add(p.a.holder, p.top, text, t, t + lineTime(text)); }
+
+  // lines one after another from t0 (speakers[who] speaks each); returns when the last one is done
+  converse(speakers, lines, t0) {
+    let at = t0;
+    for (const l of lines) {
+      const p = speakers[l.who], dur = lineTime(l.text);
+      this.bubbles?.add(p.a.holder, p.top, l.text, at, at + dur);
+      if (l.wave) this.cues.push({ at, p });
+      at += dur + 0.15;
+    }
+    this.talks.push(at);
+    return at;
+  }
+
+  // a few times a second: who meets whom near the view
+  socialize(t, player, cam) {
+    this.talks = this.talks.filter((e) => e > t);
+    const room = () => this.talks.length < MAX_TALKS;
+    const season = this.season, cx = cam.x, cy = -cam.z;
+    // two walkers coming towards each other within a couple of metres: sometimes they stop and talk
+    const near = this._near;
+    near.length = 0;
+    for (const p of this.people) {
+      if (p.walking && t > p.chatUntil && t > p.chatAfter && (p.x - cx) ** 2 + (p.y - cy) ** 2 < TALK_NEAR2) near.push(p);
+    }
+    for (let i = 0; i < near.length && room(); i++) {
+      const A = near[i];
+      if (t < A.chatUntil) continue;
+      for (let j = i + 1; j < near.length; j++) {
+        const B = near[j];
+        if (t < B.chatUntil) continue;
+        const dx = B.x - A.x, dy = B.y - A.y, dd = dx * dx + dy * dy;
+        if (dd > 2.4 * 2.4 || dd < 0.6 * 0.6) continue;
+        if (A.fx * B.fx + A.fy * B.fy > -0.3 || A.fx * dx + A.fy * dy <= 0) continue;   // facing, not yet past
+        if (Math.random() > 0.5) { A.chatAfter = B.chatAfter = t + 6; continue; }      // just walk on by
+        const end = this.converse([A, B], meeting(A.kind, B.kind, season), t + 0.35) + 0.4;
+        A.chatUntil = B.chatUntil = end;
+        A.face = B; B.face = A;
+        A.chatAfter = end + 40 + Math.random() * 40;
+        B.chatAfter = end + 40 + Math.random() * 40;
+        break;
+      }
+    }
+    // standing groups: greet you as you come up; otherwise talk among themselves now and then
+    for (const g of this.groups) {
+      const m = g.people[0];
+      if ((m.x - cx) ** 2 + (m.y - cy) ** 2 > TALK_NEAR2) continue;
+      let best = null, bd = 1e9;
+      for (const p of g.people) {
+        const d = Math.hypot(player.x - p.x, player.y - p.y);
+        if (d < bd) { bd = d; best = p; }
+      }
+      if (bd > 4.5) g.near = false;
+      else if (bd < 2.6 && !g.near) {
+        g.near = true;
+        if (t > g.greetAfter && t > g.busyUntil) {
+          g.greetAfter = t + 40;
+          g.busyUntil = this.converse([best], [{ who: 0, text: hello(best.kind, season), wave: true }], t + 0.3);
+          continue;
+        }
+      }
+      if (t < g.next || t < g.busyUntil || !room() || g.people.length < 2) continue;
+      // two speakers, students before the elders
+      const order = g.people.slice();
+      for (let k = order.length - 1; k > 0; k--) { const r = Math.floor(Math.random() * (k + 1)); [order[k], order[r]] = [order[r], order[k]]; }
+      order.sort((a, b) => (a.kind === 'student' ? 0 : 1) - (b.kind === 'student' ? 0 : 1));
+      const [A, B] = order;
+      g.busyUntil = this.converse([A, B], chatter(A.kind, B.kind, season), t);
+      g.next = g.busyUntil + 6 + Math.random() * 16;
     }
   }
 }
