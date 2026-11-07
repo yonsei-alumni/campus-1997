@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { loadTex, shrinkImage } from './materials.js';
 import { MOBILE, mulberry, placeMatrix, versioned } from './util.js';
+import { CulledSet, instancedPart } from './world.js';
 
 export class Heightfield {
   constructor(data, half, step, n) {
@@ -199,18 +200,21 @@ export function makeFarForest(hf, nearHalf, maxR = 3800) {
     }
   }
   const geo = new THREE.IcosahedronGeometry(1, 1);
+  geo.computeBoundingSphere();
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true });
-  const im = new THREE.InstancedMesh(geo, mat, pts.length);
+  // all round the campus: only the clumps in view are drawn (world.js CulledSet)
+  const im = instancedPart(geo, mat);
+  im.receiveShadow = false;
+  const set = new CulledSet([im], pts.length, geo.boundingSphere, { tinted: [im] });
   const m4 = new THREE.Matrix4(), sc = new THREE.Vector3(), c = new THREE.Color();
   pts.forEach(([x, y], i) => {
     const rr = 9 + rnd() * 8;
     sc.set(rr, rr * (0.55 + rnd() * 0.25), rr * (0.9 + rnd() * 0.2));
-    im.setMatrixAt(i, placeMatrix(m4, x, hf.height(x, y) + rr * 0.25, y, rnd() * 6.28, sc));
+    set.setAt(i, placeMatrix(m4, x, hf.height(x, y) + rr * 0.25, y, rnd() * 6.28, sc));
     c.setRGB(0.16 + rnd() * 0.08, 0.26 + rnd() * 0.08, 0.11 + rnd() * 0.05, THREE.SRGBColorSpace);
-    im.setColorAt(i, c);
+    set.colorAt(i, c);
   });
-  im.instanceMatrix.needsUpdate = true;
-  im.computeBoundingSphere();
+  set.commit(pts.length);
   im.name = 'far_forest';
   return im;
 }

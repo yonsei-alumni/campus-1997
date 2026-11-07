@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 
 export const DYNAMIC_LAYER = 1;           // the moving casters' meshes are on this layer as well as layer 0
+export const SHADOW_LAYER = 2;            // drawn into the static shadows only (world.js CulledSet shadow twins)
 const DYN_R = 55;                         // moving things farther than this from the view cast no shadow
 const MOVE = 0.16;                        // re-render the static map once the view is this share of the span off centre
 const _v = new THREE.Vector3();
@@ -27,6 +28,7 @@ export class SunShadows {
     this.prev = null;                     // pixel rect where moving casters were drawn last frame
     this.rect = [0, 0, 0, 0];
     this.staticCam = new THREE.Camera();  // layer 0: everything (moving casters are switched off for that pass)
+    this.staticCam.layers.enable(SHADOW_LAYER);
     this.dynCam = new THREE.Camera();
     this.dynCam.layers.set(DYNAMIC_LAYER);
     this.noClear = () => {};

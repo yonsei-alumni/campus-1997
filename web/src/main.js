@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { MaterialLibrary, SEASONS, texturesReady } from './materials.js';
 import { Heightfield, makeNearTerrain, makeFarTerrain, makeFarForest, makeSummitTower, makeCity, makeSky } from './terrain.js';
-import { loadGLB, bindMaterials, mergeStatic, InstancedKit, Forest } from './world.js';
+import { loadGLB, bindMaterials, mergeStatic, InstancedKit, Forest, useShadowTwins, cullInstances } from './world.js';
 import { Player, Colliders } from './player.js';
 import { UI } from './ui.js';
 import { Post } from './post.js';
@@ -63,6 +63,7 @@ async function main() {
   // (SIGSEGV in the driver's LoadTextureState -> WebGL context lost -> white screen) at any map size.
   renderer.shadowMap.enabled = !MOBILE;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  useShadowTwins(renderer.shadowMap.enabled);     // instanced kits keep all their placements for the sun shadows
 
   const scene = new THREE.Scene();
   const fogColor = new THREE.Color(0xc4cfd8);
@@ -594,6 +595,7 @@ async function main() {
         ui.setPrompt(bp ? bp : l && !ui.memoryOpen ? `${l.name} · ${MOBILE ? '눌러서 ' : ''}그때의 추억 보기` : null);
       }
     }
+    cullInstances(camera);         // instanced kits: only the placements in view (world.js)
     post.draw(tAcc);
   };
   renderer.setAnimationLoop(frame);
