@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadGLB } from './world.js';
+import { pcss } from './materials.js';
 
 export const PEOPLE = {
   'man-tee': '흰 티 · 청바지',
@@ -39,6 +40,7 @@ PERSON_MAT.onBeforeCompile = (sh) => {
     .replace('#include <common>', '#include <common>\nvarying float vRough;')
     .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vRough;');
 };
+pcss(PERSON_MAT);
 
 // The bounds the frustum (and shadow frustum) test uses: the rest pose sphere, grown to hold swinging arms,
 // strides, gestures and the seated pose.

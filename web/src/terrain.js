@@ -1,7 +1,7 @@
 // Terrain (near: 5 m heightfield with PBR splat shader; far: 100 m ring with Seoul mountains)
 // and the sky dome.  World frame: X = east, Y = up, Z = -north.
 import * as THREE from 'three';
-import { loadTex, shrinkImage } from './materials.js';
+import { loadTex, shrinkImage, pcss } from './materials.js';
 import { MOBILE, mulberry, placeMatrix, versioned } from './util.js';
 
 export class Heightfield {
@@ -148,6 +148,7 @@ export function makeNearTerrain(hf, campus, lib) {
         normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
       `);
   };
+  pcss(m);
   const mesh = new THREE.Mesh(g, m);
   mesh.receiveShadow = true;
   mesh.name = 'terrain_near';

@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry, placeMatrix, countBy, versioned } from './util.js';
+import { pcss } from './materials.js';
 
 const draco = new DRACOLoader().setDecoderPath('draco/');
 export const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
@@ -173,7 +174,7 @@ export class Forest {
       camTop.position.set(0, box.max.y + 50, 0);
       camTop.lookAt(0, box.min.y, 0);
       const card = (geo, rtx, name) => {
-        const mat = new THREE.MeshStandardMaterial({ map: rtx.texture, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
+        const mat = pcss(new THREE.MeshStandardMaterial({ map: rtx.texture, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 }));
         mat.name = name + key;
         const im = instanced(geo, mat, this.near[key].capacity, false);
         this.scene.add(im);

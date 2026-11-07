@@ -4,7 +4,7 @@ import '@fontsource/jua/400.css';
 import '@fontsource/do-hyeon/400.css';
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { MaterialLibrary, SEASONS, texturesReady } from './materials.js';
+import { MaterialLibrary, SEASONS, texturesReady, updatePcss } from './materials.js';
 import { Heightfield, makeNearTerrain, makeFarTerrain, makeFarForest, makeSummitTower, makeCity, makeSky } from './terrain.js';
 import { loadGLB, bindMaterials, mergeStatic, InstancedKit, Forest } from './world.js';
 import { Player, Colliders } from './player.js';
@@ -581,6 +581,7 @@ async function main() {
     ball?.update(dt, tAcc, started && !bird.active);
     // the shadow frustum follows the view in texel-snapped steps; people and cars are redrawn into it every frame
     shadows.update(focus, bird.active ? focus.y : camera.position.y - 10, span);
+    updatePcss(sun, post.hq);    // contact-hardening shadows on the desktop HQ path only
     if (bird.active) {
       ui.drawMinimap(bird.cur.x, bird.cur.y, bird.mapYaw);
       if (tAcc - lastPlace > 0.25) {

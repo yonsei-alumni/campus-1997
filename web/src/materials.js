@@ -256,7 +256,7 @@ export class MaterialLibrary {
   // looked up again at every switch between the two, many times a frame. Instanced kits (world.js) draw with their
   // own copy, kept in step with the original (the season's leaf textures).
   instanced(m) {
-    if (this.mats.get(m.name) !== m) return m;          // not a library material (a prop's own)
+    if (this.mats.get(m.name) !== m) return pcss(m);    // not a library material (a prop's own)
     let v = this.instancedMats.get(m);
     if (!v) {
       v = m.clone();
@@ -349,6 +349,7 @@ export class MaterialLibrary {
         m.envMapIntensity = d.env ?? 1.5;
       }
     }
+    pcss(m);
     m.name = name;
     this.mats.set(name, m);
     return m;
@@ -364,4 +365,103 @@ export class MaterialLibrary {
       m.needsUpdate = true;
     }
   }
+}
+
+// ---------------------------------------------------------------------------- contact-hardening sun shadows (PCSS)
+// The sun is a disc 0.53° across, so a shadow's penumbra widens with the gap between what casts it and what it falls
+// on: sharp at a walker's feet and the foot of a trunk, softer under a high canopy or off a roof edge. three's
+// webgl_shadowmap_pcss example (blocker search -> penumbra estimate -> filter of that radius), for the sun's
+// orthographic shadow camera: map depth is linear, so the penumbra radius is just the blocker-receiver gap along the
+// light times tan(0.265°). Taps compare against the receiver's own plane (slope from screen derivatives), so the
+// search disc, wider than the old PCF kernel, does not find the ground itself on sloped and grazing-lit faces; the
+// filter's taps are bilinear so the penumbra stays smooth without noise. Desktop HQ only (updatePcss, from main.js);
+// the static shadow cache (shadows.js) keeps the same depth map, so it works unchanged.
+export const PCSS = {
+  sunDeg: 0.53,       // the sun's angular diameter
+  reach: 45,          // farthest blocker considered, metres along the light (the tallest halls and trees, sun at ~48°)
+  minTexels: 0.5,     // smallest filter radius: below this the map's texels would show as steps
+  uniform: { value: new THREE.Vector4() },  // x: radius (uv) per unit of map depth (0: off), y: search radius (uv),
+};                                          // z: smallest radius (uv), w: largest |d depth / d uv| of a receiver plane
+
+const vogel = (n) => Array.from({ length: n }, (_, i) => {
+  const r = Math.sqrt((i + 0.5) / n), a = i * 2.39996323;
+  return `vec2(${(r * Math.cos(a)).toFixed(4)}, ${(r * Math.sin(a)).toFixed(4)})`;
+}).join(', ');
+
+// Fetches per pixel: 4 + PCSS_RING to find the blockers (the old PCFSoft kernel read 16), and only in a penumbra
+// 4 * PCSS_TAPS more for the filter (its centre tap reuses the search's four texels).
+const PCSS_RING = 8, PCSS_TAPS = 6;
+const PCSS_CHUNK = THREE.ShaderChunk.shadowmap_pars_fragment.replace('float getShadow(', 'float getShadowPCF(') + /* glsl */`
+#ifdef USE_SHADOWMAP
+  uniform vec4 uPcss;
+  const vec2 PCSS_RING[ ${PCSS_RING} ] = vec2[]( ${vogel(PCSS_RING)} );
+  const vec2 PCSS_TAPS[ ${PCSS_TAPS} ] = vec2[]( ${vogel(PCSS_TAPS)} );
+  // depth test of one point, bilinear over the four texels round it
+  float pcssTap( sampler2D map, vec2 size, vec2 uv, float z ) {
+    vec2 t = uv * size - 0.5, f = fract( t ), e = 1.0 / size, b = ( floor( t ) + 0.5 ) * e;
+    vec4 s = step( vec4( z ), vec4(
+      unpackRGBAToDepth( texture2D( map, b ) ), unpackRGBAToDepth( texture2D( map, b + vec2( e.x, 0.0 ) ) ),
+      unpackRGBAToDepth( texture2D( map, b + vec2( 0.0, e.y ) ) ), unpackRGBAToDepth( texture2D( map, b + e ) ) ) );
+    return mix( mix( s.x, s.y, f.x ), mix( s.z, s.w, f.x ), f.y );
+  }
+  float getShadow( sampler2D shadowMap, vec2 shadowMapSize, float shadowIntensity, float shadowBias, float shadowRadius,
+    vec4 shadowCoord ) {
+    if ( uPcss.x <= 0.0 ) {
+      return getShadowPCF( shadowMap, shadowMapSize, shadowIntensity, shadowBias, shadowRadius, shadowCoord );
+    }
+    vec3 c = shadowCoord.xyz / shadowCoord.w;
+    c.z += shadowBias;
+    // the receiver's plane in the map: depth change per uv (clamped for grazing faces and leaf cards seen edge-on)
+    vec3 cx = dFdx( c ), cy = dFdy( c );
+    float det = cx.x * cy.y - cx.y * cy.x;
+    vec2 dz = abs( det ) > 1e-14 ? vec2( cy.y * cx.z - cx.y * cy.z, cx.x * cy.z - cy.x * cx.z ) / det : vec2( 0.0 );
+    dz = clamp( dz, - uPcss.w, uPcss.w );
+    if ( c.x < 0.0 || c.x > 1.0 || c.y < 0.0 || c.y > 1.0 || c.z > 1.0 ) return 1.0;
+    // 1. blockers: the mean depth of what is nearer the sun, in the four texels round the point (so thin casters, a
+    // pole or a leg, are never stepped over) and on a ring out to the widest penumbra
+    vec2 t = c.xy * shadowMapSize - 0.5, f = fract( t ), e = 1.0 / shadowMapSize, b = ( floor( t ) + 0.5 ) * e;
+    vec4 d4 = vec4(
+      unpackRGBAToDepth( texture2D( shadowMap, b ) ), unpackRGBAToDepth( texture2D( shadowMap, b + vec2( e.x, 0.0 ) ) ),
+      unpackRGBAToDepth( texture2D( shadowMap, b + vec2( 0.0, e.y ) ) ), unpackRGBAToDepth( texture2D( shadowMap, b + e ) ) );
+    vec4 blk = vec4( lessThan( d4, vec4( c.z ) ) );
+    float sum = dot( blk, d4 ), n = dot( blk, vec4( 1.0 ) );
+    for ( int i = 0; i < ${PCSS_RING}; i ++ ) {
+      vec2 o = PCSS_RING[ i ] * uPcss.y;
+      float d = unpackRGBAToDepth( texture2D( shadowMap, c.xy + o ) );
+      if ( d < c.z + dot( dz, o ) ) { sum += d; n += 1.0; }
+    }
+    if ( n == 0.0 ) return 1.0;
+    if ( n == ${4 + PCSS_RING}.0 ) return 1.0 - shadowIntensity;
+    // 2. penumbra radius from the gap (similar triangles with the sun's disc), 3. filter over it: the four texels
+    // above as the centre tap, and a disc of taps round it
+    float r = clamp( ( c.z - sum / n ) * uPcss.x, uPcss.z, uPcss.y );
+    vec4 s = 1.0 - blk;
+    float lit = mix( mix( s.x, s.y, f.x ), mix( s.z, s.w, f.x ), f.y );
+    for ( int i = 0; i < ${PCSS_TAPS}; i ++ ) {
+      vec2 o = PCSS_TAPS[ i ] * r;
+      lit += pcssTap( shadowMap, shadowMapSize, c.xy + o, c.z + dot( dz, o ) );
+    }
+    return mix( 1.0, lit / ${PCSS_TAPS + 1}.0, shadowIntensity );
+  }
+#endif
+`;
+
+// give a material the PCSS shadow lookup (once; a hand-written onBeforeCompile, as terrain's and people's, is kept
+// as the first edit). Returns the material.
+export function pcss(m) {
+  if (PATCHES.get(m)?.some((p) => p.key === 'pcss')) return m;
+  if (!PATCHES.has(m) && Object.hasOwn(m, 'onBeforeCompile')) patchShader(m, m.customProgramCacheKey(), m.onBeforeCompile);
+  patchShader(m, 'pcss', (sh) => {
+    sh.uniforms.uPcss = PCSS.uniform;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <shadowmap_pars_fragment>', PCSS_CHUNK);
+  });
+  return m;
+}
+
+// per frame: the light's current frustum (it widens in the bird's-eye view) and map size; on: desktop HQ
+export function updatePcss(light, on) {
+  const u = PCSS.uniform.value, sh = light.shadow, cam = sh.camera;
+  if (!on) { u.x = 0; return; }
+  const w = cam.right - cam.left, depth = cam.far - cam.near, k = Math.tan(PCSS.sunDeg * Math.PI / 360) / w;
+  u.set(k * depth, k * PCSS.reach, PCSS.minTexels / sh.mapSize.x, 4 * w / depth);
 }
