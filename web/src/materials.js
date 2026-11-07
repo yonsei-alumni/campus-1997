@@ -86,7 +86,7 @@ export function leafUrl(species, season, young = false) {
 // default three keys a program by onBeforeCompile's source text, which is the same for every material with one kind
 // of patch whatever values it bakes in (the bark's foliage glow 0 and the leaves' 0.09 could share one program).
 const PATCHES = new WeakMap();
-function patchShader(m, key, edit) {
+export function patchShader(m, key, edit) {
   if (!PATCHES.has(m)) PATCHES.set(m, []);
   const list = PATCHES.get(m);
   list.push({ key, edit });
@@ -104,9 +104,64 @@ function patchMap(m, key, uniforms, decl, body) {
   });
 }
 
+// ---------------------------------------------------------------------------- wind
+// One clock for everything the wind stirs (leaves, branches, the banners' cloth, life.js): main.js sets it every frame.
+export const windTime = { value: 0 };
+
+// The static shadow map (shadows.js) is drawn once with nothing displaced (three's shadow pass does not run
+// onBeforeCompile either), so a vertex the wind moved looks its shadow up where it rests: a leaf keeps its own light
+// and shade instead of swaying in and out of its own shadow. `windW`: the world-space offset the vertex shader added.
+export const restShadow = (vs) => vs.replace('#include <shadowmap_vertex>', `
+  #ifdef USE_SHADOWMAP
+    worldPosition.xyz -= windW;
+  #endif
+  #include <shadowmap_vertex>
+  #ifdef USE_SHADOWMAP
+    worldPosition.xyz += windW;
+  #endif`);
+
+// Wind in the instanced plants (trees, shrubs; their impostors are rendered from the plain meshes and stay still, as do
+// the ivy and hedges merged into the buildings): the whole plant leans downwind by the square of the height above its
+// foot (h^2/(h^2+60): trunks barely move, crown tips 10-20 cm), two slow sines whose phase runs downwind with the
+// plant's position (a gust travels along the 백양로 ginkgo row, neighbours out of step), under a slow gust swell.
+// Leaves (flutter: metres) also flutter on their own, shrubs hardly (smoothstep on the height).
+function sway(m, flutter) {
+  patchShader(m, `sway${flutter}`, (sh) => {
+    sh.uniforms.uWindT = windTime;
+    sh.vertexShader = restShadow(sh.vertexShader
+      .replace('#include <common>', `#include <common>
+        uniform float uWindT;
+        vec3 windSway(vec3 o, vec3 r) {
+          const vec2 dir = vec2(0.92, -0.38);                     // towards the east-north-east (three xz)
+          float h = max(r.y, 0.0), t = uWindT;
+          float along = dot(o.xz, dir);
+          float ph = along * 0.2 + sin(o.x * 0.37 + o.z * 0.53) * 1.6;
+          float gust = 0.7 + 0.3 * sin(t * 0.21 - along * 0.01);
+          float bend = 0.22 * h * h / (h * h + 60.0) * gust;
+          float s = 0.7 * sin(t * 1.1 - ph) + 0.3 * sin(t * 2.3 - ph * 1.7 + 1.3);   // downwind
+          float c = 0.3 * sin(t * 1.7 - ph * 0.8 + 2.1);                            // across
+          vec3 w = vec3(dir.x * s - dir.y * c, 0.0, dir.y * s + dir.x * c) * bend;
+          ${flutter > 0 ? `float f = dot(r, vec3(1.7, 1.1, 2.3)) + ph;
+          w += vec3(sin(t * 4.3 + f), 0.5 * sin(t * 3.7 + f * 1.3), sin(t * 5.1 + f * 0.8 + 1.0))
+            * (${flutter.toFixed(3)} * smoothstep(0.3, 5.0, h) * gust);` : ''}
+          return w;
+        }`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vec3 windW = vec3(0.0);
+        #ifdef USE_INSTANCING
+        {
+          mat3 im = mat3(instanceMatrix);                         // a turn about the vertical and a uniform scale
+          windW = windSway(instanceMatrix[3].xyz, im * position);
+          transformed += transpose(im) * windW / dot(im[0], im[0]);
+        }
+        #endif`));
+  });
+}
+
 // Foliage: a touch of wrap lighting / translucency so canopies don't go black, and a dithered fade
-// close to the camera so the third-person camera never looks through a wall of leaves or a trunk.
-function foliage(m, glow = 0.09) {
+// close to the camera so the third-person camera never looks through a wall of leaves or a trunk; the wind (sway).
+function foliage(m, glow = 0.09, flutter = 0.03) {
+  sway(m, flutter);
   patchShader(m, `foliage${glow}`, (sh) => {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
@@ -129,7 +184,7 @@ export class MaterialLibrary {
     this.instancedMats = new Map();
     this.leafMats = [];
     this.season = 'summer';
-    this.uniforms = { uGrass: { value: new THREE.Color(...SEASONS.summer.grass) } };
+    this.uniforms = { uGrass: { value: new THREE.Color(...SEASONS.summer.grass) }, uWindT: windTime };
   }
 
   // three keeps one compiled-program slot per material. One drawn both by plain meshes and by InstancedMeshes (the
@@ -184,7 +239,7 @@ export class MaterialLibrary {
           sampledDiffuseColor.rgb = mix(texture2D( map, vMapUv, 9.0 ).rgb, sampledDiffuseColor.rgb, uContrast);
           diffuseColor *= sampledDiffuseColor;`);
       }
-      if (name.startsWith('bark')) foliage(m, 0.0);
+      if (name.startsWith('bark')) foliage(m, 0.0, 0);         // trunks and branches bend with the leaves, no flutter
     } else if (d.leaf) {
       const species = d.leaf;
       m = new THREE.MeshStandardMaterial({
@@ -201,7 +256,7 @@ export class MaterialLibrary {
       m.userData.young = !!d.young;
       m.userData.tint = d.tint || [1, 1, 1];
       m.userData.tintAutumn = d.tintAutumn || m.userData.tint;
-      foliage(m);
+      foliage(m, 0.09, d.opaque ? 0 : 0.03);                  // (a clipped hedge's solid body does not flutter)
       this.leafMats.push(m);
     } else if (d.image) {
       m = new THREE.MeshStandardMaterial({ map: loadTex('assets/textures/' + d.image, { repeat: false }), roughness: d.rough ?? 0.6 });

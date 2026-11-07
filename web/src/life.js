@@ -1,6 +1,7 @@
 // Campus life: 1997 banners (현수막) across 백양로, students walking, cars on the road.
 import * as THREE from 'three';
 import { mulberry, wrapAngle } from './util.js';
+import { patchShader, restShadow } from './materials.js';
 import { play, locomotion, gesturing } from './characters.js';
 import { kindOf, meeting, chatter, hello, excuse, lineTime } from './talk.js';
 
@@ -165,8 +166,7 @@ export function makeBanners(banners, lib) {
   group.name = 'banners';
   const cloths = [];
   const ropeMat = new THREE.MeshStandardMaterial({ color: 0xd9d5c9, roughness: 0.9 });
-  const windT = { value: 0 };
-  group.userData.update = (t) => { windT.value = t; };
+  const windT = lib.uniforms.uWindT;   // the trees' wind clock (materials.js)
   const V = (p) => new THREE.Vector3(p[0], p[2], -p[1]);
   for (const b of banners) {
     const g = new THREE.Group();      // one banner (cloth + ropes): hidden outside its season when it has `only`
@@ -209,18 +209,34 @@ export function makeBanners(banners, lib) {
     geo.setIndex(idx);
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
-    const uN = { value: nrm.clone() }, uPh = { value: ph };
-    mat.onBeforeCompile = (sh) => {
-      sh.uniforms.uWindT = windT; sh.uniforms.uWindN = uN; sh.uniforms.uWindPh = uPh;
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform float uWindT, uWindPh; uniform vec3 uWindN;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
+    // the wind: slow bellies along the cloth under the trees' gust swell, and small ripples running across it
+    // from the west end, most at the free bottom edge; the normal tilts with the slope so they catch the light
+    const W = { uWindN: { value: nrm.clone() }, uWindS: { value: new THREE.Vector3(span.x, 0, span.z).normalize() },
+      uWindPh: { value: ph }, uWindL: { value: len }, uWindDep: { value: dep } };
+    patchShader(mat, 'bannerWind', (sh) => {
+      Object.assign(sh.uniforms, W, { uWindT: windT });
+      sh.vertexShader = restShadow(sh.vertexShader
+        .replace('#include <common>', `#include <common>
+          uniform float uWindT, uWindPh, uWindL, uWindDep; uniform vec3 uWindN, uWindS;
+          // offset along the cloth's normal (metres) at t (0 west .. 1 east end), v (0 top .. 1 bottom)
+          float bannerWind(float t, float v) {
+            float x = t * uWindL, T = uWindT, P = uWindPh, e = sin(t * 3.14159);
+            float gust = 0.75 + 0.25 * sin(T * 0.21 + P);
+            float d = (0.3 + 0.7 * v) * (0.05 * sin(T * 1.3 + t * 6.0 + P) + 0.02 * sin(T * 2.1 + t * 13.0 + P * 1.7));
+            d += (0.006 + 0.022 * v * v) * (sin(T * 4.6 - x * 2.3 + P) + 0.5 * sin(T * 7.3 - x * 4.1 + P * 2.0));
+            return d * e * gust;
+          }`)
+        .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+          float windD = bannerWind(uv.x, 1.0 - uv.y);
           {
-            float t = uv.x, v = 1.0 - uv.y;
-            float w = sin(t * 3.14159) * (0.3 + 0.7 * v);
-            transformed += uWindN * w * (0.05 * sin(uWindT * 1.3 + t * 6.0 + uWindPh) + 0.02 * sin(uWindT * 2.1 + t * 13.0 + uWindPh * 1.7));
-          }`);
-    };
+            float sx = (bannerWind(uv.x + 0.01, 1.0 - uv.y) - windD) / (0.01 * uWindL);    // slope along the cloth
+            float sy = (bannerWind(uv.x, 1.0 - uv.y + 0.05) - windD) / (0.05 * uWindDep);  // and down it
+            objectNormal = normalize(objectNormal - dot(objectNormal, uWindN) * (uWindS * sx - vec3(0.0, sy, 0.0)));
+          }`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          vec3 windW = uWindN * windD;
+          transformed += windW;`));
+    });
     const texH = Math.max(96, Math.min(256, Math.round(2048 * dep / len)));
     cloths.push({ b, mat, g, key: null, texH });
     const m = new THREE.Mesh(geo, mat);

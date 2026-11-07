@@ -577,7 +577,7 @@ async function main() {
     traffic.update(dt, started ? player : NOBODY, focus);
     gates.update(dt, traffic);
     fountainWater?.update(dt, camera);
-    banners.userData.update(tAcc);
+    lib.uniforms.uWindT.value = tAcc;     // the wind in the leaves, branches and banners (materials.js sway)
     ball?.update(dt, tAcc, started && !bird.active);
     // the shadow frustum follows the view in texel-snapped steps; people and cars are redrawn into it every frame
     shadows.update(focus, bird.active ? focus.y : camera.position.y - 10, span);
