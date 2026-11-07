@@ -7,6 +7,7 @@
 // the shadows of the far trees, which are impostors that cast nothing.
 import * as THREE from 'three';
 import { versioned } from './util.js';
+import { patchShaderOwn } from './materials.js';
 
 // the baked rectangle (campus x = east, y = north, metres; every building and tree, and their shadows to the
 // north-west) and its size in texels: 31 cm texels
@@ -72,10 +73,11 @@ function editShader(sh, uniforms, mode) {
     .replace('#include <common>', '#include <common>\nvarying vec3 vSunW; varying vec3 vSunN;')
     .replace('#include <project_vertex>', `#include <project_vertex>${VERT}`);
   // (the lights chunk is expanded here so the sun's line in it can be reached; another edit may have done it already.
-  // The function goes after shadowmap_pars_fragment, where the real-time map's coordinates are declared.)
+  // The function goes right before main(), after every declaration: the real-time map's coordinates among them,
+  // whether shadowmap_pars_fragment is still an include or the PCSS edit has already replaced it.)
   sh.fragmentShader = sh.fragmentShader
     .replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin)
-    .replace('#include <shadowmap_pars_fragment>', `#include <shadowmap_pars_fragment>\n#define SUN_MODE ${mode}${FRAG_DECL}`)
+    .replace('void main() {', `#define SUN_MODE ${mode}${FRAG_DECL}\nvoid main() {`)
     .replace(SUN_LINE, `${SUN_LINE}\n\t\tdirectLight.color *= sunBaked();`);
 }
 
@@ -122,13 +124,13 @@ export class SunMap {
   get on() { return this._on; }
   set on(v) { this._on = v; this.uniforms.uSunMap.value = v && this.texture ? this.texture : this.white; }
 
-  // add the baked shadow to a lit material's sunlight (kept on top of the material's own shader edits)
+  // add the baked shadow to a lit material's sunlight
   patch(m, mode = 1) {
     if (!m || !m.isMeshStandardMaterial || this.patched.has(m)) return;
     this.patched.add(m);
-    const prev = m.onBeforeCompile, key = m.customProgramCacheKey();
-    m.onBeforeCompile = (sh, r) => { prev.call(m, sh, r); editShader(sh, this.uniforms, mode); };
-    m.customProgramCacheKey = () => `${key}|sun${mode}`;
+    // on the shared patch stack (materials.js), so a patch added later (the atmosphere's, from main.js) stacks on it
+    // instead of replacing it
+    patchShaderOwn(m, `sun${mode}`, (sh) => editShader(sh, this.uniforms, mode));
     m.needsUpdate = true;
   }
 

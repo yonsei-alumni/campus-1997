@@ -89,9 +89,17 @@ const PATCHES = new WeakMap();
 export function patchShader(m, key, edit) {
   if (!PATCHES.has(m)) PATCHES.set(m, []);
   const list = PATCHES.get(m);
+  if (list.some((p) => p.key === key)) return;        // once per material (an instanced copy shares its original's list)
   list.push({ key, edit });
   m.onBeforeCompile = (sh) => { for (const p of list) p.edit(sh); };
   m.customProgramCacheKey = () => list.map((p) => p.key).join('|');
+}
+
+// the same, for a material that may carry a hand-written onBeforeCompile (terrain's, people's): that one becomes the
+// first edit of the stack instead of being replaced
+export function patchShaderOwn(m, key, edit) {
+  if (!PATCHES.has(m) && Object.hasOwn(m, 'onBeforeCompile')) patchShader(m, m.customProgramCacheKey(), m.onBeforeCompile);
+  patchShader(m, key, edit);
 }
 
 // replace the diffuse map read: `body` gets the texel in sampledDiffuseColor and applies it to diffuseColor
@@ -262,6 +270,9 @@ export class MaterialLibrary {
       v = m.clone();
       v.onBeforeCompile = m.onBeforeCompile;            // (clone() keeps neither)
       v.customProgramCacheKey = m.customProgramCacheKey;
+      // the copy shares the original's patch list: a patch added to either later (the baked sun shadow's, from
+      // main.js) lands once in the shared list instead of once there and once more on the copy
+      if (PATCHES.has(m)) PATCHES.set(v, PATCHES.get(m));
       this.instancedMats.set(m, v);
       if (this.leafMats.includes(m)) this.leafMats.push(v);
     }
@@ -451,8 +462,7 @@ const PCSS_CHUNK = THREE.ShaderChunk.shadowmap_pars_fragment.replace('float getS
 // as the first edit). Returns the material.
 export function pcss(m) {
   if (PATCHES.get(m)?.some((p) => p.key === 'pcss')) return m;
-  if (!PATCHES.has(m) && Object.hasOwn(m, 'onBeforeCompile')) patchShader(m, m.customProgramCacheKey(), m.onBeforeCompile);
-  patchShader(m, 'pcss', (sh) => {
+  patchShaderOwn(m, 'pcss', (sh) => {
     sh.uniforms.uPcss = PCSS.uniform;
     sh.fragmentShader = sh.fragmentShader.replace('#include <shadowmap_pars_fragment>', PCSS_CHUNK);
   });
