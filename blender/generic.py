@@ -448,49 +448,65 @@ def barrel_roof(mb, cx, cy, L, W, ang, zt, rise=0.22, seg=12):
 
 
 # ----------------------------------------------------------------------------- rooftop features the outlines cannot say
-def observatory(mb, b, zt, st):
-    """과학관's observatory (reference/학교연혁_과학관.jpg, top right; reference/활천대_2009_연세춘추.jpg, far left): a
-    square white tower about 1.4 storeys over the roof near the east end of the east wing, carrying a silver dome
-    with an observing slit.  The tower stands back from the south face and is about 2.5 window bays across; the dome
-    nearly fills it (7.6 m across on a short drum), its top some 9.5 m over the main roof."""
-    fp = b['footprint']
-    e0, e1 = Vector(fp[0]), Vector(fp[1])                # the east face of the east wing (south -> north)
-    w = (Vector(fp[14]) - e0).normalized()               # along the wing, westwards
-    c = (e0 + e1) / 2 + w * 7.5                          # tower centre, 7.5 m in from the east face (aerial)
-    ang = math.atan2(w.y, w.x)
-    T, Ht = 9.0, 5.0                                     # tower side, height over the roof
+def dome_tower(mb, c, ang, zt, st, T, Ht, R, seg, rings, slit, drum, win, seam=0.04, phase=0.0):
+    """A square tower T a side and Ht over the roof zt at c (its sides along ang), with a window (half width, sill and
+    head over the roof) in three faces, carrying a silver dome R in radius on a white drum `drum` tall: gores of the
+    shell, the gores `slit` dark (the observing slit, running up over the top), raised seams between every other two."""
     zb = zt + Ht
     mb.box((c.x, c.y, zt + Ht / 2), (T, T, Ht), st['wall'], rotz=ang, mats={'top': 'roof_flat'}, skip=('bottom',))
     mb.box((c.x, c.y, zb + 0.12), (T + 0.3, T + 0.3, 0.24), 'concrete', rotz=ang, skip=('bottom',))   # coping
     cs, sn = math.cos(ang), math.sin(ang)
-    L = lambda u, v, z: (c.x + u * cs - v * sn, c.y + u * sn + v * cs, z)     # u westwards, v southwards
-    for (u, v, nu, nv) in ((0, T / 2, 0, 1), (-T / 2, 0, -1, 0), (T / 2, 0, 1, 0)):            # a window: S, E, W faces
+    L = lambda u, v, z: (c.x + u * cs - v * sn, c.y + u * sn + v * cs, z)     # u along ang, v to its right
+    hw, z0, z1 = win
+    for (u, v, nu, nv) in ((0, T / 2, 0, 1), (-T / 2, 0, -1, 0), (T / 2, 0, 1, 0)):
         tu, tv = -nv, nu
         p = lambda s, z, d=0.02: L(u + tu * s + nu * d, v + tv * s + nv * d, z)
-        mb.quad(p(-0.45, zt + 2.2), p(0.45, zt + 2.2), p(0.45, zt + 3.6), p(-0.45, zt + 3.6), st['glass'])
-    R, seg, rings = 3.8, 24, 7
-    mb.cylinder((c.x, c.y), R + 0.1, zb + 0.24, zb + 0.75, 'paint_white', seg=seg, cap_top=False)   # drum
-    za = zb + 0.75
-    # the dome: gores of the silver shell, with the slit (two gores wide, dark) running up over the top
+        mb.quad(p(-hw, zt + z0), p(hw, zt + z0), p(hw, zt + z1), p(-hw, zt + z1), st['glass'])
+    mb.cylinder((c.x, c.y), R + 0.1, zb + 0.24, zb + 0.24 + drum, 'paint_white', seg=seg, cap_top=False)
+    za = zb + 0.24 + drum
+    a_ = ang + phase
     for i in range(seg):
         a0, a1 = 2 * math.pi * i / seg, 2 * math.pi * (i + 1) / seg
-        slit = i in (5, 6)                               # facing south-west
+        dark = i in slit
         for j in range(rings):
             t0, t1 = math.pi / 2 * j / rings, math.pi / 2 * (j + 1) / rings
-            q = lambda a, t: (c.x + R * math.cos(t) * math.cos(a + ang), c.y + R * math.cos(t) * math.sin(a + ang),
+            q = lambda a, t: (c.x + R * math.cos(t) * math.cos(a + a_), c.y + R * math.cos(t) * math.sin(a + a_),
                               za + R * math.sin(t))
-            mb.face([q(a0, t0), q(a1, t0), q(a1, t1), q(a0, t1)], 'metal_dark' if slit else 'lamp_housing',
-                    smooth='obs_dome' if not slit else False)
-    for i in range(0, seg, 2):                           # raised seams between the gores
-        a = 2 * math.pi * i / seg + ang
+            mb.face([q(a0, t0), q(a1, t0), q(a1, t1), q(a0, t1)], 'metal_dark' if dark else 'lamp_housing',
+                    smooth='obs_dome' if not dark else False)
+    for i in range(0, seg, 2):
+        a = 2 * math.pi * i / seg + a_
         for j in range(rings):
             t0, t1 = math.pi / 2 * j / rings, math.pi / 2 * (j + 1) / rings
-            r0, r1 = R + 0.03, R + 0.03
+            r0 = r1 = R + 0.03
             p0 = (c.x + r0 * math.cos(t0) * math.cos(a), c.y + r0 * math.cos(t0) * math.sin(a), za + r0 * math.sin(t0))
             p1 = (c.x + r1 * math.cos(t1) * math.cos(a), c.y + r1 * math.cos(t1) * math.sin(a), za + r1 * math.sin(t1))
-            dx, dy = -math.sin(a) * 0.04, math.cos(a) * 0.04
+            dx, dy = -math.sin(a) * seam, math.cos(a) * seam
             mb.quad((p0[0] - dx, p0[1] - dy, p0[2]), (p0[0] + dx, p0[1] + dy, p0[2]),
                     (p1[0] + dx, p1[1] + dy, p1[2]), (p1[0] - dx, p1[1] - dy, p1[2]), 'frame_silver')
+
+
+def observatory(mb, b, zt, st):
+    """과학관's two domes on its east wing.  The observatory (reference/학교연혁_과학관.jpg, top right;
+    reference/활천대_2009_연세춘추.jpg, far left): a square white tower about 1.4 storeys over the roof near the east
+    end, carrying a silver dome with an observing slit.  The tower stands back from the south face and is about 2.5
+    window bays across; the dome nearly fills it (7.6 m across on a short drum), its top some 9.5 m over the main
+    roof.  And at the wing's west end, where it meets the front block, a small tower with a small silver dome
+    (학교연혁_과학관.jpg, x 213 y 55 in the 454 px print; the 1995 aerial photo, a white tower with a rounded top at
+    x 515 - 550 of 3200).  No photo shows it near enough to measure: against the window bays round each, the small
+    dome is about 0.4 - 0.5 of the large one across and its top about 0.7 as high over the roof, so 3.6 m across on
+    a tower 4.4 m a side and 4.2 m high (reference/고증.md)."""
+    fp = b['footprint']
+    e0, e1 = Vector(fp[0]), Vector(fp[1])                # the east face of the east wing (south -> north)
+    w = (Vector(fp[14]) - e0).normalized()               # along the wing, westwards
+    ang = math.atan2(w.y, w.x)
+    # (the slit two gores wide, facing south-west: u westwards, v southwards)
+    dome_tower(mb, (e0 + e1) / 2 + w * 7.5, ang, zt, st, T=9.0, Ht=5.0, R=3.8, seg=24, rings=7, slit=(5, 6),
+               drum=0.51, win=(0.45, 2.2, 3.6))
+    # the small one over the junction with the front block (whose east face meets the wing 49.5 m from its east face),
+    # its slit one gore wide, the same way
+    dome_tower(mb, (e0 + e1) / 2 + w * (Vector(fp[14]) - e0).length, ang, zt, st, T=4.4, Ht=4.2, R=1.8, seg=16,
+               rings=5, slit=(4,), drum=0.3, win=(0.35, 1.8, 3.1), seam=0.025, phase=-math.pi / 16)
 
 
 ROOF_EXTRAS = {222843398: observatory}
