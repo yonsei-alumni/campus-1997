@@ -8,6 +8,7 @@ import { MaterialLibrary, SEASONS, texturesReady, updatePcss } from './materials
 import { ATMOS, globalPatch, setupAtmosphere, updateAtmosphere } from './materials.js';
 import { Heightfield, makeNearTerrain, makeFarTerrain, makeFarForest, makeSummitTower, makeCity, makeSky } from './terrain.js';
 import { loadGLB, bindMaterials, mergeStatic, InstancedKit, Forest } from './world.js';
+import { Grass } from './grass.js';
 import { Player, Colliders } from './player.js';
 import { UI } from './ui.js';
 import { Post } from './post.js';
@@ -118,6 +119,7 @@ async function main() {
   const terrain = makeNearTerrain(hfNear, campus, lib);
   sunMap.patch(terrain.material, 0);
   scene.add(terrain);
+  const grass = new Grass(renderer, scene, lib, hfNear, campus, sun);     // blades on the lawn round the camera
   scene.add(makeFarTerrain(hfFar, T.near.half));
   scene.add(makeCity(hfFar, T.near.half));
   scene.add(makeFarForest(hfFar, T.near.half));
@@ -606,6 +608,7 @@ async function main() {
     sky.position.copy(camera.position);
     updateAtmosphere(dt);
     forest.update(focus);
+    grass.update(camera.position, tAcc);
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
     crowd.bubbles.update(tAcc, started && !bird.active);
     traffic.update(dt, started ? player : NOBODY, focus);
@@ -661,7 +664,7 @@ async function main() {
     },
   };
   window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows, fountainWater,
-    startWalk, enterBird, leaveBird, record, ball, post, sunMap, blobs,
+    startWalk, enterBird, leaveBird, record, ball, post, grass, sunMap, blobs,
     // tools/bake_sun_shadows.mjs (desktop path: it draws with the shadow map; the page needs reloading afterwards)
     bakeSunMap: () => bakeSunMap({ renderer, scene, sun, sunDir, shadows, forest, hf: hfNear, hide: [banners, ball?.mesh], skip: farScenery }) };
   window.__y97.atmos = ATMOS;
