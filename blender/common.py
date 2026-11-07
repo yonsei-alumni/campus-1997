@@ -147,6 +147,7 @@ class MeshBuilder:
         self.faces = []        # (vert indices, mat, uvs or None, smooth)
         self.colors = None     # optional per-face-corner colour list aligned to faces
         self.fcols = []
+        self.panes = {}        # face index -> pane hint for window glass (pane_uv)
         self.xf = Matrix.Identity(4)
         self.uv_rot = 0.0
 
@@ -161,14 +162,17 @@ class MeshBuilder:
         self.verts.append(p)
         return len(self.verts) - 1
 
-    def face(self, pts, mat, uvs=None, smooth=False, col=None):
-        """pts in local coords (transformed by self.xf). uvs optional list of (u,v)."""
+    def face(self, pts, mat, uvs=None, smooth=False, col=None, panes=None):
+        """pts in local coords (transformed by self.xf). uvs optional list of (u,v).
+        panes: window glass only, (cols, rows[, hall]) panes across the face (pane_uv)."""
         if len(pts) < 3:
             return
         share = smooth if isinstance(smooth, str) else ('s' if smooth else None)
         idx = [self._v(p, share) for p in pts]
         if len(set(idx)) < 3:
             return
+        if panes:
+            self.panes[len(self.faces)] = panes
         self.faces.append((idx, mat, uvs, bool(smooth)))
         self.fcols.append(col)
 
@@ -256,7 +260,8 @@ class MeshBuilder:
             poly.material_index = mats.index(mat)
             poly.use_smooth = smooth
             if uvs is None:
-                uvs = auto_uv([self.verts[i] for i in idx])
+                pts = [self.verts[i] for i in idx]
+                uvs = pane_uv(pts, self.panes.get(pi)) if mat in ROOM_GLASS else auto_uv(pts)
             for k, li_ in enumerate(poly.loop_indices):
                 uvl.data[li_].uv = uvs[k]
                 if has_col:
@@ -288,6 +293,45 @@ def auto_uv(pts):
         bt = n.cross(t).normalized()
         return [(Vector(p).dot(t), Vector(p).dot(bt)) for p in pts]
     return [(Vector(p).dot(t), p[2]) for p in pts]
+
+
+# Window glass gets pane UVs instead of metric ones, so that every window shows a different room: u and v count the
+# panes across the face (a whole number per pane, 0..1 across it) from a pseudo-random whole-number offset per face.
+# The web app's glass shader (web/src/materials.js windowGlass) picks a cell of its room atlas from the whole part and
+# spreads it over the fraction.  v from HALL up: a hall (lobby, stair hall) behind tall glazing instead of a room.
+ROOM_GLASS = ('glass', 'glass_green')
+HALL = 32
+
+
+def pane_uv(pts, panes=None):
+    """panes: (cols, rows[, hall]) or None -> panes about a window bay wide and a storey tall"""
+    a, b, c = Vector(pts[0]), Vector(pts[1]), Vector(pts[2])
+    n = (b - a).cross(c - a)
+    if n.length < 1e-9 and len(pts) > 3:
+        n = (Vector(pts[2]) - a).cross(Vector(pts[3]) - a)
+    n = n.normalized() if n.length > 0 else Vector((0, 0, 1))
+    flat = abs(n.z) > 0.72
+    if flat:                                   # a skylight: x, y
+        sz = [(p[0], p[1]) for p in pts]
+    else:                                      # along the wall (to the right seen from outside), up the slope
+        t = Vector((-n.y, n.x, 0)).normalized()
+        bt = n.cross(t).normalized()
+        sz = [(Vector(p).dot(t), Vector(p).dot(bt)) for p in pts]
+    s0, s1 = min(p[0] for p in sz), max(p[0] for p in sz)
+    z0, z1 = min(p[1] for p in sz), max(p[1] for p in sz)
+    W, H = max(s1 - s0, 1e-3), max(z1 - z0, 1e-3)
+    if panes:
+        cols, rows = panes[0], panes[1]
+        hall = panes[2] if len(panes) > 2 else H / rows > 3.0
+    else:
+        cols, rows = max(1, round(W / 3.4)), max(1, round(H / 3.6))
+        hall = flat or H / rows > 3.0 or W / cols > 4.5
+    m = sum(pts, Vector()) / len(pts)          # the same window gets the same rooms in every build
+    h = (int(round(m.x * 50)) * 73856093) ^ (int(round(m.y * 50)) * 19349663) ^ (int(round(m.z * 50)) * 83492791)
+    h = (h ^ (h >> 13)) * 1274126177 & 0xffffffff
+    ox, oy = h % 24, (h >> 8) % 16 + (HALL if hall else 0)
+    e = 0.02                                   # keep off the whole numbers (Draco quantises the UVs)
+    return [(ox + e + (s - s0) / W * (cols - 2 * e), oy + e + (z - z0) / H * (rows - 2 * e)) for s, z in sz]
 
 
 # ----------------------------------------------------------------------------- 2D geometry

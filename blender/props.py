@@ -75,9 +75,9 @@ def payphone_booth():
         for sy in (-1, 1):
             mb.box((sx * (w / 2 - 0.03), sy * (d / 2 - 0.03), h / 2), (0.06, 0.06, h), 'frame_silver')
     for sx in (-1, 1):                                                                 # clear side panels, mid rail
-        mb.box((sx * (w / 2 - 0.03), 0, 1.2), (0.03, d - 0.1, 1.9), 'glass')
+        mb.box((sx * (w / 2 - 0.03), 0, 1.2), (0.03, d - 0.1, 1.9), 'glass_door')
         mb.box((sx * (w / 2 - 0.03), 0, 1.0), (0.05, d - 0.06, 0.05), 'frame_silver')
-    mb.box((0, d / 2 - 0.03, 1.2), (w - 0.1, 0.03, 1.9), 'glass')                      # back panel: lower half solid
+    mb.box((0, d / 2 - 0.03, 1.2), (w - 0.1, 0.03, 1.9), 'glass_door')                 # back panel: lower half solid
     mb.box((0, d / 2 - 0.03, 0.55), (w - 0.06, 0.05, 0.9), 'plastic_grey')
     mb.box((0, -d / 2 + 0.03, 2.05), (w - 0.06, 0.06, 0.2), 'frame_silver')            # front head rail
     mb.box((0, 0, h + 0.05), (w + 0.12, d + 0.12, 0.1), 'frame_silver')                # roof

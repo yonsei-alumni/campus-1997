@@ -177,6 +177,70 @@ function foliage(m, glow = 0.09, flutter = 0.03) {
   });
 }
 
+// Window glass (materials.json `rooms`): a room behind every pane, the sky over it by Fresnel. Blender gives window
+// glass pane UVs (blender/common.py pane_uv): the whole part names a pane (a random number per window), the fraction
+// runs across it, and v from 32 marks a hall behind tall glazing. Each pane takes a cell of the room atlas
+// (tools/make_window_atlas.py: rows 0-2 rooms, row 3 halls), lit like a surface just behind the glass, or by its own
+// light where the lights are on. The glass reflects the environment by Fresnel (ior 1.5, both faces of a pane: F0 ~
+// 0.08), every pane tilted a hair so that neighbours mirror a different patch of sky. three ignores envMapIntensity
+// with scene.environment, so the glass scales its own IBL radiance.
+// a room pane's cell: dark rooms, blinds and pale green curtains (학생회관) more often; 8, 13, 15 have the lights on
+const ROOM_CELLS = '0, 0, 1, 1, 2, 3, 4, 5, 6, 6, 7, 8, 9, 10, 11, 11';
+function windowGlass(d) {
+  const m = new THREE.MeshPhysicalMaterial({
+    map: loadTex('assets/textures/' + d.rooms, { repeat: false }),
+    roughness: d.rough ?? 0.05,
+    metalness: 0,
+    ior: 1.5,
+  });
+  // both faces of the pane reflect (F0 0.04 each); the back face's light crosses the tinted glass (학생회관's green)
+  const t = new THREE.Color(...(d.tint || [0.66, 0.69, 0.69]));
+  const tm = Math.max(t.r, t.g, t.b);
+  m.specularColor.setRGB(1 + t.r / tm, 1 + t.g / tm, 1 + t.b / tm);
+  const u = {
+    uRoomTint: { value: t },                       // what the (dusty) glass lets through
+    uRoomLit: { value: d.lit ?? 0.45 },            // a room with the lights on
+    uGlassEnv: { value: d.env ?? 2.0 },            // the reflection, x scene.environmentIntensity
+  };
+  m.userData.rooms = u;                            // (to tune from the console)
+  patchShader(m, 'rooms', (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform vec3 uRoomTint;
+        uniform float uRoomLit, uGlassEnv;
+        const int ROOM_CELLS[16] = int[16](${ROOM_CELLS});
+        uint paneMix(uint n) { n ^= n >> 16; n *= 0x7feb352du; n ^= n >> 15; n *= 0x846ca68bu; n ^= n >> 16; return n; }
+        float paneHash(vec2 p, uint k) {
+          uvec2 q = uvec2(ivec2(p) + 4096);
+          return float(paneMix(q.x * 1973u + q.y * 9277u + k * 26699u) >> 8) / 16777216.0;
+        }`)
+      .replace('#include <map_fragment>', `
+        vec2 paneUv = vec2(vMapUv.x, 1.0 - vMapUv.y);              // (glTF flips v)
+        vec2 pane = floor(paneUv), fp = fract(paneUv);
+        int cell = pane.y > 31.5 ? 12 + int(paneHash(pane, 1u) * 4.0) : ROOM_CELLS[int(paneHash(pane, 1u) * 16.0)];
+        if (paneHash(pane, 2u) < 0.5) fp.x = 1.0 - fp.x;            // mirrored rooms: twice the variety
+        vec2 cuv = (vec2(float(cell % 4), float(cell / 4)) + 0.02 + vec2(fp.x, 1.0 - fp.y) * 0.96) * 0.25;
+        // gradients of the continuous uv: no mip seam where the fraction wraps between two panes of one face
+        vec3 room = textureGrad(map, cuv, dFdx(paneUv) * 0.24, dFdy(paneUv) * 0.24).rgb;
+        room *= uRoomTint * (0.75 + 0.5 * paneHash(pane, 3u));
+        float glassF = 0.08 + 0.92 * pow(1.0 - saturate(abs(dot(normalize(vNormal), normalize(vViewPosition)))), 5.0);
+        float roomOn = (cell == 8 || cell == 13 || cell == 15) ? 1.0 : 0.0;
+        diffuseColor.rgb = room * (1.0 - roomOn) * (1.0 - glassF);
+        vec3 roomGlow = room * roomOn * uRoomLit * (1.0 - glassF);
+        vec3 paneTilt = (vec3(paneHash(pane, 4u), paneHash(pane, 5u), paneHash(pane, 6u)) - 0.5) * 0.05;`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        normal = normalize(normal + mat3(viewMatrix) * paneTilt);`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += roomGlow;`)
+      .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
+        // the HDRI's horizon is open haze; the campus's is trees and buildings: dim what the glass mirrors low
+        vec3 glassR = (vec4(reflect(-geometryViewDir, geometryNormal), 0.0) * viewMatrix).xyz;
+        radiance *= uGlassEnv * mix(0.35, 1.0, smoothstep(-0.05, 0.4, glassR.y));`);
+  });
+  return m;
+}
+
 export class MaterialLibrary {
   constructor(defs) {
     this.defs = defs;
@@ -258,6 +322,8 @@ export class MaterialLibrary {
       m.userData.tintAutumn = d.tintAutumn || m.userData.tint;
       foliage(m, 0.09, d.opaque ? 0 : 0.03);                  // (a clipped hedge's solid body does not flutter)
       this.leafMats.push(m);
+    } else if (d.rooms) {
+      m = windowGlass(d);
     } else if (d.image) {
       m = new THREE.MeshStandardMaterial({ map: loadTex('assets/textures/' + d.image, { repeat: false }), roughness: d.rough ?? 0.6 });
       if (d.emissiveMap) {

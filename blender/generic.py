@@ -88,8 +88,9 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
             mb.quad(P(w1, zh, 0), P(w1, zh, -d), P(w0, zh, -d), P(w0, zh, 0), rv)
             mb.quad(P(w0, zh, 0), P(w0, zh, -d), P(w0, zs, -d), P(w0, zs, 0), rv)
             mb.quad(P(w1, zs, 0), P(w1, zs, -d), P(w1, zh, -d), P(w1, zh, 0), rv)
-            # glass + frame
-            mb.quad(P(w0, zs, -d), P(w1, zs, -d), P(w1, zh, -d), P(w0, zh, -d), glass)
+            # glass + frame: one room behind the window (a shop or the gym's hall instead: common.py pane_uv)
+            mb.quad(P(w0, zs, -d), P(w1, zs, -d), P(w1, zh, -d), P(w0, zh, -d), glass,
+                    panes=(1, 1, shop or st is STYLE['gym']))
             fw = 0.06
             nm = st['mull'] if not shop else 3
             dd = -d + 0.05

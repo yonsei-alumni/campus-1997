@@ -95,8 +95,24 @@ def rect(L, W):
     return [(-L / 2, -W / 2), (L / 2, -W / 2), (L / 2, W / 2), (-L / 2, W / 2)]
 
 
-def flat_wall(mb, P, s0, s1, z0, z1, mat, d=0.0):
-    mb.quad(P(s0, z0, d), P(s1, z0, d), P(s1, z1, d), P(s0, z1, d), mat)
+def flat_wall(mb, P, s0, s1, z0, z1, mat, d=0.0, **kw):
+    mb.quad(P(s0, z0, d), P(s1, z0, d), P(s1, z1, d), P(s0, z1, d), mat, **kw)
+
+
+def glass_run(mb, P, s0, s1, z0, z1, d, cuts, glass='glass', hall=None):
+    """Glass over [s0, s1] x [z0, z1] at depth d of a wall P, one pane (a room or a hall seen through it, common.py
+    pane_uv) between each two cuts (mullions), so that the rooms change behind a mullion, not in mid-pane."""
+    edges = [s0] + [c for c in cuts if s0 + 0.3 < c < s1 - 0.3] + [s1]
+    for a, b in zip(edges, edges[1:]):
+        mb.quad(P(a, z0, d), P(b, z0, d), P(b, z1, d), P(a, z1, d), glass, panes=(1, 1) if hall is None else (1, 1, hall))
+
+
+def pane_count(n, size, target):
+    """How many panes of whole bays: n bays over size metres grouped into panes about target metres (dividing n)."""
+    k = max(1, min(n, round(target * n / max(size, 1e-3))))
+    while n % k:
+        k -= 1
+    return n // k
 
 
 def window_grid(mb, P, L, z0, nfl, fh, bay, mat_wall, ww=0.6, sill=0.9, head=0.6, depth=0.25,
@@ -180,8 +196,9 @@ def library():
         P, Le, t, n = edge_P(a, bb)
         gaps = [(x0 - a[0] + 0.15, x1 - a[0] - 0.15) for x0, x1 in door_bays] if i == 0 else []
         cuts = [0.0] + [v for g in gaps for v in g] + [Le]
+        mull = [(k + 0.5) * Le / int(Le / 2.0) for k in range(int(Le / 2.0))]
         for s0_, s1_ in zip(cuts[0::2], cuts[1::2]):                          # ground floor: dark glazing, set back
-            flat_wall(mb, P, s0_, s1_, g0, g0 + 3.4, 'glass', d=-0.3)
+            glass_run(mb, P, s0_, s1_, g0, g0 + 3.4, -0.3, mull[1::2])        # a hall behind every two lights
         for k in range(int(Le / 2.0)):
             s = (k + 0.5) * Le / int(Le / 2.0)
             if any(g[0] - 0.1 < s < g[1] + 0.1 for g in gaps):
@@ -195,7 +212,7 @@ def library():
         for f in range(1, nf):
             zf = g0 + 3.4 + (f - 1) * fh
             flat_wall(mb, P, 0, Le, zf, zf + 1.35, 'panel_bronze')
-            flat_wall(mb, P, 0, Le, zf + 1.35, zf + fh, 'glass', d=-0.12)
+            glass_run(mb, P, 0, Le, zf + 1.35, zf + fh, -0.12, [(k + 0.5) * Le / int(Le / 1.4) for k in range(1, int(Le / 1.4), 2)])
             mb.quad(P(0, zf + 1.35, 0), P(Le, zf + 1.35, 0), P(Le, zf + 1.35, -0.12), P(0, zf + 1.35, -0.12), 'panel_bronze')
             for k in range(int(Le / 1.4)):
                 s = (k + 0.5) * Le / int(Le / 1.4)
@@ -265,7 +282,8 @@ def union():
     for i in range(4):
         a, bb = core[i], core[(i + 1) % 4]
         P, Le, t, n = edge_P(a, bb)
-        flat_wall(mb, P, 0, Le, 0.3, g, 'glass')
+        # a room behind every light (curtains in the 2009 photo)
+        glass_run(mb, P, 0, Le, 0.3, g, 0.0, [(k + 0.5) * Le / int(Le / 2.4) for k in range(int(Le / 2.4))], hall=False)
         for k in range(int(Le / 2.4)):
             s = (k + 0.5) * Le / int(Le / 2.4)
             mb.quad(P(s - 0.06, 0.3, 0.05), P(s + 0.06, 0.3, 0.05), P(s + 0.06, g, 0.05), P(s - 0.06, g, 0.05), 'frame_dark')
@@ -433,7 +451,7 @@ def centennial():
     P, Le, t, n = edge_P(tuple(A_), tuple(B_), z0)              # d < 0: into the building
     zt = HP - 1.4
     mb.quad(P(PS0 + 0.3, 0.4, -PD + 0.03), P(PS1 - 0.3, 0.4, -PD + 0.03), P(PS1 - 0.3, zt, -PD + 0.03),
-            P(PS0 + 0.3, zt, -PD + 0.03), 'glass')
+            P(PS0 + 0.3, zt, -PD + 0.03), 'glass', panes=(1, 1, True))
     for k in range(1, 15):
         sm = PS0 + (PS1 - PS0) * k / 15
         mb.quad(P(sm - 0.08, 0.4, -PD + 0.05), P(sm + 0.08, 0.4, -PD + 0.05), P(sm + 0.08, zt, -PD + 0.05),
@@ -470,7 +488,8 @@ def centennial():
         bk.quad(Q(e0, 2.5, 0), Q(e0, 0, 0), Q(e0, 0, he), Q(e0, 2.5, he), 'void_black')
         bk.quad(Q(e0, 0, he), Q(e0, 2.5, he), Q(e1, 2.5, he), Q(e1, 0, he), 'void_black')          # its soffit
         bk.quad(Q(e0, 0, 0.02), Q(e1, 0, 0.02), Q(e1, 2.5, 0.02), Q(e0, 2.5, 0.02), 'stone_granite')
-        bk.quad(Q(e0 + 0.4, 2.45, 0.05), Q(e1 - 0.4, 2.45, 0.05), Q(e1 - 0.4, 2.45, he - 0.3), Q(e0 + 0.4, 2.45, he - 0.3), 'glass')
+        bk.quad(Q(e0 + 0.4, 2.45, 0.05), Q(e1 - 0.4, 2.45, 0.05), Q(e1 - 0.4, 2.45, he - 0.3), Q(e0 + 0.4, 2.45, he - 0.3), 'glass',
+                panes=(1, 1, True))
         # west side with its dark door
         bk.quad(Q(0, d0, -3), Q(0, 0, -3), Q(0, 0, Hb), Q(0, d0, Hb), 'stone_ashlar')
         bk.quad(Q(0, S, -3), Q(0, d1, -3), Q(0, d1, Hb), Q(0, S, Hb), 'stone_ashlar')
@@ -558,7 +577,7 @@ def museum_entrance(A, B, z0, HP):
     mb.quad(P(S1, g1, 0), P(S0, g1, 0), P(S0, g1, dg1), P(S1, g1, dg1), W)
     # the glass: 6 x 3 large lights in grey mullions, leaning out towards the head
     lean = lambda s_, f: P(s_, g0 + (g1 - g0) * f, dg0 + (dg1 - dg0) * f)
-    mb.quad(lean(S0, 0), lean(S1, 0), lean(S1, 1), lean(S0, 1), 'glass')
+    mb.quad(lean(S0, 0), lean(S1, 0), lean(S1, 1), lean(S0, 1), 'glass', panes=(3, 1, True))    # the museum's hall
     for k in range(7):
         s_ = S0 + (S1 - S0) * k / 6
         rod(mb, lean(s_, 0), lean(s_, 1), 0.06, 'frame_silver', seg=4)
@@ -1058,8 +1077,8 @@ def flat_portal(mb, W, plinth, fh, wall, bw=7.4, gfn=None):
     yb = y0 - 0.03
     mb.quad((-ow / 2, yb, zd), (ow / 2, yb, zd), (ow / 2, yb, zo), (-ow / 2, yb, zo), wall)
     dw, dh = 2.9, 3.0
-    mb.quad((-dw / 2, yb - 0.02, zd), (dw / 2, yb - 0.02, zd), (dw / 2, yb - 0.02, zd + dh), (-dw / 2, yb - 0.02, zd + dh), 'glass')
-    mb.quad((-dw / 2, yb - 0.02, zd + dh + 0.1), (dw / 2, yb - 0.02, zd + dh + 0.1), (dw / 2, yb - 0.02, zo - 0.15), (-dw / 2, yb - 0.02, zo - 0.15), 'glass')
+    mb.quad((-dw / 2, yb - 0.02, zd), (dw / 2, yb - 0.02, zd), (dw / 2, yb - 0.02, zd + dh), (-dw / 2, yb - 0.02, zd + dh), 'glass', panes=(1, 1, True))
+    mb.quad((-dw / 2, yb - 0.02, zd + dh + 0.1), (dw / 2, yb - 0.02, zd + dh + 0.1), (dw / 2, yb - 0.02, zo - 0.15), (-dw / 2, yb - 0.02, zo - 0.15), 'glass', panes=(1, 1, True))
     for x in (-dw / 2, 0.0, dw / 2):
         mb.box((x, yb - 0.05, (zd + zo - 0.15) / 2), (0.1, 0.06, zo - 0.15 - zd), 'frame_dark')
     for z in (zd + dh + 0.05, zd + 0.05, zo - 0.15):
@@ -1399,7 +1418,9 @@ def reveal(mb, P, a, b, za, zb, depth, mat):
 
 def glazing(mb, P, a, b, za, zb, d, cols, rows, frame, glass='glass', fw=0.07, transom=None):
     """A pane over [a, b] x [za, zb] at depth d of a wall P, divided cols x rows by slim bars (and a transom bar)."""
-    mb.quad(P(a, za, d), P(b, za, d), P(b, zb, d), P(a, zb, d), glass)
+    # the rooms behind it change at bars, about a bay wide and a storey tall (common.py pane_uv)
+    mb.quad(P(a, za, d), P(b, za, d), P(b, zb, d), P(a, zb, d), glass,
+            panes=(pane_count(cols, b - a, 3.4), pane_count(rows, zb - za, 3.6)))
     for k in range(cols + 1):
         x = a + (b - a) * k / cols
         bar(mb, P, x, za, x, zb, fw if 0 < k < cols else fw * 1.5, d, d + 0.06, frame)
@@ -1737,7 +1758,7 @@ def engineering():
     xe = x0c + 4.6
     # wide concrete flight with handrails under the canopy, glass double doors behind a landing
     stair_flight(mb, xe, -W / 2, 8.0, 0.4, n=4, mat='stone_granite', landing=1.8, tread=0.4, flare=0.6, rail=True, gfn=local_ground(mb))
-    mb.quad((xe - 2.6, -W / 2 - 0.02, 0.4), (xe + 2.6, -W / 2 - 0.02, 0.4), (xe + 2.6, -W / 2 - 0.02, 3.4), (xe - 2.6, -W / 2 - 0.02, 3.4), 'glass')
+    mb.quad((xe - 2.6, -W / 2 - 0.02, 0.4), (xe + 2.6, -W / 2 - 0.02, 0.4), (xe + 2.6, -W / 2 - 0.02, 3.4), (xe - 2.6, -W / 2 - 0.02, 3.4), 'glass', panes=(1, 1, True))
     mb.box((xe, -W / 2 - 0.03, 3.5), (5.4, 0.08, 0.16), 'frame_dark')
     mb.box((xe, -W / 2 - 0.03, 0.4 + 1.5), (0.1, 0.08, 3.0), 'frame_dark')
     return [mb, mbw]

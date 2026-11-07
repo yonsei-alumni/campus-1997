@@ -267,9 +267,16 @@
    0.08,
    0.09
   ],
-  "rough": 0.06,
+  "rough": 0.05,
   "metal": 0.0,
-  "env": 1.6
+  "env": 2.0,
+  "rooms": "windows.jpg",
+  "lit": 0.45,
+  "tint": [
+   0.66,
+   0.69,
+   0.69
+  ]
  },
  "glass_green": {
   "color": [
@@ -277,9 +284,16 @@
    0.09,
    0.08
   ],
-  "rough": 0.08,
+  "rough": 0.06,
   "metal": 0.0,
-  "env": 1.4
+  "env": 2.0,
+  "rooms": "windows.jpg",
+  "lit": 0.45,
+  "tint": [
+   0.48,
+   0.62,
+   0.54
+  ]
  },
  "glass_car": {
   "color": [
