@@ -145,29 +145,140 @@
               "창 위 아치 몰딩, 그 위 띠에 아치 한 줄 더",
               "창: 깊은 홈 안의 짙은 창틀과 녹색 유리"
             ]
-          }
+          },
+          {
+            "text": "창유리를 칸마다 다르게",
+            "items": [
+              "유리 뒤: 어두운 방, 흰 · 베이지 · 연녹색 커튼, 블라인드, 불 켠 강의실, 책장, 붙여 둔 종이",
+              "1층 높은 유리 뒤: 로비 · 계단실 · 복도",
+              "중앙도서관 · 학생회관 1층: 창살 칸마다 다른 방"
+            ]
+          },
+          {
+            "text": "유리에 하늘이 비침",
+            "items": [
+              "비스듬히 볼수록 밝게",
+              "칸마다 조금씩 다른 반사",
+              "낮게 비치는 반사는 어둡게"
+            ]
+          },
+          {
+            "text": "건물 규모의 그늘: 하늘빛이 덜 드는 곳을 어둡게 (햇빛은 그대로)",
+            "items": [
+              "중앙도서관: 아케이드 안쪽 · 아치 밑",
+              "학생회관: 필로티 밑 · 창의 깊은 홈",
+              "백주년기념관: 현관 · 원통 밑",
+              "처마 밑 · 안쪽 모서리"
+            ]
+          },
+          {
+            "text": "풍화",
+            "items": [
+              "기단: 튄 흙자국",
+              "창대 · 갓돌 밑: 빗물 줄무늬",
+              "창대 · 난간벽 윗면: 얼룩",
+              "세기: 흰 회벽 · 콘크리트 세게, 잡석벽 약하게, 대우관(1996년 준공) · 공사 중 건물은 거의 없게"
+            ]
+          },
+          "먼 도시 땅: 안개 속 흰 벌판 → 회색 시가지"
         ],
         "images": [
-          { "src": "assets/news/55_old_halls.jpg", "alt": "도서관 서쪽의 옛 어학당 · 장기원 기념관 · 원형 건물" },
-          { "src": "assets/news/56_cheonggyeong.jpg", "alt": "유억겸 기념관 남서쪽의 청경관" },
-          { "src": "assets/news/46_kwangbok.jpg", "alt": "광복관: 화강석 벽기둥, 세 칸 유리문과 등, 넓은 계단 (1996년 졸업 앨범 사진대로)" },
-          { "src": "assets/news/46b_kwangbok_roof.jpg", "alt": "광복관: 모임지붕의 ㄱ자, 한 층 높은 북쪽 날개와 굴뚝 (1995년 항공 사진대로)" },
-          { "src": "assets/news/54_science_stairs.jpg", "alt": "과학관 앞 높은 계단: 1996년 사진(위)과 게임(아래)" },
-          { "src": "assets/news/49_science_entrance.jpg", "alt": "과학관 동쪽 날개 마당 쪽의 세 칸 현관" },
-          { "src": "assets/news/43_science_dome.jpg", "alt": "과학관 동쪽 날개 옥상의 천문대 돔" },
-          { "src": "assets/news/53_music_door.jpg", "alt": "음악관 현관: 1996년 사진(위)과 게임(아래)" },
-          { "src": "assets/news/52_museum_entrance.jpg", "alt": "백주년기념관 박물관 입구: 1996년 사진(위)과 게임(아래)" },
-          { "src": "assets/news/35_centennial_block.jpg", "alt": "백주년기념관 남서쪽의 낮은 앞 상자와 어두운 출입구, 어린 나무" },
-          { "src": "assets/news/39_daewoo_back.jpg", "alt": "대우관 뒤쪽: 가운데 계단탑과 환기통, 계단실 세로 유리, 뒤 주차장 (2009년 거리뷰 시점)" },
-          { "src": "assets/news/41_auditorium.jpg", "alt": "대강당: 박공 정면, 양끝 탑, 로비 유리문 세 칸과 열 단 위 현관" },
-          { "src": "assets/news/42_library_entrance.jpg", "alt": "중앙도서관: 두 단 기단과 아케이드, 가운데 두 칸의 유리문" },
-          { "src": "assets/news/50_billingsley.jpg", "alt": "빌링슬리관: 밝은 회색 잡석 벽과 돌 후드 몰딩의 튜더 아치 현관" },
-          { "src": "assets/news/48_hall_door.jpg", "alt": "일반 건물의 현관: 유리문 · 차양 · 화강석 계단과 옆벽 · 손잡이 (백양관)" },
-          { "src": "assets/news/51_aerial_1995_vs_game.jpg", "alt": "1995년 항공 사진(위)과 비슷한 방향의 게임(아래)" },
-          { "src": "assets/news/59_building_colors.jpg", "alt": "건물 색: 고치기 전(위)과 뒤(아래)" },
-          { "src": "assets/news/60_building_colors_photos.jpg", "alt": "중앙도서관 · 광복관 · 국제학사 · 성암관: 사진, 고치기 전, 뒤" },
-          { "src": "assets/news/61_union_facade.jpg", "alt": "학생회관 외벽: 2009년 사진(위)과 게임(아래)" },
-          { "src": "assets/news/62_shaded_fronts.jpg", "alt": "해를 등진 서쪽 정면: 고치기 전(왼쪽)과 뒤(오른쪽)" }
+          {
+            "src": "assets/news/55_old_halls.jpg",
+            "alt": "도서관 서쪽의 옛 어학당 · 장기원 기념관 · 원형 건물"
+          },
+          {
+            "src": "assets/news/56_cheonggyeong.jpg",
+            "alt": "유억겸 기념관 남서쪽의 청경관"
+          },
+          {
+            "src": "assets/news/46_kwangbok.jpg",
+            "alt": "광복관: 화강석 벽기둥, 세 칸 유리문과 등, 넓은 계단 (1996년 졸업 앨범 사진대로)"
+          },
+          {
+            "src": "assets/news/46b_kwangbok_roof.jpg",
+            "alt": "광복관: 모임지붕의 ㄱ자, 한 층 높은 북쪽 날개와 굴뚝 (1995년 항공 사진대로)"
+          },
+          {
+            "src": "assets/news/54_science_stairs.jpg",
+            "alt": "과학관 앞 높은 계단: 1996년 사진(위)과 게임(아래)"
+          },
+          {
+            "src": "assets/news/49_science_entrance.jpg",
+            "alt": "과학관 동쪽 날개 마당 쪽의 세 칸 현관"
+          },
+          {
+            "src": "assets/news/43_science_dome.jpg",
+            "alt": "과학관 동쪽 날개 옥상의 천문대 돔"
+          },
+          {
+            "src": "assets/news/53_music_door.jpg",
+            "alt": "음악관 현관: 1996년 사진(위)과 게임(아래)"
+          },
+          {
+            "src": "assets/news/52_museum_entrance.jpg",
+            "alt": "백주년기념관 박물관 입구: 1996년 사진(위)과 게임(아래)"
+          },
+          {
+            "src": "assets/news/35_centennial_block.jpg",
+            "alt": "백주년기념관 남서쪽의 낮은 앞 상자와 어두운 출입구, 어린 나무"
+          },
+          {
+            "src": "assets/news/39_daewoo_back.jpg",
+            "alt": "대우관 뒤쪽: 가운데 계단탑과 환기통, 계단실 세로 유리, 뒤 주차장 (2009년 거리뷰 시점)"
+          },
+          {
+            "src": "assets/news/41_auditorium.jpg",
+            "alt": "대강당: 박공 정면, 양끝 탑, 로비 유리문 세 칸과 열 단 위 현관"
+          },
+          {
+            "src": "assets/news/42_library_entrance.jpg",
+            "alt": "중앙도서관: 두 단 기단과 아케이드, 가운데 두 칸의 유리문"
+          },
+          {
+            "src": "assets/news/50_billingsley.jpg",
+            "alt": "빌링슬리관: 밝은 회색 잡석 벽과 돌 후드 몰딩의 튜더 아치 현관"
+          },
+          {
+            "src": "assets/news/48_hall_door.jpg",
+            "alt": "일반 건물의 현관: 유리문 · 차양 · 화강석 계단과 옆벽 · 손잡이 (백양관)"
+          },
+          {
+            "src": "assets/news/51_aerial_1995_vs_game.jpg",
+            "alt": "1995년 항공 사진(위)과 비슷한 방향의 게임(아래)"
+          },
+          {
+            "src": "assets/news/59_building_colors.jpg",
+            "alt": "건물 색: 고치기 전(위)과 뒤(아래)"
+          },
+          {
+            "src": "assets/news/60_building_colors_photos.jpg",
+            "alt": "중앙도서관 · 광복관 · 국제학사 · 성암관: 사진, 고치기 전, 뒤"
+          },
+          {
+            "src": "assets/news/61_union_facade.jpg",
+            "alt": "학생회관 외벽: 2009년 사진(위)과 게임(아래)"
+          },
+          {
+            "src": "assets/news/62_shaded_fronts.jpg",
+            "alt": "해를 등진 서쪽 정면: 고치기 전(왼쪽)과 뒤(오른쪽)"
+          },
+          {
+            "src": "assets/news/79_windows.jpg",
+            "alt": "창유리 전 · 후: 학생회관, 중앙도서관, 국제학사"
+          },
+          {
+            "src": "assets/news/79_windows_photo.jpg",
+            "alt": "학생회관 정면: 2009년 사진과 게임의 후 · 전"
+          },
+          {
+            "src": "assets/news/78_vertex_ao.jpg",
+            "alt": "중앙도서관 · 학생회관 · 백주년기념관의 그늘 전/후"
+          },
+          {
+            "src": "assets/news/78b_weathering.jpg",
+            "alt": "흰 회벽 건물의 기단과 창대 밑 전/후"
+          }
         ]
       },
       {
@@ -191,12 +302,59 @@
               "서쪽 날개 옆: 2 ~ 3 m 드러나던 짙은 기초벽 대신 1층 높이 띠에서 둘레 땅으로 이음. 땅이 내려가는 곳은 흰 돌벽이 그대로 내려옴"
             ]
           },
-          "중앙도서관 뒤 · 북쪽: 지형에 6 m까지 묻히던 것을 둘레 6 m는 앞마당 높이로, 바깥 30 m까지 매끈하게 이음"
+          "중앙도서관 뒤 · 북쪽: 지형에 6 m까지 묻히던 것을 둘레 6 m는 앞마당 높이로, 바깥 30 m까지 매끈하게 이음",
+          {
+            "text": "나무 · 떨기나무가 바람에 흔들림",
+            "items": [
+              "수관: 땅에서 높을수록 크게, 잎 끝 10~20 cm",
+              "몸통: 거의 그대로",
+              "잎: 따로 잔떨림",
+              "돌풍: 바람 방향으로 나무 줄을 따라 지나감"
+            ]
+          },
+          {
+            "text": "떨어진 잎 · 꽃잎",
+            "items": [
+              "10월: 은행나무 밑에 노란 은행잎, 느티나무 · 참나무 · 단풍나무 · 벚나무 밑에 갈색 · 붉은 잎",
+              "4월: 벚나무 밑에 분홍 꽃잎",
+              "수관 밑은 두껍게, 밖으로 성기게, 서풍에 동쪽으로 끌린 모양",
+              "5월: 없음"
+            ]
+          },
+          {
+            "text": "잔디밭에 풀잎",
+            "items": [
+              "카메라 둘레 25 m, 멀수록 성기게",
+              "땅색 · 계절색 그대로, 마른 잔디는 짚색 · 성기게, 맨땅에는 없음",
+              "나무 · 사람 그림자에 어둡게, 바람에 흔들림"
+            ]
+          }
         ],
         "images": [
-          { "src": "assets/news/57_sang.jpg", "alt": "대우관 상뜰: 사진(위)과 게임(아래)" },
-          { "src": "assets/news/40_daewoo_back_yard.jpg", "alt": "대우관 뒤 주차장 · 소나무 잔디 둔덕 · 화단과 북문 가는 길의 철책" },
-          { "src": "assets/news/58_daewoo_back_fix.jpg", "alt": "대우관 뒤 · 옆 땅: 고치기 전(왼쪽)과 뒤(오른쪽)" }
+          {
+            "src": "assets/news/57_sang.jpg",
+            "alt": "대우관 상뜰: 사진(위)과 게임(아래)"
+          },
+          {
+            "src": "assets/news/40_daewoo_back_yard.jpg",
+            "alt": "대우관 뒤 주차장 · 소나무 잔디 둔덕 · 화단과 북문 가는 길의 철책"
+          },
+          {
+            "src": "assets/news/58_daewoo_back_fix.jpg",
+            "alt": "대우관 뒤 · 옆 땅: 고치기 전(왼쪽)과 뒤(오른쪽)"
+          },
+          {
+            "src": "assets/news/76_wind.jpg",
+            "alt": "같은 자리에서 0.5초 간격으로 본 은행나무 줄과 현수막"
+          },
+          {
+            "src": "assets/news/77_leaf_carpet.jpg",
+            "alt": "10월 백양로 · 4월 벚나무 밑 전/후"
+          },
+          {
+            "src": "assets/news/77b_grass_blades.jpg",
+            "alt": "잔디밭 풀잎 전/후"
+          }
         ]
       },
       {
@@ -231,15 +389,35 @@
               "화단섬 안쪽도 마른 땅"
             ]
           },
-          "아스팔트: 지형 위와 백양로 메시 모두 균열 무늬를 낮춰 사진처럼 고르게"
+          "아스팔트: 지형 위와 백양로 메시 모두 균열 무늬를 낮춰 사진처럼 고르게",
+          "현수막 천에 바람 잔물결, 천 위의 빛도 일렁임",
+          "보도 · 차도에도 은행잎, 차도 가운데는 옅게"
         ],
         "images": [
-          { "src": "assets/news/38_baekyangro_section.png", "alt": "백양로 높이 단면: 고도 자료, 전 게임, 고친 게임, 재창조 보고서 종단면도" },
-          { "src": "assets/news/26_photo_view.jpg", "alt": "1997년 백양로 항공 사진(위)과 게임의 「1997 사진 시점」(아래)" },
-          { "src": "assets/news/44_guard_booth_1997.jpg", "alt": "백양로 가운데 초소: 1997년 사진(왼쪽)과 같은 카메라의 게임(오른쪽)" },
-          { "src": "assets/news/37_banner_cloth.jpg", "alt": "처지고 주름진 현수막 천과 화단섬 북동쪽의 흰 세로 천" },
-          { "src": "assets/news/45_bed_placard.jpg", "alt": "화단섬 안 나무 사이에 건 가로 플랜카드" },
-          { "src": "assets/news/36_east_lawn_1997.jpg", "alt": "정문 동쪽의 마른 잔디밭과 나무 그늘 주차, 어린 나무" }
+          {
+            "src": "assets/news/38_baekyangro_section.png",
+            "alt": "백양로 높이 단면: 고도 자료, 전 게임, 고친 게임, 재창조 보고서 종단면도"
+          },
+          {
+            "src": "assets/news/26_photo_view.jpg",
+            "alt": "1997년 백양로 항공 사진(위)과 게임의 「1997 사진 시점」(아래)"
+          },
+          {
+            "src": "assets/news/44_guard_booth_1997.jpg",
+            "alt": "백양로 가운데 초소: 1997년 사진(왼쪽)과 같은 카메라의 게임(오른쪽)"
+          },
+          {
+            "src": "assets/news/37_banner_cloth.jpg",
+            "alt": "처지고 주름진 현수막 천과 화단섬 북동쪽의 흰 세로 천"
+          },
+          {
+            "src": "assets/news/45_bed_placard.jpg",
+            "alt": "화단섬 안 나무 사이에 건 가로 플랜카드"
+          },
+          {
+            "src": "assets/news/36_east_lawn_1997.jpg",
+            "alt": "정문 동쪽의 마른 잔디밭과 나무 그늘 주차, 어린 나무"
+          }
         ]
       },
       {
@@ -260,12 +438,23 @@
               "물: 지름 약 6.4 m 수반 테두리의 물줄기 32개가 종처럼 기둥으로 휘어 들고, 꼭대기에서 물기둥",
               "둘레: 다듬은 관목과 작은 소나무, 독수리상 쪽 철쭉"
             ]
-          }
+          },
+          "공중전화 부스 판: 짙은 유리 → 속이 보이는 유리",
+          "활천대 분수 수면의 햇빛에도 구름 그림자"
         ],
         "images": [
-          { "src": "assets/news/47_tennis.jpg", "alt": "공학관 남쪽 큰길가의 정구장: 클레이 코트와 하드 코트" },
-          { "src": "assets/news/33_hwalcheon.jpg", "alt": "독수리상 옆의 활천대: 十자 조각 기둥과 종 모양 물줄기" },
-          { "src": "assets/news/34_hwalcheon_2009.jpg", "alt": "2009년 활천대 사진(왼쪽)과 같은 자리에서 본 게임(오른쪽)" }
+          {
+            "src": "assets/news/47_tennis.jpg",
+            "alt": "공학관 남쪽 큰길가의 정구장: 클레이 코트와 하드 코트"
+          },
+          {
+            "src": "assets/news/33_hwalcheon.jpg",
+            "alt": "독수리상 옆의 활천대: 十자 조각 기둥과 종 모양 물줄기"
+          },
+          {
+            "src": "assets/news/34_hwalcheon_2009.jpg",
+            "alt": "2009년 활천대 사진(왼쪽)과 같은 자리에서 본 게임(오른쪽)"
+          }
         ]
       },
       {
@@ -293,6 +482,87 @@
               "날짜 아래 카테고리별로 정리, 날짜 옆 긴 제목은 뺌",
               "새 소식 페이지와 게임 안 새 소식 창이 같은 코드로 목록을 그림"
             ]
+          },
+          {
+            "text": "고품질 화면에 안티에일리어싱 (SMAA)",
+            "items": [
+              "학생회관 핀 · 지붕선의 톱니를 없앰",
+              "가로등 장대 · 잎 가장자리도 매끈하게",
+              "폰에서는 끔"
+            ]
+          },
+          {
+            "text": "햇빛 받은 흰 벽 · 해 둘레 하늘에 약한 블룸",
+            "items": [
+              "그늘진 벽 · 잔디 · 사람은 그대로",
+              "폰에서는 끔"
+            ]
+          },
+          {
+            "text": "잔디밭과 지붕 위로 흘러가는 구름 그림자",
+            "items": [
+              "세기: 햇빛의 40 %, 하늘의 1/3쯤이 구름",
+              "바람: 서남서에서 초속 5 m쯤, 구름 모양도 천천히 바뀜",
+              "C 키로 끄고 켬, 폰에서도 켬"
+            ]
+          },
+          {
+            "text": "균일한 안개 → 높이 따라 옅어지는 안개",
+            "items": [
+              "골짜기의 시가지는 뿌옇게, 산꼭대기와 높은 시점은 맑게",
+              "색: 해 쪽은 밝고 따뜻하게, 반대쪽은 푸른 회색",
+              "하늘 지평선도 같은 색으로 먼 산과 이어짐",
+              "먼 산 흐림: 안산 약 28 %, 7 km 산 약 65 % (1997년 백양로 항공사진)"
+            ]
+          },
+          "필름 모드의 뿌연 정도를 줄여 안개와 겹치지 않게",
+          {
+            "text": "해 그림자의 번짐을 가리는 것과의 거리대로 (해의 지름 0.53°)",
+            "items": [
+              "발치 · 나무 밑동: 선명하게",
+              "높은 수관 · 지붕 끝: 퍼지게",
+              "잎 그림자: 뭉개진 덩어리 → 잎 사이 햇빛 무늬",
+              "고품질 그림자를 켰을 때만"
+            ]
+          },
+          {
+            "text": "폰에 해 그림자",
+            "items": [
+              "건물 · 나무 · 회양목 · 세워 둔 차 그림자를 캠퍼스 전체 한 장으로 미리 구움 (31 cm 텍셀, 2.1 MB)",
+              "그늘에 들어간 사람 · 차는 어둡게",
+              "사람 · 달리는 차 · 농구공 밑에 부드러운 그림자"
+            ]
+          },
+          "PC: 그림자 맵 밖 먼 땅에도 건물 · 나무 그림자"
+        ],
+        "images": [
+          {
+            "src": "assets/news/74_smaa.jpg",
+            "alt": "학생회관: SMAA 전/후와 200 % 확대"
+          },
+          {
+            "src": "assets/news/74b_bloom.jpg",
+            "alt": "학생회관 서쪽 정면 역광과 대우관 흰 석벽: 블룸 전/후"
+          },
+          {
+            "src": "assets/news/75_cloud_shadows.jpg",
+            "alt": "구름 그림자 전 · 후 · 10초 뒤"
+          },
+          {
+            "src": "assets/news/75b_aerial_fog.jpg",
+            "alt": "날아가기에서 본 안개 전/후"
+          },
+          {
+            "src": "assets/news/81_pcss.jpg",
+            "alt": "전/후: 백양로 가로수 밑, 언더우드관 앞 정원, 걷는 사람의 발치"
+          },
+          {
+            "src": "assets/news/80_baked_shadows.jpg",
+            "alt": "폰 화면 백양로: 그림자 없음 → 구운 해 그림자"
+          },
+          {
+            "src": "assets/news/80b_blob_shadows.jpg",
+            "alt": "폰 화면: 사람 · 차 밑 그림자"
           }
         ]
       },
@@ -308,7 +578,9 @@
               "멀리 있는 사람과 차 운전자: 장면에서 빼서 뼈 계산을 건너뜀",
               "셰이더: 같은 재질의 건물과 반복 소품(가로등 · 세워 둔 차)이 번갈아 그려질 때마다 다시 고르던 것을 고침"
             ]
-          }
+          },
+          "풀잎: 빛을 한 번 재어 꼭짓점에서 칠함, 그림자 계산에서 뺌, 폰은 밀도 1/4 · 반경 18 m",
+          "건물 모델 6.3 MB → 8.9 MB, 랜드마크 2.8 MB → 3.8 MB (정점마다 그늘 · 풍화 값)"
         ]
       },
       {
@@ -338,8 +610,14 @@
           }
         ],
         "images": [
-          { "src": "assets/news/63_cmp_library.jpg", "alt": "중앙도서관: 1997년 사진(위)과 게임(아래)" },
-          { "src": "assets/news/65_cmp_underwood.jpg", "alt": "언더우드관: 2016년 사진(위)과 게임(아래)" }
+          {
+            "src": "assets/news/63_cmp_library.jpg",
+            "alt": "중앙도서관: 1997년 사진(위)과 게임(아래)"
+          },
+          {
+            "src": "assets/news/65_cmp_underwood.jpg",
+            "alt": "언더우드관: 2016년 사진(위)과 게임(아래)"
+          }
         ]
       }
     ]
@@ -398,19 +676,58 @@
           "사진에 없던 상점 건물 2동을 지움 (정문 동쪽, 독수리상 서쪽)"
         ],
         "images": [
-          { "src": "assets/news/23_underwood_door.jpg", "alt": "언더우드관 현관: 튜더 아치 안의 검은 철제 격자 유리문" },
-          { "src": "assets/news/29_hall_door.jpg", "alt": "언더우드관 유리문 너머로 보이는 불 켜진 현관 홀" },
-          { "src": "assets/news/18_underwood.jpg", "alt": "언더우드관 입구: 중간 참에서 꺾이는 화강석 계단과 돌 난간벽, 네모 기둥" },
-          { "src": "assets/news/21_stimson.jpg", "alt": "스팀슨관 입구 계단과 유리문" },
-          { "src": "assets/news/22_appenzeller.jpg", "alt": "아펜젤러관 앞 정원 길과 입구 계단" },
-          { "src": "assets/news/19_yeonhui.jpg", "alt": "연희관 앞 정원과 네 짝 유리문 현관" },
-          { "src": "assets/news/24_daewoo_podium.jpg", "alt": "대우관: 상뜰 앞 석축 아래 아치 현관과 그 위 테라스" },
-          { "src": "assets/news/25_daewoo_door.jpg", "alt": "대우관 석축 아래 아치 현관: 유리문 너머 불 켜진 로비" },
-          { "src": "assets/news/20_daewoo.jpg", "alt": "대우관 테라스: 세 단 위 탑의 뾰족 아치 유리문" },
-          { "src": "assets/news/13_annex_entrance.jpg", "alt": "대우관 별관 앞에서 본 새 입구 계단과 가로등" },
-          { "src": "assets/news/30_auditorium_porch.jpg", "alt": "대강당: 차양 아래 화강석 현관 바닥과 평평한 앞마당의 계단" },
-          { "src": "assets/news/27_engineering_1997.jpg", "alt": "1997년 크기의 제1공학관과 정문 화단섬, 백양로" },
-          { "src": "assets/news/32_centennial_porch.jpg", "alt": "백주년기념관 원통 아래의 어두운 현관" }
+          {
+            "src": "assets/news/23_underwood_door.jpg",
+            "alt": "언더우드관 현관: 튜더 아치 안의 검은 철제 격자 유리문"
+          },
+          {
+            "src": "assets/news/29_hall_door.jpg",
+            "alt": "언더우드관 유리문 너머로 보이는 불 켜진 현관 홀"
+          },
+          {
+            "src": "assets/news/18_underwood.jpg",
+            "alt": "언더우드관 입구: 중간 참에서 꺾이는 화강석 계단과 돌 난간벽, 네모 기둥"
+          },
+          {
+            "src": "assets/news/21_stimson.jpg",
+            "alt": "스팀슨관 입구 계단과 유리문"
+          },
+          {
+            "src": "assets/news/22_appenzeller.jpg",
+            "alt": "아펜젤러관 앞 정원 길과 입구 계단"
+          },
+          {
+            "src": "assets/news/19_yeonhui.jpg",
+            "alt": "연희관 앞 정원과 네 짝 유리문 현관"
+          },
+          {
+            "src": "assets/news/24_daewoo_podium.jpg",
+            "alt": "대우관: 상뜰 앞 석축 아래 아치 현관과 그 위 테라스"
+          },
+          {
+            "src": "assets/news/25_daewoo_door.jpg",
+            "alt": "대우관 석축 아래 아치 현관: 유리문 너머 불 켜진 로비"
+          },
+          {
+            "src": "assets/news/20_daewoo.jpg",
+            "alt": "대우관 테라스: 세 단 위 탑의 뾰족 아치 유리문"
+          },
+          {
+            "src": "assets/news/13_annex_entrance.jpg",
+            "alt": "대우관 별관 앞에서 본 새 입구 계단과 가로등"
+          },
+          {
+            "src": "assets/news/30_auditorium_porch.jpg",
+            "alt": "대강당: 차양 아래 화강석 현관 바닥과 평평한 앞마당의 계단"
+          },
+          {
+            "src": "assets/news/27_engineering_1997.jpg",
+            "alt": "1997년 크기의 제1공학관과 정문 화단섬, 백양로"
+          },
+          {
+            "src": "assets/news/32_centennial_porch.jpg",
+            "alt": "백주년기념관 원통 아래의 어두운 현관"
+          }
         ]
       },
       {
@@ -428,7 +745,10 @@
           "백주년기념관 현관 앞: 3 ~ 5 m 흙둔덕 → 평평한 잔디"
         ],
         "images": [
-          { "src": "assets/news/28_underwood_garden.jpg", "alt": "언더우드관 앞 정원에서 본 아펜젤러관: 비탈 없이 고르게 이어지는 정원" }
+          {
+            "src": "assets/news/28_underwood_garden.jpg",
+            "alt": "언더우드관 앞 정원에서 본 아펜젤러관: 비탈 없이 고르게 이어지는 정원"
+          }
         ]
       },
       {
@@ -463,8 +783,14 @@
           }
         ],
         "images": [
-          { "src": "assets/news/31_side_road_1997.jpg", "alt": "정문 안 왼쪽 갈림길: 보도가 끊기고 아스팔트 앞마당으로 이어짐" },
-          { "src": "assets/news/14_autumn_banners.jpg", "alt": "10월 백양로에 걸린 연고전 응원 현수막" }
+          {
+            "src": "assets/news/31_side_road_1997.jpg",
+            "alt": "정문 안 왼쪽 갈림길: 보도가 끊기고 아스팔트 앞마당으로 이어짐"
+          },
+          {
+            "src": "assets/news/14_autumn_banners.jpg",
+            "alt": "10월 백양로에 걸린 연고전 응원 현수막"
+          }
         ]
       },
       {
@@ -481,8 +807,14 @@
           "학생회관 앞 공중전화 부스 세 칸"
         ],
         "images": [
-          { "src": "assets/news/17_basketball.jpg", "alt": "림과 그물이 달린 농구 골대, 공을 든 채 슛 준비" },
-          { "src": "assets/news/16_payphone_booths.jpg", "alt": "학생회관 앞 공중전화 부스" }
+          {
+            "src": "assets/news/17_basketball.jpg",
+            "alt": "림과 그물이 달린 농구 골대, 공을 든 채 슛 준비"
+          },
+          {
+            "src": "assets/news/16_payphone_booths.jpg",
+            "alt": "학생회관 앞 공중전화 부스"
+          }
         ]
       },
       {
@@ -491,7 +823,10 @@
           "학생회관: 1997년 4·19 마라톤 사진 추가"
         ],
         "images": [
-          { "src": "assets/news/15_marathon_card.jpg", "alt": "학생회관 추억 카드에 실린 1997년 4·19 마라톤 사진" }
+          {
+            "src": "assets/news/15_marathon_card.jpg",
+            "alt": "학생회관 추억 카드에 실린 1997년 4·19 마라톤 사진"
+          }
         ]
       },
       {
@@ -505,7 +840,10 @@
           }
         ],
         "images": [
-          { "src": "assets/news/26_photo_view.jpg", "alt": "1997년 백양로 항공 사진(위)과 게임의 「1997 사진 시점」(아래)" }
+          {
+            "src": "assets/news/26_photo_view.jpg",
+            "alt": "1997년 백양로 항공 사진(위)과 게임의 「1997 사진 시점」(아래)"
+          }
         ]
       },
       {
@@ -561,7 +899,10 @@
           }
         ],
         "images": [
-          { "src": "assets/news/02_library_union.jpg", "alt": "1997년 모습으로 고친 중앙도서관과 학생회관" }
+          {
+            "src": "assets/news/02_library_union.jpg",
+            "alt": "1997년 모습으로 고친 중앙도서관과 학생회관"
+          }
         ]
       },
       {
@@ -586,7 +927,10 @@
           "없던 상호의 간판을 바로잡음"
         ],
         "images": [
-          { "src": "assets/news/11_cars.jpg", "alt": "1997년 서울 거리를 닮게 바꾼 백양로의 자동차들" }
+          {
+            "src": "assets/news/11_cars.jpg",
+            "alt": "1997년 서울 거리를 닮게 바꾼 백양로의 자동차들"
+          }
         ]
       },
       {
