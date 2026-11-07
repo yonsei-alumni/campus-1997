@@ -22,11 +22,11 @@
 | ![백양로: 1997년 항공 사진(위)과 같은 카메라의 게임(아래)](docs/reference/baekyangro_1997_vs_game.jpg)<br>**백양로** · 1997년 항공 사진과 같은 카메라 | ![캠퍼스 서쪽: 1995년 항공 사진(위)과 게임(아래)](docs/screenshots/51_aerial_1995_vs_game.jpg)<br>**캠퍼스 서쪽** · 1995년 항공 사진 |
 | ![중앙도서관: 1997년 사진(위)과 게임(아래)](docs/screenshots/63_cmp_library.jpg)<br>**중앙도서관** · 1997년 | ![학생회관 외벽: 2009년 사진(위)과 게임(아래)](docs/screenshots/61_union_facade.jpg)<br>**학생회관** 외벽 · 2009년 |
 | ![백주년기념관 박물관 입구: 1996년 사진(위)과 게임(아래)](docs/screenshots/52_museum_entrance.jpg)<br>**백주년기념관** 박물관 입구 · 1996년 | ![대강당: 2009년 사진(위)과 게임(아래)](docs/screenshots/64_cmp_auditorium.jpg)<br>**대강당** · 2009년 |
-| ![언더우드관: 2016년 사진(위)과 게임(아래)](docs/screenshots/65_cmp_underwood.jpg)<br>**언더우드관** · 2016년 | ![스팀슨관: 2016년 사진(위)과 게임(아래)](docs/screenshots/66_cmp_stimson.jpg)<br>**스팀슨관** · 2016년 |
-| ![아펜젤러관: 2016년 사진(위)과 게임(아래)](docs/screenshots/67_cmp_appenzeller.jpg)<br>**아펜젤러관** · 2016년 | ![연희관: 2023년 사진(위)과 게임의 10월(아래)](docs/screenshots/68_cmp_yeonhui.jpg)<br>**연희관** · 2023년 가을 |
+| ![언더우드관: 2016년 사진(위)과 게임(아래)](docs/screenshots/65_cmp_underwood.jpg)<br>**언더우드관** · 2016년 | ![스팀슨관: 2016년 사진(위)과 게임(아래)](docs/screenshots/66_cmp_stimson.jpg)<br>**스팀슨관** · 2016년. 게임의 탑 · 도머는 사진과 다름 ([#29](https://github.com/yonsei-reunion/campus-1997/issues/29)) |
+| ![아펜젤러관: 2016년 사진(위)과 게임(아래)](docs/screenshots/67_cmp_appenzeller.jpg)<br>**아펜젤러관** · 2016년. 게임은 아직 언더우드관처럼 탑 있는 3층 ([#27](https://github.com/yonsei-reunion/campus-1997/issues/27)) | ![연희관: 2023년 사진(위)과 게임의 10월(아래)](docs/screenshots/68_cmp_yeonhui.jpg)<br>**연희관** · 2023년 가을 |
 | ![대우관: 사진(위)과 게임(아래)](docs/screenshots/69_cmp_daewoo.jpg)<br>**대우관** (1996년 준공) | ![대우관 상뜰: 사진(위)과 게임(아래)](docs/screenshots/57_sang.jpg)<br>**대우관 상뜰** |
 | ![광복관 현관: 1996년 사진(위)과 게임(아래)](docs/screenshots/70_cmp_kwangbok.jpg)<br>**광복관** 현관 · 1996년 | ![과학관 앞 높은 계단: 1996년 사진(위)과 게임(아래)](docs/screenshots/54_science_stairs.jpg)<br>**과학관** 앞 계단 · 1996년 |
-| ![음악관 현관: 1996년 사진(위)과 게임(아래)](docs/screenshots/53_music_door.jpg)<br>**음악관** 현관 · 1996년 | ![빌링슬리관 현관: 1996년 사진(위)과 게임(아래)](docs/screenshots/71_cmp_billingsley.jpg)<br>**빌링슬리관** 현관 · 1996년 |
+| ![음악관 현관: 1996년 사진(위)과 게임(아래)](docs/screenshots/53_music_door.jpg)<br>**음악관** 현관 · 1996년 | ![빌링슬리관 현관: 1996년 사진(위)과 게임(아래)](docs/screenshots/71_cmp_billingsley.jpg)<br>**빌링슬리관** 현관 · 1996년. 게임의 현관 자리는 다름 ([#30](https://github.com/yonsei-reunion/campus-1997/issues/30)) |
 | ![용재관: 사진(왼쪽)과 게임(오른쪽)](docs/screenshots/72_cmp_yongjae.jpg)<br>**용재관** (1957 – 2013, 지금 경영관 자리) | ![옛 노천극장: 1997년 사진(위)과 게임(아래)](docs/screenshots/73_cmp_amphitheater.jpg)<br>**옛 노천극장** · 1997년 |
 | ![활천대: 2009년 사진(왼쪽)과 같은 자리에서 본 게임(오른쪽)](docs/screenshots/34_hwalcheon_2009.jpg)<br>**활천대** · 2009년, 독수리상 옆의 옛 자리 | ![백양로 가운데 초소: 1997년 사진(왼쪽)과 같은 카메라의 게임(오른쪽)](docs/screenshots/44_guard_booth_1997.jpg)<br>**백양로 초소** · 1997년 |
 
