@@ -10,17 +10,20 @@ One float colour attribute, exported as COLOR_0:
   B  position along that ledge, -1..1 under it, (u + U_RANGE) / (2 U_RANGE)             } down from the ledge, over
                                                                                          } the faces below it to
                                                                                          } the next opening
-  A  1 (free)
-White (1, 1, 1, 1) reads as open and under no ledge: what the web app gives a mesh without the attribute.  (The
-height over the ground, for the soil splashed up the walls, the web app reads from its own terrain.)  Leaf faces (the
-ivy) take none of it: their corners keep the mesh's own corner colour, the wind data of landmarks.ivy_patch.
+  A  the sun's light on the face's side towards the sun (the fixed sun of web/public/data/sky.json): 1 sunlit, 0 in
+     the shadow of a hall or landmark (these and the other GLB's) or, partly, of a tree's crown.  Rays cast to the
+     sun; the phones' only sun shadow above the ground (web/src/bakedshadow.js), the desktop draws its shadow map.
+White (1, 1, 1, 1) reads as open, under no ledge and sunlit: what the web app gives a mesh without the attribute.
+(The height over the ground, for the soil splashed up the walls, the web app reads from its own terrain.)  Leaf
+faces (the ivy) take none of it: their corners keep the mesh's own corner colour, the wind data of
+landmarks.ivy_patch.
 
 G and B are linear in position over a face, so the corners carry them exactly.  The occlusion is not: a large flat
 quad (a 60 m band of glass behind the piers of 중앙도서관, the soffit of 학생회관's pilotis) is split into a grid of
-about STEP for the bake and thinned back to the fewest grid lines that reproduce it (an open wall: its corners only).
-A large flat n-gon (a roof inside its parapets) takes one value from points inside it.
+about STEP for the bake and thinned back to the fewest grid lines that reproduce it and the sun's shadow on it (an open
+wall: its corners only).  A large flat n-gon (a roof inside its parapets) takes one value from points inside it.
 """
-import bpy, math, time
+import bpy, math, os, json, time
 import numpy as np
 import common
 from common import MATS
@@ -33,7 +36,7 @@ AO_TOL = 0.08          # thin a grid while its coarser cells stay this close to 
 DOWN_W = 0.6           # share of a downward face's light that the shaded ground under it takes away
 D_RANGE, U_RANGE = 16.0, 8.0
 REACH = 2.5            # m: how far the streaks under a ledge run down at most (else to the opening below it)
-QUANT = (64, 256, 256, 1)  # levels per channel
+QUANT = (64, 256, 256, 32)  # levels per channel
 LEDGE_DEPTH = 0.65     # m: deepest upward face that still counts as a ledge (sills, copings, bands, treads)
 # halls that were new in 1997 (bid -> share of their materials' weathering, exported as the object's extras):
 # 대우관 was finished in 1996, 제3공학관 and 제2인문관 were going up
@@ -395,9 +398,9 @@ def _streaks(m, cow, n_eff, wet):
     return dep, along
 
 
-def _coarsest(g):
+def _coarsest(g, gs=None):
     """The fewest grid lines (index arrays along u and v, ends included) whose bilinear cells reproduce every node of
-    the grid g (nv+1, nu+1) within AO_TOL"""
+    the grid g (nv+1, nu+1) within AO_TOL, and of the sun's grid gs (the same shape) within SUN_TOL"""
     nv, nu = g.shape[0] - 1, g.shape[1] - 1
 
     def lines(n, k):
@@ -417,9 +420,9 @@ def _coarsest(g):
             u0, u1, wu = interp(iu, nu)
             v0, v1, wv = interp(jv, nv)
             wu, wv = wu[None, :], wv[:, None]
-            est = (g[np.ix_(v0, u0)] * (1 - wu) * (1 - wv) + g[np.ix_(v0, u1)] * wu * (1 - wv)
-                   + g[np.ix_(v1, u1)] * wu * wv + g[np.ix_(v1, u0)] * (1 - wu) * wv)
-            if np.abs(est - g).max() < AO_TOL:
+            err = lambda G: np.abs(G[np.ix_(v0, u0)] * (1 - wu) * (1 - wv) + G[np.ix_(v0, u1)] * wu * (1 - wv)
+                                   + G[np.ix_(v1, u1)] * wu * wv + G[np.ix_(v1, u0)] * (1 - wu) * wv - G).max()
+            if err(g) < AO_TOL and (gs is None or err(gs) < SUN_TOL):
                 best = (iu, jv)
     return best if best is not None else (np.arange(nu + 1), np.arange(nv + 1))
 
@@ -445,10 +448,176 @@ def _own_colour(me, verts):
     return out
 
 
+# ----------------------------------------------------------------------------- 4. the sun's shadow
+SUN_RAYS = 4           # shadow rays per corner, spread over the sun's disc
+SUN_ANGLE = 1.5        # deg: the sun's disc and a little more (the soft edges of the web's shadows)
+SUN_TOL = 0.3          # a split quad keeps the grid lines its shadow edges need, to within this
+SUN_LIFT = 0.02        # m: the rays leave this far off the face, a centimetre in from its edges
+CROWN_PASS = 0.55      # light each side of a crown lets through: about 0.3 through a whole crown, as the dappled
+                       # shade of the leaf cards on the ground (web/public/assets/textures/sun_shadow.png)
+
+
+def sun_dir():
+    """The fixed sun (blender/sky_bake.py: the HDRI's brightest texel, web/public/data/sky.json) as web/src/main.js
+    turns it into the light's direction, in the campus frame (x east, y north, z up; three's z is -north)"""
+    s = json.load(open(os.path.join(common.ROOT, 'web', 'public', 'data', 'sky.json')))
+    phi, el = (s['sun_u'] - 0.5) * 2 * math.pi, (s['sun_v'] - 0.5) * math.pi
+    return np.array((math.cos(el) * math.cos(phi), -math.cos(el) * math.sin(phi), math.sin(el)))
+
+
+def _tris(m):
+    """A _Mesh's faces for a BVH: triangles and quads as triangles (array), larger faces as they are (lists)"""
+    tri = m.lt == 3
+    quad = m.lt == 4
+    a = m.ls[tri][:, None] + np.arange(3)
+    q = m.ls[quad][:, None] + np.array((0, 1, 2, 0, 2, 3))
+    t = np.vstack((m.lv[a], m.lv[q].reshape(-1, 3)))
+    big = [m.lv[s:s + n].tolist() for s, n in zip(m.ls[m.lt > 4], m.lt[m.lt > 4])]
+    return t, big
+
+
+def _crowns():
+    """Every tree's crown (blender/vegetation.py SPECIES envelope, where web/src/world.js plants it) as an ellipsoid:
+    (vertices, triangles) of them all, or None"""
+    import vegetation
+    seg, ring = 12, 6
+    th = np.linspace(0, math.pi, ring + 1)
+    ph = np.linspace(0, 2 * math.pi, seg, endpoint=False)
+    u = np.vstack([(np.sin(t) * np.cos(ph), np.sin(t) * np.sin(ph), np.full(seg, np.cos(t))) for t in th[1:-1]]
+                  ).reshape(ring - 1, 3, seg).transpose(0, 2, 1).reshape(-1, 3)
+    u = np.vstack((u, (0, 0, 1), (0, 0, -1)))                 # rings, then the two poles
+    top, bot = len(u) - 2, len(u) - 1
+    f = []
+    for r in range(ring - 2):
+        for k in range(seg):
+            a, b = r * seg + k, r * seg + (k + 1) % seg
+            f += [(a, b, b + seg), (a, b + seg, a + seg)]
+    for k in range(seg):
+        f += [(top, (k + 1) % seg, k), (bot, (ring - 2) * seg + k, (ring - 2) * seg + (k + 1) % seg)]
+    f = np.array(f)
+    V, T = [], []
+    for sp, x, y, sc, *_ in common.CAMPUS['trees']:
+        s = vegetation.SPECIES.get(sp)
+        if s is None:
+            continue
+        p = u.copy()
+        r = np.where(p[:, 2] > 0, 1 - s['taper'] * np.maximum(p[:, 2], 0) ** 1.2, 1.0) if s.get('exc') else 1.0
+        p[:, 0] *= s['rx'] * sc * r
+        p[:, 1] *= s['rx'] * sc * r
+        p[:, 2] *= s['rz'] * sc
+        p += (x, y, common.ground(x, y) - 0.05 + s['cz'] * sc)
+        T.append(f + len(V) * len(u))
+        V.append(p)
+    return (np.vstack(V), np.vstack(T)) if V else None
+
+
+def _glb_tris(path):
+    """The triangles of another GLB's meshes (the halls' when the landmarks bake, and the other way round), world
+    space: (vertices, triangles), or None"""
+    if not path or not os.path.exists(path):
+        print('bake: no', path, '(its shadows left out)')
+        return None
+    objs0, mats0 = set(bpy.data.objects), set(bpy.data.materials)
+    bpy.ops.import_scene.gltf(filepath=path)
+    new = [o for o in bpy.data.objects if o not in objs0]
+    V, T, nv = [], [], 0
+    for o in new:
+        if o.type != 'MESH' or o.name.startswith('walk'):
+            continue
+        me = o.data
+        c = np.empty(len(me.vertices) * 3, np.float32)
+        me.vertices.foreach_get('co', c)
+        M = np.array(o.matrix_world)
+        me.calc_loop_triangles()
+        t = np.empty(len(me.loop_triangles) * 3, np.int32)
+        me.loop_triangles.foreach_get('vertices', t)
+        V.append(c.reshape(-1, 3) @ M[:3, :3].T + M[:3, 3])
+        T.append(t.reshape(-1, 3) + nv)
+        nv += len(me.vertices)
+    for o in new:
+        data = o.data
+        bpy.data.objects.remove(o)
+        if isinstance(data, bpy.types.Mesh) and not data.users:
+            bpy.data.meshes.remove(data)
+    for m in [m for m in bpy.data.materials if m not in mats0]:
+        bpy.data.materials.remove(m)
+    return (np.vstack(V), np.vstack(T)) if V else None
+
+
+def _sun_light(meshes, glb=None):
+    """The sun's light on every corner (loop) of the dense meshes (world space), on the side of its face towards the
+    sun (the other side is unlit whatever the shadow, so this one value serves whichever side the web app shows: it
+    draws the walls double-sided).  SUN_RAYS rays over the sun's disc from just off the face, against these meshes
+    and the other GLB's, and through the crowns, each side of one letting CROWN_PASS through.  1 sunlit, 0 in shadow.
+    (A ray cast of our own: Cycles' shadow bake leaves the baked object out of its own shadow.)"""
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+    t0 = time.time()
+    s = sun_dir()
+    V, T, big, nv = [], [], [], 0
+    for d in meshes:
+        t, b = _tris(d)
+        V.append(d.co)
+        T.append(t + nv)
+        big += [[i + nv for i in p] for p in b]
+        nv += len(d.co)
+    other = _glb_tris(glb)
+    if other is not None:
+        V.append(other[0])
+        T.append(other[1] + nv)
+    solid = BVHTree.FromPolygons(np.vstack(V).tolist(), np.vstack(T).tolist() + big)
+    cr = _crowns()
+    crowns = BVHTree.FromPolygons(cr[0].tolist(), cr[1].tolist(), all_triangles=True) if cr is not None else None
+    # the points: every corner, moved in towards its face's middle and off the face on the sun's side
+    co = np.vstack([d.co[d.lv] for d in meshes])
+    nrm = np.vstack([d.normals(d.co)[d.lf] for d in meshes])
+    cen = np.column_stack([np.concatenate([(np.bincount(d.lf, d.co[d.lv, k], len(d.ls)) / d.lt)[d.lf] for d in meshes])
+                           for k in range(3)])
+    tc = cen - co
+    tl = np.linalg.norm(tc, axis=1)
+    p = (co + tc * (np.minimum(0.01, tl * 0.3) / np.maximum(tl, 1e-9))[:, None]
+         + nrm * np.where(nrm @ s >= 0, SUN_LIFT, -SUN_LIFT)[:, None])
+    _, first, inv = np.unique(np.round(p / 0.005).astype(np.int64), axis=0, return_index=True, return_inverse=True)
+    # the rays: SUN_RAYS directions spread evenly over the disc
+    e1 = np.cross(s, (0, 0, 1))
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(s, e1)
+    rad = math.radians(SUN_ANGLE) / 2
+    dirs = []
+    for k in range(SUN_RAYS):
+        r, a = rad * math.sqrt((k + 0.5) / SUN_RAYS), k * 2.39996
+        v = s + r * (math.cos(a) * e1 + math.sin(a) * e2)
+        dirs.append(Vector(v / np.linalg.norm(v)))
+    cast, ccast = solid.ray_cast, crowns.ray_cast if crowns is not None else None
+    out = np.empty(len(first))
+    for i, q in enumerate(p[first].tolist()):
+        lit = 0.0
+        for dv in dirs:
+            if cast(q, dv)[0] is not None:
+                continue
+            tr = 1.0
+            if ccast is not None:
+                o = q
+                for _ in range(8):
+                    h = ccast(o, dv)[0]
+                    if h is None:
+                        break
+                    tr *= CROWN_PASS
+                    o = h + dv * 0.001
+            lit += tr
+        out[i] = lit / SUN_RAYS
+    vis = out[inv.ravel()]
+    loff = np.cumsum([0] + [len(d.lv) for d in meshes])
+    print('bake: sun %.1fs (%d points, %d of the other GLB\'s triangles, %d crowns)' % (
+        time.time() - t0, len(first), 0 if other is None else len(other[1]), len(common.CAMPUS['trees'])))
+    return [vis[loff[i]:loff[i + 1]] for i in range(len(meshes))]
+
+
 # ----------------------------------------------------------------------------- driver
-def bake(objs):
+def bake(objs, sun_glb=None):
     """Write the 'bake' colour attribute on every mesh object in objs (in place; large quads may be split).
-    Objects named walk_* (invisible walk surfaces) neither receive nor occlude."""
+    Objects named walk_* (invisible walk surfaces) neither receive nor occlude.  sun_glb: the other GLB of halls or
+    landmarks, whose shadows fall on these too (its last build)."""
     t0 = time.time()
     hidden = [o for o in objs if o.name.startswith('walk')]
     objs = [o for o in objs if o.type == 'MESH' and o not in hidden and len(o.data.polygons)]
@@ -465,9 +634,10 @@ def bake(objs):
         world.append(w)
     t1 = time.time()
     front, back = _bake_both_sides(world, objs + hidden)
+    sunL = _sun_light(world, sun_glb)
     t2 = time.time()
     nv0 = nv1 = npatch = nmerge = 0
-    for ob, aoF, aoB in zip(objs, front, back):
+    for ob, aoF, aoB, suL in zip(objs, front, back, sunL):
         m, M, mats = orig[ob.name]
         d, patches, probe = dense[ob.name]
         R3, T3 = M[:3, :3], M[:3, 3]
@@ -494,14 +664,22 @@ def bake(objs):
         _, inv = np.unique(key, axis=0, return_inverse=True)
         inv = inv.ravel()
         ao = (np.bincount(inv, ao) / np.bincount(inv))[inv]
+        # the sun, on the side of each face that faces it, the coinciding corners averaged the same way
+        sun = suL                                                 # (per corner)
+        ns = nd[d.lf] * np.where(nd[d.lf] @ sun_dir() > 0, 1.0, -1.0)[:, None]
+        _, inv_s = np.unique(np.hstack((np.round(cod[d.lv] / 0.02), np.round(ns * 3))).astype(np.int64), axis=0,
+                             return_inverse=True)
+        inv_s = inv_s.ravel()
+        sun = (np.bincount(inv_s, sun) / np.bincount(inv_s))[inv_s]
         # rain streaks, from the original faces with their open side
         com = m.co @ R3.T + T3
         n_eff = m.normals(com) * sign[:, None]
         wet = np.array([MATS.get(x.name.split('.')[0], {}).get('weather', 0) > 0 for x in mats] + [False])
         dep, along = _streaks(m, com, n_eff, wet[np.minimum(m.mi, len(mats))])
         # assemble: faces as they were, each grid thinned to what its corners or a coarser grid reproduce
-        aov = np.zeros(len(d.co))
+        aov, sunv = np.zeros(len(d.co)), np.zeros(len(d.co))
         aov[d.lv] = ao                                            # (a node is shared only within its grid)
+        sunv[d.lv] = sun
         for p in patches:
             nu, nv = p['grid']
             g = aov[p['v0']:p['v0'] + p['k']].reshape(nv + 1, nu + 1)
@@ -509,11 +687,16 @@ def bake(objs):
                 inner = sum(g[1 + dj:nv + dj, 1 + di:nu + di] for dj in (-1, 0, 1) for di in (-1, 0, 1)) / 9
                 g[1:nv, 1:nu] = 0.5 * g[1:nv, 1:nu] + 0.5 * inner
             p['ao'] = g.ravel()
-            p['sub'] = _coarsest(g)
+            p['sun'] = sunv[p['v0']:p['v0'] + p['k']]
+            p['sub'] = _coarsest(g, p['sun'].reshape(nv + 1, nu + 1))
             p['merge'] = len(p['sub'][0]) == 2 and len(p['sub'][1]) == 2
         # a probed n-gon: one value, from the more open of its probes (a roof half under 백주년기념관's drum)
         flat = {f: np.percentile((aoF if fwd[f] else aoB)[v], 70) for f, v in probe.items()}
-        co, ls, lv, mi, sm, uv, col = [m.co], [], [], [], [], [], []
+        # and the share of its probes in the sun
+        pS = np.zeros(len(d.co))
+        pS[d.lv] = suL                                            # (a probe's corners are its own)
+        flat_sun = {f: pS[v].mean() for f, v in probe.items()}
+        co, ls, lv, mi, sm, uv, col, sa = [m.co], [], [], [], [], [], [], []
         nl_, nv_ = 0, len(m.co)
         cnt_o = np.ones(len(m.ls), np.int64)
         dl = 0                                                    # running dense loop index
@@ -535,6 +718,8 @@ def bake(objs):
                     nu, nv = p['grid']
                     r = p['ao'][[0, nu, p['k'] - 1, nv * (nu + 1)]]
                 col.append(np.column_stack((r, dep[a:a + n], along[a:a + n], np.ones(n))))
+                sa.append(np.full(n, flat_sun[f]) if f in flat else sun[dl:dl + n] if p is None
+                          else p['sun'][[0, nu, p['k'] - 1, nv * (nu + 1)]])
                 nl_ += n
             else:
                 nu, nv = p['grid']                                # the coarser grid on a subset of the nodes
@@ -555,6 +740,7 @@ def bake(objs):
                     uv.append((Ws @ m.uv[a:a + n])[loc])
                 col.append(np.column_stack((p['ao'][sel][loc], (Ws @ dep[a:a + n])[loc], (Ws @ along[a:a + n])[loc],
                                             np.ones(F.size))))
+                sa.append(p['sun'][sel][loc])
                 cnt_o[f] = len(F)
                 nv_ += len(sel)
                 nl_ += F.size
@@ -562,6 +748,7 @@ def bake(objs):
         out = _Mesh(np.vstack(co), np.concatenate(ls).astype(np.int64), np.concatenate(lv).astype(np.int64),
                     np.concatenate(mi), np.concatenate(sm).astype(bool), np.vstack(uv) if m.uv is not None else None)
         col = np.vstack(col)
+        col[:, 3] = np.concatenate(sa)
         cow = out.co @ R3.T + T3
         h = cow[:, 2] - _ground(cow[:, 0], cow[:, 1])
         hl = h[out.lv]

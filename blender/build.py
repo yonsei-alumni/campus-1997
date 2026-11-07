@@ -40,8 +40,8 @@ if want('buildings'):
     # the halls' front flights (generic.porch): walked on like the landmarks' (web/src/main.js looks for 'walk_stairs')
     objs.append(landmarks.walk_mesh().build())
     json.dump(generic.DOORS, open(os.path.join(common.ROOT, 'data', 'entrances_generic.json'), 'w'))
-    if BAKE:
-        bake.bake(objs)
+    if BAKE:        # (the landmarks' shadows on the halls from their last build)
+        bake.bake(objs, sun_glb=os.path.join(OUT, 'campus_landmarks.glb'))
     stats['buildings'] = tri_count(objs)
     export_glb(objs, os.path.join(OUT, 'campus_buildings.glb'), colors=BAKE)
 
@@ -84,7 +84,7 @@ if want('landmarks'):
     _gen = json.load(open(_gp)) if os.path.exists(_gp) else []
     json.dump({'entrances': landmarks.ENTRANCES + _gen}, open(os.path.join(common.ROOT, 'web/public/data/entrances.json'), 'w'))
     if BAKE:
-        bake.bake(objs)
+        bake.bake(objs, sun_glb=os.path.join(OUT, 'campus_buildings.glb'))
     stats['landmarks'] = tri_count(objs)
     export_glb(objs, os.path.join(OUT, 'campus_landmarks.glb'), colors=BAKE)
 
