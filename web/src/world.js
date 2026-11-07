@@ -17,15 +17,35 @@ const OWN = [[/^lm_yeonhui/, { stone_rubble: 'stone_rubble_brown' }]];
 const ownMats = (o) => OWN.find(([re]) => re.test(o.name) || re.test(o.parent?.name ?? ''))?.[1];
 
 // Our own GLBs carry material *names*; replace them with the shared library materials.
-export function bindMaterials(root, lib, keepUnknown = false) {
+// baked: the halls and landmarks, whose COLOR_0 is blender/bake.py's occlusion and weathering data, not a colour:
+// their library materials become lib.baked() copies reading it as the attribute `bake`.
+export function bindMaterials(root, lib, keepUnknown = false, baked = false) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     const own = ownMats(o);                        // (the loaded materials are shared between meshes: rename nothing)
-    const out = mats.map((m) => (own?.[m.name] ?? ((lib.defs[m.name] || !keepUnknown) ? m.name : null)))
+    let out = mats.map((m) => (own?.[m.name] ?? ((lib.defs[m.name] || !keepUnknown) ? m.name : null)))
       .map((n, i) => (n ? lib.get(n) : mats[i]));
+    if (baked) {
+      const age = o.userData.weather ?? o.parent?.userData.weather ?? 1;
+      out = out.map((m) => lib.baked(m, age));
+      const g = o.geometry;
+      if (out.some((m) => m.userData.baked) && g.attributes.color && !g.attributes.bake) {
+        g.setAttribute('bake', g.attributes.color);
+        g.deleteAttribute('color');
+      }
+    }
     o.material = Array.isArray(o.material) ? out : out[0];
   });
+}
+
+// the baked attribute as Draco decodes it (16-bit normalized RGBA), so that every geometry of a bucket merges;
+// white where a mesh has none
+function bakeU16(a, count) {
+  if (a && a.array instanceof Uint16Array && a.normalized && a.itemSize === 4) return a;
+  const out = new Uint16Array(count * 4).fill(65535);
+  if (a) for (let i = 0; i < count; i++) for (let c = 0; c < Math.min(4, a.itemSize); c++) out[i * 4 + c] = Math.round(a.getComponent(i, c) * 65535);
+  return new THREE.BufferAttribute(out, 4, true);
 }
 
 // Merge every mesh under root into one mesh per (material, chunk).
@@ -38,9 +58,11 @@ export function mergeStatic(root, { chunk = 160, castShadow = true, receiveShado
     const g = o.geometry.clone();
     g.applyMatrix4(o.matrixWorld);
     for (const k of Object.keys(g.attributes)) {
-      if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
+      if (!['position', 'normal', 'uv', 'color', 'bake'].includes(k)) g.deleteAttribute(k);
     }
     if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+    if (o.material.userData.baked) g.setAttribute('bake', bakeU16(g.attributes.bake, g.attributes.position.count));
+    else if (g.attributes.bake) g.deleteAttribute('bake');
     if (o.material.vertexColors) {
       if (!g.attributes.color) g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
       else if (g.attributes.color.itemSize === 4) {
@@ -54,7 +76,8 @@ export function mergeStatic(root, { chunk = 160, castShadow = true, receiveShado
     if (!g.index) g.setIndex(Array.from({ length: g.attributes.position.count }, (_, i) => i));
     box.setFromBufferAttribute(g.attributes.position);
     box.getCenter(c);
-    const key = o.material.name + '|' + Math.floor(c.x / chunk) + '|' + Math.floor(c.z / chunk);
+    // (by material object: a building's own weathering makes a second copy of a library material, same name)
+    const key = o.material.name + '#' + o.material.id + '|' + Math.floor(c.x / chunk) + '|' + Math.floor(c.z / chunk);
     if (!buckets.has(key)) buckets.set(key, { mat: o.material, geos: [] });
     buckets.get(key).geos.push(g);
   });

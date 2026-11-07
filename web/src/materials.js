@@ -250,15 +250,157 @@ function windowGlass(d) {
   return m;
 }
 
+// Halls and landmarks: the per-corner data blender/bake.py writes (attribute `bake`, RGBA; a mesh without it reads
+// white, i.e. open and under no ledge):
+//   R  ambient occlusion by the buildings within 10 m -> only the light from the sky and the ground (hemisphere,
+//      environment) is taken away, never the sun: the arcade of 중앙도서관, the pilotis of 학생회관 and the deep porch
+//      of 백주년기념관 go dim in their own shade, and stay lit where the sun reaches into them
+//   G  depth under the ledge above in fade lengths / 16, B position along that ledge (u + 8) / 16
+// -> weathering: soil splashed up the foot of the walls (their height over the terrain the walker sees: setTerrain),
+// rain streaks down from sills, copings and bands, grime on the faces that look up, scaled by the material's
+// `weather` (materials.json) and the building's age (GLB extras `weather`: 대우관 was new in 1996)
+const BAKE_VERT = /* glsl */`
+attribute vec4 bake;
+uniform sampler2D uTerrain;
+uniform vec3 uTerrainGrid;
+varying vec4 vBake;
+varying vec3 vBakeW;
+varying float vBakeH;
+float bkGround(vec2 p) {
+  vec2 f = clamp((p + uTerrainGrid.x) / uTerrainGrid.y, vec2(0.0), vec2(uTerrainGrid.z - 1.001));
+  ivec2 i = ivec2(f);
+  vec2 a = f - vec2(i);
+  float h00 = texelFetch(uTerrain, i, 0).r, h10 = texelFetch(uTerrain, i + ivec2(1, 0), 0).r;
+  float h01 = texelFetch(uTerrain, i + ivec2(0, 1), 0).r, h11 = texelFetch(uTerrain, i + ivec2(1, 1), 0).r;
+  // (the two triangles of each cell, as terrain.js draws them)
+  return a.x + a.y <= 1.0 ? h00 + (h10 - h00) * a.x + (h01 - h00) * a.y
+                          : h11 + (h01 - h11) * (1.0 - a.x) + (h10 - h11) * (1.0 - a.y);
+}`;
+const BAKE_FRAG = /* glsl */`
+varying vec4 vBake;
+varying vec3 vBakeW;
+varying float vBakeH;
+uniform float uBakeAO;
+uniform float uWeather;
+float bkHash(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+float bkNoise(vec3 x) {
+  vec3 i = floor(x), f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(bkHash(i), bkHash(i + vec3(1, 0, 0)), f.x), mix(bkHash(i + vec3(0, 1, 0)), bkHash(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(bkHash(i + vec3(0, 0, 1)), bkHash(i + vec3(1, 0, 1)), f.x), mix(bkHash(i + vec3(0, 1, 1)), bkHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}`;
+// (world y is up: three's frame of the campus)
+const BAKE_WEATHER = /* glsl */`
+#ifdef BAKE_WEATHER
+#ifdef BAKE_LITE
+  #define bkDetail(p) 0.5
+#else
+  #define bkDetail(p) bkNoise(p)
+#endif
+{
+  vec3 wN = inverseTransformDirection(nonPerturbedNormal, viewMatrix);
+  vec3 P = vBakeW;
+  float wall = 1.0 - smoothstep(0.35, 0.7, abs(wN.y));
+  // soil splashed up the foot of the walls: darker and yellower, its top ragged
+  float h = vBakeH, base = 0.0;
+  if (h < 1.4) {
+    float nb = bkNoise(P * vec3(1.1, 0.4, 1.1)) * 0.65 + bkDetail(P * 4.0) * 0.35;
+    base = pow(1.0 - smoothstep(0.0, 0.35 + 0.9 * nb, h), 1.3) * wall;
+  }
+  // rain streaks down from the ledge above: a film under its whole width and darker columns, each running its own
+  // length
+  float dl = vBake.g * 16.0, ul = vBake.b * 16.0 - 8.0, streak = 0.0;
+  if (dl < 1.0 && abs(ul) < 1.05) {
+    float c1 = bkNoise(vec3(P.x * 5.0, P.y * 0.18, P.z * 5.0));
+    float c2 = bkDetail(vec3(P.x * 14.0, P.y * 0.4, P.z * 14.0));
+    float run = 1.0 - smoothstep(0.0, 0.45 + 0.55 * c1, dl);
+    streak = (1.0 - smoothstep(0.7, 1.05, abs(ul))) * sqrt(run)
+           * (0.55 + 0.45 * smoothstep(0.25, 0.65, c1 * 0.6 + c2 * 0.4)) * wall;
+  }
+  // grime where water stands and dust settles: sill tops, copings, ledges
+  float up = 0.0;
+  if (wN.y > 0.6) up = smoothstep(0.6, 0.9, wN.y) * smoothstep(0.35, 0.75, bkNoise(P * 1.9) * 0.6 + bkDetail(P * 7.0) * 0.4);
+  // and broad uneven weathering, more of it in the corners the rain and the sun do not reach
+  float broad = bkNoise(P * vec3(0.3, 0.8, 0.3)) - 0.5;
+  float grime = clamp(up * 0.7 + broad * 0.35 + (1.0 - vBake.r) * 0.3, 0.0, 1.0);
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.47, 0.42, 0.35), base * uWeather);
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.34, 0.33, 0.32), streak * uWeather);
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.6, 0.59, 0.56), grime * uWeather);
+}
+#endif`;
+// what aomap_fragment does with an AO map, with the baked value: the indirect light only
+const BAKE_AO = /* glsl */`
+{
+  float bkAO = 1.0 - uBakeAO * (1.0 - vBake.r);
+  reflectedLight.indirectDiffuse *= bkAO;
+  #if defined( USE_ENVMAP ) && defined( STANDARD )
+    float bkNV = saturate( dot( geometryNormal, geometryViewDir ) );
+    reflectedLight.indirectSpecular *= computeSpecularOcclusion( bkNV, bkAO, material.roughness );
+  #endif
+}`;
+
+function bakeShade(m, uniforms, weather) {
+  patchShader(m, weather ? 'bakeW' : 'bake', (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    if (weather) sh.defines = { ...sh.defines, BAKE_WEATHER: '', ...(MOBILE ? { BAKE_LITE: '' } : {}) };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>${BAKE_VERT}`)
+      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+        vBake = bake;
+        vBakeW = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        vBakeH = vBakeW.y - bkGround(vec2(vBakeW.x, -vBakeW.z));`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>${BAKE_FRAG}`)
+      .replace('#include <lights_physical_fragment>', `${BAKE_WEATHER}\n#include <lights_physical_fragment>`)
+      .replace('#include <aomap_fragment>', `#include <aomap_fragment>${BAKE_AO}`);
+  });
+}
+
 export class MaterialLibrary {
   constructor(defs) {
     this.defs = defs;
     this.mats = new Map();
     this.instancedMats = new Map();
+    this.bakedMats = new Map();
     this.leafMats = [];
     this.season = 'summer';
-    this.uniforms = { uGrass: { value: new THREE.Color(...SEASONS.summer.grass) }, uWindT: windTime };
+    this.uniforms = { uGrass: { value: new THREE.Color(...SEASONS.summer.grass) }, uWindT: windTime, uBakeAO: { value: 1.0 },
+      uTerrain: { value: null }, uTerrainGrid: { value: new THREE.Vector3(0, 1, 1) } };
     Object.assign(this.uniforms, litterUniforms(loadTex));     // the month's fallen leaves (litter.js)
+    this.setTerrain({ data: new Float32Array(4).fill(-1e4), half: 0, step: 1, n: 2 });
+  }
+
+  // the near terrain's heights (web/src/terrain.js Heightfield) for the baked materials: how high each wall is
+  setTerrain(hf) {
+    const t = new THREE.DataTexture(hf.data, hf.n, hf.n, THREE.RedFormat, THREE.FloatType);
+    t.needsUpdate = true;
+    this.uniforms.uTerrain.value = t;
+    this.uniforms.uTerrainGrid.value.set(hf.half, hf.step, hf.n);
+  }
+
+  // The halls' and landmarks' copy of a library material, reading their baked attribute (see BAKE_VERT above);
+  // age scales the material's weathering (a building's GLB extras). It keeps the original's name and its shader
+  // edits, also those made later. The leaves (ivy) keep their own vertex colours, which the bake leaves white.
+  baked(m, age = 1) {
+    if (this.mats.get(m.name) !== m || !m.isMeshStandardMaterial || m.vertexColors) return m;
+    const key = `${m.name}|${age}`;
+    let v = this.bakedMats.get(key);
+    if (!v) {
+      v = m.clone();
+      v.userData = { ...m.userData, baked: true };
+      v.defaultAttributeValues = { bake: [1, 1, 1, 1] };
+      const weather = (this.defs[m.name]?.weather ?? 0) * age;
+      const own = PATCHES.get(m);
+      // the original's edits, looked up at compile time, then ours
+      PATCHES.set(v, [{ get key() { return (PATCHES.get(m) || []).map((p) => p.key).join('|'); },
+        edit: (sh) => { for (const p of PATCHES.get(m) || []) p.edit(sh); } }]);
+      if (!own) PATCHES.set(m, []);
+      const { uBakeAO, uTerrain, uTerrainGrid } = this.uniforms;
+      v.userData.uWeather = { value: weather };
+      bakeShade(v, { uBakeAO, uTerrain, uTerrainGrid, uWeather: v.userData.uWeather }, weather > 0);
+      this.bakedMats.set(key, v);
+    }
+    return v;
   }
 
   // three keeps one compiled-program slot per material. One drawn both by plain meshes and by InstancedMeshes (the

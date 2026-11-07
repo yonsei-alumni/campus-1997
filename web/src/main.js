@@ -112,6 +112,7 @@ async function main() {
   // ---------------------------------------------------------------- terrain
   const T = campus.terrain;
   const hfNear = new Heightfield(nearData, T.near.half, T.near.step, T.near.n);
+  lib.setTerrain(hfNear);
   const hfFar = new Heightfield(farData, T.far.half, T.far.step, T.far.n);
   // the campus's static sun shadow baked into one texture (src/bakedshadow.js): the phones' only sun shadow, the
   // desktop's beyond the shadow map; on the terrain here, on every other lit material once the scene is built
@@ -134,8 +135,8 @@ async function main() {
     load('campus_landmarks.glb', '언더우드관에 담쟁이를 심는 중…'),
     load('baekyangro.glb', '백양로에 차선을 긋는 중…'),
   ]);
-  bindMaterials(bld.scene, lib);
-  bindMaterials(lms.scene, lib);
+  bindMaterials(bld.scene, lib, false, true);
+  bindMaterials(lms.scene, lib, false, true);
   bindMaterials(road.scene, lib);
 
   // walkable surfaces: terrain + road + amphitheater terraces

@@ -1,7 +1,7 @@
 """Build every 3D asset of the Yonsei-1997 campus and export GLBs for the web app.
 
 usage: blender -b --factory-startup --python blender/build.py -- [buildings] [landmarks] [road] [veg] [props] [polyhaven] [preview]
-(no argument = everything)
+(no argument = everything; add noao to skip the occlusion / weathering bake of the halls and landmarks, blender/bake.py)
 """
 import sys, os, math, random, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -9,14 +9,14 @@ import bpy
 from mathutils import Vector, Matrix
 import common
 from common import CAMPUS, OUT, reset_scene, export_glb, tri_count, ground
-import generic, landmarks, vegetation, props, road, statues
+import generic, landmarks, vegetation, props, road, statues, bake
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 ALL = not argv
 BLEND = 'blend' in argv
-if BLEND:
-    argv = [a for a in argv if a != 'blend']
-    ALL = not argv
+BAKE = 'noao' not in argv
+argv = [a for a in argv if a not in ('blend', 'noao')]
+ALL = not argv
 want = lambda k: ALL or k in argv
 stats = {}
 
@@ -40,8 +40,10 @@ if want('buildings'):
     # the halls' front flights (generic.porch): walked on like the landmarks' (web/src/main.js looks for 'walk_stairs')
     objs.append(landmarks.walk_mesh().build())
     json.dump(generic.DOORS, open(os.path.join(common.ROOT, 'data', 'entrances_generic.json'), 'w'))
+    if BAKE:
+        bake.bake(objs)
     stats['buildings'] = tri_count(objs)
-    export_glb(objs, os.path.join(OUT, 'campus_buildings.glb'))
+    export_glb(objs, os.path.join(OUT, 'campus_buildings.glb'), colors=BAKE)
 
 if want('landmarks'):
     reset_scene()
@@ -81,8 +83,10 @@ if want('landmarks'):
     _gp = os.path.join(common.ROOT, 'data', 'entrances_generic.json')
     _gen = json.load(open(_gp)) if os.path.exists(_gp) else []
     json.dump({'entrances': landmarks.ENTRANCES + _gen}, open(os.path.join(common.ROOT, 'web/public/data/entrances.json'), 'w'))
+    if BAKE:
+        bake.bake(objs)
     stats['landmarks'] = tri_count(objs)
-    export_glb(objs, os.path.join(OUT, 'campus_landmarks.glb'))
+    export_glb(objs, os.path.join(OUT, 'campus_landmarks.glb'), colors=BAKE)
 
 if want('road'):
     reset_scene()
