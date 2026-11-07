@@ -7,7 +7,9 @@ One float colour attribute, exported as COLOR_0:
      looking down (a soffit, the ceiling of a pilotis or a porch) does see the ground under it close by, in the
      building's own shade: that share is added from its height over the terrain.
   G  depth under the ledge above (a sill, a coping, a band) in fade lengths, / D_RANGE   } rain streaks running
-  B  position along that ledge, -1..1 under it, (u + U_RANGE) / (2 U_RANGE)             } down from the ledge
+  B  position along that ledge, -1..1 under it, (u + U_RANGE) / (2 U_RANGE)             } down from the ledge, over
+                                                                                         } the faces below it to
+                                                                                         } the next opening
   A  1 (free)
 White (1, 1, 1, 1) reads as open and under no ledge: what the web app gives a mesh without the attribute.  (The
 height over the ground, for the soil splashed up the walls, the web app reads from its own terrain.)
@@ -29,7 +31,7 @@ STEP = 1.5             # m: into a grid this fine
 AO_TOL = 0.08          # thin a grid while its coarser cells stay this close to every node
 DOWN_W = 0.6           # share of a downward face's light that the shaded ground under it takes away
 D_RANGE, U_RANGE = 16.0, 8.0
-FADE = 1.6             # m: how far the streaks under a ledge run down (at most the face's height)
+REACH = 2.5            # m: how far the streaks under a ledge run down at most (else to the opening below it)
 QUANT = (64, 256, 256, 1)  # levels per channel
 LEDGE_DEPTH = 0.65     # m: deepest upward face that still counts as a ledge (sills, copings, bands, treads)
 # halls that were new in 1997 (bid -> share of their materials' weathering, exported as the object's extras):
@@ -275,8 +277,14 @@ def _bake_both_sides(meshes, scene_objs):
 
 
 # ----------------------------------------------------------------------------- 3. ledges and rain streaks
-def _streaks(m, cow, n_eff):
-    """The G and B channels per loop of the original mesh: under which ledge each wall face lies"""
+def _streaks(m, cow, n_eff, wet):
+    """The G and B channels per loop of the original mesh: under which ledge each wall face lies.
+    A wall face right under a ledge takes it.  The faces below that one in the same wall plane -- under a sill the
+    spandrel ends at the floor line, and the window head of the storey below is a face of its own -- take the ledge
+    from the face above, with the position along it measured the same way, so the streaks run on across the seams.
+    A ledge's fade length is how far its faces reach down under its middle (to the opening below it, or the ground),
+    at most REACH: the streaks fade out at the next window head, not at the first face's foot.
+    wet: per face, whether its material weathers (glass and frames neither take the streaks on nor pass them down)."""
     dep = np.ones(len(m.lv))
     along = np.ones(len(m.lv))
     cell = 4.0
@@ -305,20 +313,26 @@ def _streaks(m, cow, n_eff):
                 grid.setdefault((gx, gy), []).append(li)
     if not ledges:
         return dep, along
-    for f in np.where(np.abs(n_eff[:, 2]) < 0.15)[0]:
-        a, n = m.ls[f], m.lt[f]
-        p = cow[m.lv[a:a + n]]
+    def cells(q):                                          # the grid cells a face's corners q span
+        lo, hi = np.floor(q[:, :2].min(0) / cell).astype(int), np.floor(q[:, :2].max(0) / cell).astype(int)
+        return [(gx, gy) for gx in range(lo[0], hi[0] + 1) for gy in range(lo[1], hi[1] + 1)]
+
+    walls = np.where(np.abs(n_eff[:, 2]) < 0.15)[0]
+    info = {}       # wall face -> corners, top, foot, outward normal, along-the-wall axis, its offset at top and foot
+    for f in walls:
+        p = cow[m.lv[m.ls[f]:m.ls[f] + m.lt[f]]]
         ztop, zbot = p[:, 2].max(), p[:, 2].min()
         nf = n_eff[f, :2] / max(np.linalg.norm(n_eff[f, :2]), 1e-9)
-        tf = np.array((-nf[1], nf[0]))
+        off = p[:, :2] @ nf
+        info[f] = (p, ztop, zbot, nf, np.array((-nf[1], nf[0])), off[p[:, 2] > ztop - 0.02].mean(),
+                   off[p[:, 2] < zbot + 0.02].mean())
+    asg = {}        # wall face -> (ledge, its height, axis and extent along it [l0, l1] as the faces under it measure it)
+    # 1. right under a ledge
+    for f in walls:
+        p, ztop, zbot, nf, tf, _, _ = info[f]
         fs = p[:, :2] @ tf
-        lo, hi = np.floor(p[:, :2].min(0) / cell).astype(int), np.floor(p[:, :2].max(0) / cell).astype(int)
-        cand = set()
-        for gx in range(lo[0], hi[0] + 1):
-            for gy in range(lo[1], hi[1] + 1):
-                cand.update(grid.get((gx, gy), ()))
         best = None
-        for li in cand:
+        for li in {li for c in cells(p) for li in grid.get(c, ())}:
             z, xy = ledges[li]
             if not (z - 0.3 <= ztop <= z + 0.02):
                 continue
@@ -328,15 +342,54 @@ def _streaks(m, cow, n_eff):
             ls_ = xy @ tf
             ov = min(ls_.max(), fs.max()) - max(ls_.min(), fs.min())
             if ov > 0.15 and (best is None or ov > best[0]):
-                best = (ov, z, ls_.min(), ls_.max())
-        if best is None:
-            continue
-        _, z, l0, l1 = best
-        u = (fs - (l0 + l1) / 2) / max((l1 - l0) / 2, 0.05)
-        if np.abs(u).max() > U_RANGE:
-            continue
-        fade = min(FADE, max(0.3, ztop - zbot))
-        dep[a:a + n] = np.clip((z - p[:, 2]) / fade / D_RANGE, 0, 1)
+                best = (ov, li, z, ls_.min(), ls_.max())
+        if best is not None:
+            _, li, z, l0, l1 = best
+            if np.abs(fs - (l0 + l1) / 2).max() <= U_RANGE * max((l1 - l0) / 2, 0.05):
+                asg[f] = (li, z, tf, l0, l1)
+    # 2. on down the wall: from the face above, top to bottom so that each face's is settled before it hands it on
+    below = {}
+    for f in asg:
+        for c in cells(info[f][0]):
+            below.setdefault(c, []).append(f)
+    for f in sorted((f for f in walls if f not in asg and wet[f]), key=lambda f: -info[f][1]):
+        p, ztop, zbot, nf, tf, otop, _ = info[f]
+        fs = p[:, :2] @ tf
+        best = None
+        for g in {g for c in cells(p) for g in below.get(c, ())}:
+            gp, _, gzb, gnf, _, _, gobot = info[g]
+            if not wet[g] or abs(gzb - ztop) > 0.03 or gnf @ nf < 0.95 or abs(gobot - otop) > 0.04:
+                continue
+            li, z, ltf, l0, l1 = asg[g]
+            gs = gp[:, :2] @ tf
+            ov = min(gs.max(), fs.max()) - max(gs.min(), fs.min())
+            s = p[:, :2] @ ltf
+            if (ov > 0.1 and z - ztop < REACH and min(s.max(), l1) - max(s.min(), l0) > 0.05
+                    and np.abs(s - (l0 + l1) / 2).max() <= U_RANGE * max((l1 - l0) / 2, 0.05)
+                    and (best is None or ov > best[0])):
+                best = (ov, g)
+        if best is not None:
+            asg[f] = asg[best[1]]
+            for c in cells(p):
+                below.setdefault(c, []).append(f)
+    # 3. each ledge's fade length: down to the lowest foot of its faces under its middle, not into the ground
+    stop = {}
+    for f, (li, z, ltf, l0, l1) in asg.items():
+        p, zbot = info[f][0], info[f][2]
+        s = p[:, :2] @ ltf
+        mid = s.min() - 0.02 <= (l0 + l1) / 2 <= s.max() + 0.02
+        k = stop.get(li, (False, np.inf))
+        if (mid, -zbot) > (k[0], -k[1]):
+            stop[li] = (mid, zbot)
+    fade = {}
+    for li, (_, zs) in stop.items():
+        z, xy = ledges[li]
+        fade[li] = min(REACH, max(0.3, z - max(zs, _ground(xy[:, 0], xy[:, 1]).min())))
+    for f, (li, z, ltf, l0, l1) in asg.items():
+        a, n = m.ls[f], m.lt[f]
+        p = info[f][0]
+        u = (p[:, :2] @ ltf - (l0 + l1) / 2) / max((l1 - l0) / 2, 0.05)
+        dep[a:a + n] = np.clip((z - p[:, 2]) / fade[li] / D_RANGE, 0, 1)
         along[a:a + n] = (u + U_RANGE) / (2 * U_RANGE)
     return dep, along
 
@@ -422,7 +475,8 @@ def bake(objs):
         # rain streaks, from the original faces with their open side
         com = m.co @ R3.T + T3
         n_eff = m.normals(com) * sign[:, None]
-        dep, along = _streaks(m, com, n_eff)
+        wet = np.array([MATS.get(x.name.split('.')[0], {}).get('weather', 0) > 0 for x in mats] + [False])
+        dep, along = _streaks(m, com, n_eff, wet[np.minimum(m.mi, len(mats))])
         # assemble: faces as they were, each grid thinned to what its corners or a coarser grid reproduce
         aov = np.zeros(len(d.co))
         aov[d.lv] = ao                                            # (a node is shared only within its grid)
