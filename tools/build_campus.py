@@ -227,6 +227,41 @@ w = np.clip((dist - (ROAD_HALF + 4)) / 30.0, 0, 1)
 w = w * w * (3 - 2 * w)
 Hn = hline * (1 - w) + Hn * w
 
+# --- the hill north of 한경길 (연희관, 대우관, 생활과학관), 6 m down.  The elevation tiles are a radar surface model at
+# 30 m: over the wooded hill and its big halls they stand over the ground, and the 5 m grid had 연희관's door 19.5 m
+# over 한경길 behind 언더우드관, with 13 m of it one 30 % slope across the garden between them.  The photos have
+# something else: a level parterre a short flight (OSM: 5 m) over 한경길, then a bank with a broad flight up to the
+# road before 연희관 and its entrance flight, some 7 - 9 m in all (reference/연희관_정면_2023.jpg, 학교연혁_연희관.jpg,
+# 대우관_블로그_연희관과_대우관_원경.jpg).  In the 1997 aerial photo, through its fitted camera, 대우관's tower top stood
+# 18 px (6 m) and 연희관's 17 px (5.5 m) under where the game had them, while 언더우드관's roof sat right.  With the hill
+# 6 m down their eaves, gables and towers land within 2 - 4 px (about a metre), the roads either side of the garden ease from 27 % and 18 % to 14 % and 8 %, and
+# 연희관 keeps its back yard a storey over its front as before.  Full over the hill (G frame: e across, n up the
+# garden's axis from its round planter), easing in from 한경길 to the road before 연희관 (the garden takes the step,
+# YEONHUI below) and out into the woods west, east and north.
+GF_C, GF_E, GF_N = np.array([78.4, 318.3]), np.array([0.968, -0.250]), np.array([0.250, 0.968])
+GE = (X - GF_C[0]) * GF_E[0] + (Y - GF_C[1]) * GF_E[1]
+GN = (X - GF_C[0]) * GF_N[0] + (Y - GF_C[1]) * GF_N[1]
+NORTH_DROP = 6.0
+
+
+def _smooth(t):
+    t = np.clip(t, 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def north_drop(e, n):
+    return NORTH_DROP * (_smooth((n + 22.0) / 48.0) * (1 - _smooth((n - 235.0) / 95.0))
+                         * (1 - _smooth((-95.0 - e) / 50.0)) * (1 - _smooth((e - 105.0) / 45.0)))
+
+
+def drop_at(x, y):
+    d_ = np.array([x, y]) - GF_C
+    return float(north_drop(d_ @ GF_E, d_ @ GF_N))
+
+
+Hn = Hn - north_drop(GE, GN)
+print('north hill down %.1f m (%d grid nodes moved)' % (NORTH_DROP, int((north_drop(GE, GN) > 0.05).sum())))
+
 # --- 대운동장 / pitches: flatten to their mean height
 for wv in ways.values():
     t = wv.get('tags', {})
@@ -367,7 +402,7 @@ FORECOURTS = [  # OSM way, outward front direction (None: the recess edge footpr
     (246156115, (0.27, -1.0), 12.0, dict(blend=8.0)),
     (246156118, (1.0, -0.27), 11.0, {}),      # 스팀슨관
     (246156116, (-1.0, 0.27), 11.0, {}),      # 아펜젤러관
-    (245623759, None, 11.0, {}),              # 연희관
+    # (연희관's front: YEONHUI below, with the garden before it)
     # 대강당: the 45 m wide flight under the canopy ran across a 2 m cross slope, its north end under the grass
     (371403811, (-1.0, 0.25), 13.0, dict(max_half=27.0, blend=12.0)),
     # 대우관 별관: likewise the lower of its two flights (10 m wide) on the slope of the road past its front
@@ -433,7 +468,7 @@ FORECOURTS.append((222843398, None, 20.0, dict(face=(tuple(_sf - SCI_T * 8.8), t
 # the threshold, banking back up into the hill at the west end.
 BILL_FRONT = ((14.11, 417.87), (57.73, 406.29))      # the south front, west -> east (the outside to the right)
 FORECOURTS.append((245623193, None, 12.0, dict(face=BILL_FRONT, max_half=23.0, blend=10.0, side_blend=9.0,
-                                                level=68.85, inside=2.0)))
+                                                level=round(68.85 - drop_at(36.0, 412.0), 2), inside=2.0)))  # (68.85 before)
 
 
 def level_forecourt(wid, front, depth, blend=18.0, side_blend=7.0, max_half=20.0, level=None, face=None, inside=2.0):
@@ -540,6 +575,114 @@ _free = shapely.contains_xy(GARDEN_FILL, X, Y) & ~FIXED & ~near_buildings(1.5)
 _free &= np.hypot(X - 55.5, Y - 187.5) > 8.0                 # the statue on its round steps
 harmonic_fill(_free)
 
+
+def fix_strip(line_pts, h0, h1, half, top=False):
+    """Grid nodes within half m of a polyline (not past its ends) get a straight grade from h0 to h1 along it.
+    top: only lower them to it (the ground under a flight must stay below its treads)."""
+    ls = LineString(line_pts)
+    m = shapely.contains_xy(ls.buffer(half, cap_style='flat'), X, Y)
+    z = h0 + (h1 - h0) * shapely.line_locate_point(ls, shapely.points(X[m], Y[m])) / ls.length
+    Hn[m] = np.minimum(Hn[m], z) if top else z
+    FIXED[m] = True
+    return m
+
+
+# --- 연희관 앞 정원: between 언더우드관's back and 연희관 (OSM; reference/연희관_정면_2023.jpg, 학교연혁_연희관.jpg from
+# its south walk, 대우관_블로그_연희관과_대우관_원경.jpg from above to the west, the 1995 map's star-shaped garden).
+# A diamond of walks round a round planter, a cross of walks through it, four beds edged with clipped boxwood.  It is
+# a level terrace (a 4 % rise northwards) a short flight over 한경길 (OSM 5 m: 16 risers); to the north a planted bank
+# with a broad flight between low walls (OSM 10 m: 32 risers) climbs to the road before 연희관, whose entrance flight
+# (nineteen risers, a landing) rises from the road between the wings.  West and east, walled flights come down into
+# the garden's side corners from the drives along 교육관 and 성암관.  The 5 m grid had one 30 % slope from 한경길 to
+# the door; now: 한경길 45.6 -> garden 48.0 (the S node) .. 49.4 (the N node) -> road 54.3 -> door 57.3.
+YH_DIAMOND = [(74.4, 302.5), (52.7, 325.4), (82.5, 335.4), (103.4, 312.1)]      # S, W, N, E nodes of the walks
+YH_C = (78.4, 318.3)                                                            # the round planter (GF_C)
+_zh = sample(Hn, NEAR_HALF, NEAR_STEP, 73.1, 297.5)                             # 한경길 at the foot of the S flight
+YEONHUI = dict(garden=round(_zh + 2.4, 2), slope=0.04, planter=dict(c=list(YH_C), r=3.2, h=0.5))
+
+
+def yh_plane(e, n):
+    return YEONHUI['garden'] + YEONHUI['slope'] * (n + 16.3)          # (n = -16.3 at the S node)
+
+
+def g_en(x, y):
+    d_ = np.array([x, y]) - GF_C
+    return float(d_ @ GF_E), float(d_ @ GF_N)
+
+
+def flight_at(name, top, down, z_top, z_foot, width, landing=0.6, tread=0.30, maxrise=0.165, **kw):
+    d_ = np.array(down, float) / np.linalg.norm(down)
+    n_ = int(math.ceil((z_top - z_foot) / maxrise - 1e-6))
+    foot = np.array(top) + d_ * (landing + n_ * tread)
+    return dict(name=name, top=[round(float(top[0]), 2), round(float(top[1]), 2)], down=[round(float(d_[0]), 4), round(float(d_[1]), 4)],
+                foot=[round(float(foot[0]), 2), round(float(foot[1]), 2)], z_top=round(float(z_top), 2), z_foot=round(float(z_foot), 2),
+                n=n_, width=width, landing=landing, tread=tread, **kw)
+
+
+# the north flight: from the road's south edge on the OSM line down onto the garden's axis walk, 32 risers of 0.16
+_un = np.array([85.2 - 82.5, 345.0 - 335.4]) / math.hypot(85.2 - 82.5, 345.0 - 335.4)
+_tn = np.array([85.2, 345.0]) - _un * 3.0
+_fn = _tn - _un * (0.6 + 32 * 0.31)
+_zfn = yh_plane(*g_en(*_fn))
+YEONHUI['road'] = round(_zfn + 32 * 0.16, 2)                  # the road before 연희관, on the garden's axis
+YEONHUI['floor'] = round(YEONHUI['road'] + 3.0, 2)            # 연희관's door (blender: gothic z_floor)
+_rw, _rc, _re = YEONHUI['road'] + 1.3, YEONHUI['road'], YEONHUI['road'] - 1.5       # the road's west end, axis, east end
+_hw0 = sample(Hn, NEAR_HALF, NEAR_STEP, 40.3, 301.6)          # 한경길 where the west drive leaves it
+_he0 = sample(Hn, NEAR_HALF, NEAR_STEP, 106.6, 289.8)         # and the east one
+for _ln in ([(154.1, 270.8), (149.3, 272.5), (105.3, 286.1), (72.5, 295.2), (52.5, 300.2), (40.3, 301.6)],
+            [(40.3, 301.6), (52.2, 296.6), (71.4, 290.9), (104.1, 281.3), (147.7, 268.6)]):
+    _m = shapely.contains_xy(LineString(_ln).buffer(3.5, cap_style='flat'), X, Y)
+    FIXED[_m] = True                                          # 한경길 itself stays as it was
+_FRONT_RD = [(51.7, 354.5), (85.2, 345.0), (118.8, 335.6)]
+_W_RD = [(40.3, 301.6), (40.7, 306.0), (41.7, 310.2), (45.5, 327.4), (51.7, 354.5)]
+_E_RD = [(106.6, 289.8), (111.9, 310.1), (118.8, 335.6)]
+fix_strip(_FRONT_RD[:2], _rw, _rc, 3.5)
+fix_strip(_FRONT_RD[1:], _rc, _re, 3.5)
+fix_strip(_W_RD, _hw0, _rw, 3.5)
+fix_strip(_E_RD, _he0, _re, 3.5)
+_wrd, _erd = LineString(_W_RD), LineString(_E_RD)
+# the garden terrace, its walks and a metre beyond
+_gd = shapely.contains_xy(Polygon(YH_DIAMOND).buffer(2.0), X, Y)
+Hn[_gd] = yh_plane(GE[_gd], GN[_gd])
+FIXED[_gd] = True
+# the court between 연희관's wings: from the foot of its walls (the floor less the 1.2 m plinth) down to the road
+_yfp = list(footprint(ways[245623759]).exterior.coords)
+_ya, _yb = np.array(_yfp[3]), np.array(_yfp[4])
+_yt = (_yb - _ya) / np.linalg.norm(_yb - _ya)
+_yn = np.array([-_yt[1], _yt[0]])
+YH_U = (X - _ya[0]) * _yt[0] + (Y - _ya[1]) * _yt[1]
+YH_V = (X - _ya[0]) * _yn[0] + (Y - _ya[1]) * _yn[1]
+_ct = (YH_U > -14.5) & (YH_U < 52.5) & (YH_V > -10.6) & (YH_V < -0.8) & ~near_buildings(0.3)
+_rd_u = np.interp(YH_U[_ct], [float((np.array(p_) - _ya) @ _yt) for p_ in _FRONT_RD], [_rw, _rc, _re])   # (its grade)
+Hn[_ct] = (YEONHUI['floor'] - 1.2) + (_rd_u - (YEONHUI['floor'] - 1.2)) * np.clip(-YH_V[_ct] / 10.5, 0, 1)
+FIXED[_ct] = True
+# the flights (blender/landmarks.py yeonhui_garden builds them from these)
+_dw = np.array([52.7 - 45.5, 325.4 - 327.4]); _dw /= np.linalg.norm(_dw)
+_tw = np.array([45.5, 327.4]) + _dw * 3.0
+_de = np.array([103.4 - 111.9, 312.1 - 310.1]); _de /= np.linalg.norm(_de)
+_te = np.array([111.9, 310.1]) + _de * 3.0
+_ds = np.array([73.1 - 74.4, 297.5 - 302.5]); _ds /= np.linalg.norm(_ds)
+_zw = float(_hw0 + (_rw - _hw0) * _wrd.project(Point(*_tw)) / _wrd.length)
+_zeo = float(_he0 + (_re - _he0) * _erd.project(Point(*_te)) / _erd.length)
+YEONHUI['flights'] = [
+    flight_at('north', _tn, -_un, YEONHUI['road'], _zfn, 5.0, landing=0.6, tread=0.31, maxrise=0.16, cheek=0.4),
+    flight_at('south', YH_DIAMOND[0], _ds, yh_plane(*g_en(*YH_DIAMOND[0])), _zh, 4.0, landing=0.5, maxrise=0.15, cheek=0.35),
+]
+_fw = flight_at('west', _tw, _dw, _zw, 0.0, 3.2, landing=0.5, cheek=0.35, maxrise=0.16)
+_fw = flight_at('west', _tw, _dw, _zw, yh_plane(*g_en(*_fw['foot'])), 3.2, landing=0.5, cheek=0.35, maxrise=0.16)
+_fe = flight_at('east', _te, _de, _zeo, 0.0, 3.2, landing=0.5, cheek=0.35, maxrise=0.16)
+_fe = flight_at('east', _te, _de, _zeo, yh_plane(*g_en(*_fe['foot'])), 3.2, landing=0.5, cheek=0.35, maxrise=0.16)
+YEONHUI['flights'] += [_fw, _fe]
+for _f in YEONHUI['flights']:            # keep the ground under each flight below its treads
+    fix_strip([_f['top'], _f['foot']], _f['z_top'] - 0.35, _f['z_foot'] - 0.25, _f['width'] / 2 + 1.6, top=True)
+# the rest of the block (the banks, the lawns between the garden and 한경길, the verges along 교육관 and 성암관) one
+# smooth surface between all that
+_blk = Polygon(_W_RD + _FRONT_RD[1:] + _E_RD[::-1][1:] + [(105.3, 286.1), (72.5, 295.2), (52.5, 300.2)]).buffer(8.0)
+_free = shapely.contains_xy(_blk, X, Y) & (GN > -24.0) & ~FIXED & ~near_buildings(1.0)
+harmonic_fill(_free)
+print('연희관 앞', {k: v for k, v in YEONHUI.items() if k != 'flights'},
+      [(f_['name'], f_['n'], f_['z_top'], f_['z_foot']) for f_ in YEONHUI['flights']])
+
 # --- 대우관 (reference/대우관_정면_전경.jpg, 대우관_2024_정면과_상뜰.jpg, 대우관_측면_2012.jpg): the hall stands on a
 # terrace about 6 m over the 상뜰.  A white stone podium projects from the tower with the main door at the plaza level
 # (no steps: a wide low arch, a glazed lobby behind) and flights climb to the terrace beside it; the tower's own
@@ -564,6 +707,42 @@ _court = (((DW_U > -1.0) & (DW_U < 48.2) & (DW_V > -17.5) & (DW_V < 1.0))       
 _strip = (DW_U > -12.0) & (DW_U < 59.0) & (DW_V <= -17.0) & (DW_V > -31.0)        # the plaza in front of it
 Hn[_court] = _P
 Hn[_strip] = _P - DAEWOO['fall'] * (-17.0 - DW_V[_strip])
+# 상뜰 (issue #39; reference/대우관_정면_전경.jpg, 대우관_2024_정면과_상뜰.jpg): a level terrace, not the 11 - 16 % slope the
+# smooth fill made south of the plaza.  From the plaza's level at the diamond's north node it falls 2.5 % southwards
+# and 1.5 % west / 1 % east of its axis, so its side nodes meet the drives (east within 0.2 m, west by a short ramp).
+# At its south node a broad granite flight with steel handrails on both sides goes down through the trees to the
+# footway (OSM 1451337739, 7 m: 22 risers of 15.5 cm), which runs straight between its ends but for the foot of the
+# flight; the bank round it and under the diamond's lower walks is filled smoothly (and planted, below).
+# (SG: e east along the hall, n north, from the round lawn's centre.)
+SANG = (106.8, 427.1)
+SG_E = np.array([0.964, -0.263])
+SG_N = np.array([0.263, 0.964])
+SG = lambda e, n: tuple(np.array(SANG) + SG_E * e + SG_N * n)
+SANG_DIAMOND = [SG(-0.8, 14.2), SG(-26.5, 0.0), SG(0.0, -15.3), SG(26.6, 0.4)]       # N, W, S, E nodes of the walks
+_vN = float((np.array(SANG_DIAMOND[0]) - _a) @ _nl)
+SANG_LV = dict(top=round(_P - DAEWOO['fall'] * (-17.0 - _vN), 2), fall=0.025, west=0.015, east=0.01)
+
+
+def sang_h(e, n):
+    return SANG_LV['top'] + SANG_LV['fall'] * (n - 14.2) - np.where(e < 0, SANG_LV['west'], SANG_LV['east']) * np.abs(e)
+
+
+_SE = (X - SANG[0]) * SG_E[0] + (Y - SANG[1]) * SG_E[1]
+_SN = (X - SANG[0]) * SG_N[0] + (Y - SANG[1]) * SG_N[1]
+_sg = shapely.contains_xy(Polygon(SANG_DIAMOND).buffer(3.0), X, Y) & ~_court
+Hn[_sg] = sang_h(_SE[_sg], _SN[_sg])
+FIXED[_sg] = True
+_zS = float(sang_h(0.0, -15.3))
+_ds_ = np.array([101.2, 405.4]) - np.array(SANG_DIAMOND[2])
+DAEWOO['sang'] = SANG_LV
+DAEWOO['stair'] = flight_at('sang_south', SANG_DIAMOND[2], _ds_, _zS, _zS - 22 * 0.155, 5.5, landing=0.5, tread=0.30,
+                            maxrise=0.155, rails=True, cheek=0.25)
+_fwW, _fwE = sample(Hn, NEAR_HALF, NEAR_STEP, 66.6, 414.3), sample(Hn, NEAR_HALF, NEAR_STEP, 137.7, 396.5)
+fix_strip([(66.6, 414.3), (101.2, 405.4)], _fwW, DAEWOO['stair']['z_foot'], 1.8)
+fix_strip([(101.2, 405.4), (137.7, 396.5)], DAEWOO['stair']['z_foot'], _fwE, 1.8)
+_st = DAEWOO['stair']
+fix_strip([_st['top'], _st['foot']], _st['z_top'] - 0.35, _st['z_foot'] - 0.25, _st['width'] / 2 + 1.6, top=True)
+print('상뜰', SANG_LV, 'S node %.2f, footway %.2f .. %.2f .. %.2f' % (_zS, _fwW, _st['z_foot'], _fwE))
 _free = (DW_U > -32) & (DW_U < 80) & (DW_V > -74) & (DW_V < 4) & ~_court & ~_strip & ~FIXED & ~near_buildings(1.0)
 harmonic_fill(_free)
 print('daewoo', DAEWOO)
@@ -932,12 +1111,21 @@ draw_poly('pavers', garden.buffer(1.5))
 draw_poly('pavers', garden.buffer(-3), 0)
 draw_line('pavers', [WU(0, -30), WU(0, 31)], 5.5)
 draw_line('dirt', [WU(-25, 2), WU(25, 2)], 3.0)
-# 연희관 앞: an axis walk from the door to a round stone planter, boxwood beds either side, big shade trees
+# 연희관 앞 정원 (YEONHUI above): the diamond of walks (OSM draws them), a broad axis walk from the south flight to the
+# north one, a cross walk, a paved ring round the planter and a paved forecourt at the head of the south flight (the
+# radiating joints and the drain of reference/연희관_정면_2023.jpg); the four beds between are lawn; the banks up to
+# the road and the court between 연희관's wings stay lawn too
 WY = frame_from(245623759)
-yeonhui_garden = fpoly(WY, [(-2, -2), (42, -2), (44, -34), (-4, -34)])
-draw_line('pavers', [WY(20, 0), WY(20, -34)], 4.0)
-draw_poly('pavers', Point(*WY(20, -13)).buffer(4.6))
-draw_line('dirt', [WY(-2, -24), WY(42, -24)], 2.6)
+YH_G = lambda e, n: tuple(GF_C + GF_E * e + GF_N * n)
+_ybank = Polygon([YH_DIAMOND[1], YH_DIAMOND[2], YH_DIAMOND[3], (118.8 - 0.8, 335.6 - 2.9), (85.2 - 0.8, 345.0 - 2.9),
+                  (51.7 - 0.8, 354.5 - 2.9)])
+yeonhui_garden = unary_union([Polygon(YH_DIAMOND).buffer(3.0), _ybank, fpoly(WY, [(0.5, -10.0), (39.8, -10.0), (39.8, -0.5), (0.5, -0.5)])])
+draw_line('pavers', [YEONHUI['flights'][1]['top'], YEONHUI['flights'][0]['foot']], 4.0)
+draw_line('pavers', [YH_DIAMOND[1], YH_DIAMOND[3]], 3.0)
+draw_poly('pavers', Point(*YH_C).buffer(5.6))
+draw_poly('pavers', Point(*YH_DIAMOND[0]).buffer(4.6))
+for _f in YEONHUI['flights']:
+    draw_poly('pavers', Point(*_f['foot']).buffer(_f['width'] / 2 + 0.8))
 # 대우관 상뜰 (reference/대우관_정면_전경.jpg, 대우관_블로그_본관_정면_상뜰.jpg, 학교연혁_대우관.jpg, from above the
 # 연희관 side; 대우관_2024_정면과_상뜰.jpg on the ground): a round lawn about 6.5 m across inside a low curb with one
 # small tree in it, ringed by a broad paved circle (the OSM footway ring, 9 m across, is its centre line); a broad walk
@@ -946,12 +1134,7 @@ draw_line('dirt', [WY(-2, -24), WY(42, -24)], 2.6)
 # along their upper edges and benches along their lower ones, a pair facing each path from either side; the lawns
 # outside the diamond, under the terrace, carry the big spreading pines.  (SG: e east along the hall, n north.)
 WD = frame_from(242897922)
-SANG = (106.8, 427.1)
-SG_E = np.array([0.964, -0.263])
-SG_N = np.array([0.263, 0.964])
-SG = lambda e, n: tuple(np.array(SANG) + SG_E * e + SG_N * n)
-SANG_DIAMOND = [SG(-0.8, 14.2), SG(-26.5, 0.0), SG(0.0, -15.3), SG(26.6, 0.4)]       # N, W, S, E nodes of the walks
-SANG_LAWN = 3.25
+SANG_LAWN = 3.25                                         # (SANG, SG, SANG_DIAMOND: with the 상뜰's levels above)
 daewoo_garden = Point(*SANG).buffer(17).union(Polygon(SANG_DIAMOND).buffer(3.0))
 draw_poly('pavers', Point(*SANG).buffer(7.2))
 draw_poly('pavers', Point(*SANG).buffer(SANG_LAWN), 0)
@@ -1309,18 +1492,70 @@ for su in (-1, 1):
 # tall trees standing round the parterre's edge
 for (u, v) in ((-27, -20), (-28, 8), (-27, 26), (27, -22), (28, 6), (27, 27)):
     plant('zelkova', WU, u, v, 1.15, rng.uniform(0, 6.28))
-# 연희관 앞 정원
-hedge_rect(WY, 3.0, 15.5, -28.0, -5.0)
-hedge_rect(WY, 24.5, 37.0, -28.0, -5.0)
-for uc in (9.25, 30.75):
-    for vv in (-9.0, -16.5, -24.0):
-        plant('topiary_round', WY, uc, vv, 1.3)
-for k in range(8):                                                        # round planter on the axis
-    a_ = 2 * math.pi * k / 8
-    plant('topiary_round', WY, 20 + 2.6 * math.cos(a_), -13 + 2.6 * math.sin(a_), 0.85)
-plant('bush', WY, 20, -13, 1.2)
-for (u, v) in ((-1.5, -31), (41.5, -31), (-9, -16), (49, -16), (12, -33), (28, -33)):
-    plant('zelkova', WY, u, v, 1.2, rng.uniform(0, 6.28))
+# 연희관 앞 정원 (YEONHUI): each of the four beds edged with clipped boxwood, a clipped pine in its middle and round
+# boxwood towards its corners; the two by the south walk behind tall clipped hedges that end square at the forecourt
+# (reference/연희관_정면_2023.jpg), the two under the bank low ones (대우관_블로그_연희관과_대우관_원경.jpg); the big
+# clipped yew in the round planter; small round-headed shrubs along the top of the banks by the road and a low hedge
+# along their foot; zelkovas on the lawns down to 한경길, ginkgos and round pines in the court before 연희관
+rng7 = random.Random(1997 + 71)
+
+
+def hedge_line(pts, kind='hedge_low', sc=1.0, step=1.5, closed=True):
+    pts = list(pts) + ([pts[0]] if closed else [])
+    for (xa, ya), (xb, yb) in zip(pts, pts[1:]):
+        L_ = math.hypot(xb - xa, yb - ya)
+        a_ = math.atan2(yb - ya, xb - xa)
+        for k in range(max(1, int(L_ / step))):
+            f_ = (k + 0.5) / max(1, int(L_ / step))
+            shrubs.append([kind, round(xa + (xb - xa) * f_, 2), round(ya + (yb - ya) * f_, 2), sc, round(a_, 3)])
+
+
+_yd = Polygon(YH_DIAMOND).buffer(-1.4, join_style='mitre')
+_ywalks = unary_union([LineString([YH_G(0, -20), YH_G(0, 20)]).buffer(2.2), LineString([YH_DIAMOND[1], YH_DIAMOND[3]]).buffer(1.7),
+                       Point(*YH_C).buffer(5.8)])
+_beds = _yd.difference(_ywalks)
+for bed in sorted(_beds.geoms if hasattr(_beds, 'geoms') else [_beds], key=lambda g: g.centroid.y):
+    if bed.area < 20:
+        continue
+    bed = bed.simplify(0.3)
+    south = g_en(bed.centroid.x, bed.centroid.y)[1] < 0
+    hedge_line(list(bed.exterior.coords)[:-1], 'hedge_blob' if south else 'hedge_low', 1.3 if south else 1.0,
+               step=1.6 if south else 1.5)
+    inner = bed.buffer(-2.2).simplify(1.0)
+    cx_, cy_ = bed.centroid.x, bed.centroid.y
+    trees.append(['pine', round(cx_, 2), round(cy_, 2), round(rng7.uniform(0.36, 0.44), 2), round(rng7.uniform(0, 6.28), 2)])
+    _done = [(cx_, cy_)]
+    for (px_, py_) in ([] if inner.is_empty or inner.geom_type != 'Polygon' else list(inner.exterior.coords)[:-1]):
+        if min(math.hypot(px_ - qx_, py_ - qy_) for qx_, qy_ in _done) > 3.2:
+            _done.append((px_, py_))
+            shrubs.append(['topiary_round', round(px_, 2), round(py_, 2), round(rng7.uniform(0.95, 1.2), 2), 0])
+for k in range(6):                                                  # the clipped yew filling the round planter
+    a_ = 2 * math.pi * k / 6
+    shrubs.append(['topiary_round', round(YH_C[0] + 1.55 * math.cos(a_), 2), round(YH_C[1] + 1.55 * math.sin(a_), 2), 1.45, 0])
+shrubs.append(['topiary_round', YH_C[0], YH_C[1], 1.9, 0])
+for (a_, b_) in ((YH_DIAMOND[1], YH_DIAMOND[2]), (YH_DIAMOND[2], YH_DIAMOND[3])):
+    a_, b_ = np.array(a_), np.array(b_)
+    d_ = (b_ - a_) / np.linalg.norm(b_ - a_)
+    o_ = np.array([-d_[1], d_[0]])                                   # (out of the diamond: north-west / north-east)
+    _ax = 2.6 if a_[0] < YH_C[0] else 0.0                            # (clear of the north flight's walls)
+    hedge_line([tuple(a_ + d_ * (1.0 + (0 if a_[0] < YH_C[0] else 3.6)) + o_ * 1.7),
+                tuple(b_ - d_ * (1.0 + _ax) + o_ * 1.7)], closed=False)
+for (p0, p1) in ((_FRONT_RD[0], _FRONT_RD[1]), (_FRONT_RD[1], _FRONT_RD[2])):
+    p0, p1 = np.array(p0), np.array(p1)
+    d_ = (p1 - p0) / np.linalg.norm(p1 - p0)
+    s_ = np.array([d_[1], -d_[0]])                                   # (south, off the road)
+    for k in range(int(np.linalg.norm(p1 - p0) / 3.4)):
+        q_ = p0 + d_ * (1.7 + k * 3.4) + s_ * 4.6
+        if np.linalg.norm(q_ - (_tn - _un * 1.0)) < 4.6 or not _ybank.buffer(-0.5).contains(Point(*q_)):
+            continue
+        shrubs.append(['topiary_round', round(float(q_[0]), 2), round(float(q_[1]), 2), 1.15, 0])
+for (e_, n_, kind_, sc_) in ((-30, -12, 'zelkova', 1.0), (-19, -21, 'pine', 0.6), (-38, -2, 'zelkova', 0.9),
+                             (24, -16, 'zelkova', 1.05), (14, -22, 'pine', 0.55), (33, -8, 'zelkova', 0.9)):
+    x_, y_ = YH_G(e_, n_)
+    trees.append([kind_, round(x_, 2), round(y_, 2), sc_, round(rng7.uniform(0, 6.28), 2)])
+for (u, v, kind_, sc_) in ((-6.0, -11.5, 'ginkgo', 0.9), (46.5, -10.5, 'ginkgo', 0.9), (6.0, -5.5, 'pine', 0.34),
+                           (12.5, -5.5, 'pine', 0.3), (27.5, -5.5, 'pine', 0.3), (34.0, -5.5, 'pine', 0.34)):
+    plant(kind_, WY, u, v, sc_, rng7.uniform(0, 6.28))
 # 대우관 상뜰 (see SANG above): the small round-crowned pine in the round lawn, a broadleaf tree in the west lawn
 # triangle by the ring and one by the north-east path, low shrubs along the triangles' upper edges, and the big pines
 # on the lawns outside the walks towards the terrace
@@ -1328,6 +1563,14 @@ ang_d = axis_angle(WD)
 rng6 = random.Random(1997 + 61)
 trees.append(['pine', SANG[0], SANG[1], 0.55, 0.4])
 for (e_, n_, kind_, sc_) in ((-8.5, 4.5, 'zelkova', 0.75), (10.0, 8.6, 'zelkova', 0.8), (13.0, -2.5, 'pine', 0.45)):
+    x_, y_ = SG(e_, n_)
+    trees.append([kind_, round(x_, 2), round(y_, 2), sc_, round(rng6.uniform(0, 6.28), 2)])
+# the planted bank under the diamond's lower walks, down to the footway, the south flight going down between its
+# trees (issue #39; reference/대우관_정면_전경.jpg: spreading conifers east of the flight, broadleaves west of it)
+for (e_, n_, kind_, sc_) in ((-7.5, -18.6, 'zelkova', 0.85), (-15.0, -15.5, 'maple', 0.75), (-23.0, -11.5, 'zelkova', 0.9),
+                             (-30.5, -8.0, 'oak', 0.85), (-11.0, -20.5, 'cherry', 0.7), (7.5, -18.8, 'pine', 0.95),
+                             (14.5, -16.0, 'pine', 0.8), (22.0, -12.0, 'zelkova', 0.85), (30.0, -8.5, 'pine', 0.85),
+                             (11.5, -21.0, 'maple', 0.65)):
     x_, y_ = SG(e_, n_)
     trees.append([kind_, round(x_, 2), round(y_, 2), sc_, round(rng6.uniform(0, 6.28), 2)])
 for sg in (-1, 1):
@@ -1653,9 +1896,14 @@ def bench_along(W, u, v, face_u):
 for v in (-17.0, -6.0, 10.0, 20.0):                 # 언더우드관: along the axis, both sides
     bench_along(WU, -3.6, v, 1)
     bench_along(WU, 3.6, v, -1)
-for v in (-20.0, -26.5):                            # 연희관: along the axis walk
-    bench_along(WY, 17.6, v, 1)
-    bench_along(WY, 22.4, v, -1)
+# 연희관 앞 정원: along the two upper walks of the diamond at the foot of the banks, looking into the garden
+for (a_, b_) in ((YH_DIAMOND[1], YH_DIAMOND[2]), (YH_DIAMOND[2], YH_DIAMOND[3])):
+    a_, b_ = np.array(a_), np.array(b_)
+    d_ = (b_ - a_) / np.linalg.norm(b_ - a_)
+    o_ = np.array([-d_[1], d_[0]])
+    for t_ in (0.3, 0.55):
+        q_ = a_ + (b_ - a_) * (t_ if a_[0] < YH_C[0] else 1 - t_) + o_ * 0.95
+        P('bench', float(q_[0]), float(q_[1]), math.atan2(-o_[1], -o_[0]))
 # 대우관 상뜰: along the two lower (SW / SE) walks of the diamond, two benches on the lawn triangle inside facing the
 # walk and two on the far side facing back (the photos; a bench model faces its rot angle, see bench_along)
 for sg in (-1, 1):
@@ -1942,7 +2190,7 @@ out = dict(
     amphitheater={k: (round(v, 3) if isinstance(v, float) else v) for k, v in AMPH.items()},
     buildings=buildings, trees=trees, shrubs=shrubs, props=props, cars=cars, banners=banners,
     paths=paths_out, landmarks=LANDMARKS, statues=STATUES, spawn=SPAWN, markers=markers, daewoo_front=DAEWOO, daewoo_back=DAEWOO_BACK,
-    centennial_block=CENT_BLOCK, sang=dict(c=list(SANG), r=SANG_LAWN), colliders=[CENT_BLOCK['poly']] +
+    centennial_block=CENT_BLOCK, sang=dict(c=list(SANG), r=SANG_LAWN), yeonhui=YEONHUI, colliders=[CENT_BLOCK['poly']] +
     [[[round(x_, 2), round(y_, 2)] for x_, y_ in list(tennis_poly(pd_, 0.1).exterior.coords)[:-1]] for pd_ in TENNIS['pads']],
 )
 out['baekyangro']['booth'] = BOOTH

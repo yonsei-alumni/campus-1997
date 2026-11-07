@@ -2732,6 +2732,11 @@ def daewoo():
             cb.box((x_, y_, zg - 0.05), (2 * (r + 0.1) * math.sin(math.pi / n_) + 0.02, 0.22, 0.4), 'stone_trim',
                    rotz=am + math.pi / 2)
         out.append(cb)
+    # 상뜰's south flight (issue #39; reference/대우관_정면_전경.jpg): from the end of the broad walk down through the trees
+    # to the footway towards 연희관, granite, 5.5 m wide like the walk, steel handrails on low kerbs both sides
+    st = lv.get('stair')
+    if st:
+        out.append(garden_flight(st, wall='stone_granite'))
     return out
 
 
@@ -2746,14 +2751,109 @@ def yeonhui():
     ang = math.atan2(t.y, t.x)
     W = lambda u, v: tuple(a + t * u + nl * v)
     centre = dict(b, footprint=[W(0.4, 0), W(39.9, 0), W(39.9, 14.2), W(0.4, 14.2)])
+    yh = CAMPUS.get('yeonhui', {})
+    # the door three metres over the road before it (tools/build_campus.py YEONHUI): nineteen risers and a landing
+    # down to the road, between rubble side walls (reference/대우관_블로그_연희관과_대우관_원경.jpg)
     out = gothic('yeonhui', centre, tuple(-nl), 4, tower_w=8.5, tower_extra=9.5, ivy=0.85, wings=False, fh=4.1,
-                 stairs=dict(width=4.4, wl=5.6), door=dict(w=3.3, style='four'))
+                 stairs=dict(width=4.8, wl=5.6), door=dict(w=3.3, style='four'), z_floor=yh.get('floor'))
     mb = MeshBuilder('lm_yeonhui_pavilions')
     iv = MeshBuilder('lm_yeonhui_pavilions_ivy')
     mb.xf = iv.xf = local_frame(a.x, a.y, ang, out[0].z_base)
     gable_hall(mb, -14.0, 0.0, -7.9, 28.8, 4, 4.1, 'stone_rubble', pitch=1.1, plinth=1.3, iv=iv, ivy=0.85, seed=3, gothic_trim=True)
     gable_hall(mb, 40.3, 52.0, -6.7, 30.1, 4, 4.1, 'stone_rubble', pitch=1.1, plinth=1.3, iv=iv, ivy=0.85, seed=9, gothic_trim=True)
-    return out + [mb, iv]
+    return out + [mb, iv] + yeonhui_garden(yh)
+
+
+def garden_flight(f, wall='stone_rubble', mat='stone_step'):
+    """An outdoor flight between two levels of the ground, laid out by tools/build_campus.py (flight_at): from the
+    middle of its upper edge f['top'] it goes down along f['down'] -- a short landing, then f['n'] risers of granite
+    treads on a solid core -- to the ground at its foot.  f['cheek'] > 0: side walls of the wall's stone with a pale
+    coping that follow the flight, square capped posts at both ends; f['rails']: steel handrails on posts along both
+    sides (on the side walls when there are any)."""
+    mb = MeshBuilder('lm_flight_' + f['name'])
+    d = Vector(f['down']).normalized()
+    mb.xf = local_frame(f['top'][0], f['top'][1], math.atan2(d.x, -d.y), 0.0)
+    zt, zf, n, w = f['z_top'], f['z_foot'], f['n'], f['width']
+    gnd = zf - 1.6
+    lnd, tr = f['landing'], f['tread']
+    stair_flight(mb, 0.0, 0.0, w, zt, n=n, mat=mat, landing=lnd, tread=tr, flare=0.0, ground=gnd, zbot=zf,
+                 cheek=0.0)
+    y_foot = -lnd - n * tr
+    ct = f.get('cheek', 0.0)
+    hw = w / 2
+    rise = (zt - zf) / n
+    # a paved apron round the head: the 5 m terrain grid cannot hold a level edge there, so it sags up to a metre
+    # under the landing; the apron runs from the landing out over it to meet the ground (and is walked on)
+    gl = local_ground(mb)
+    hx, L, K = hw + ct + 1.6, 3.4, 10
+
+    def apron_z(x, y):
+        dx = max(0.0, abs(x) - (hw + ct))
+        dy = max(0.0, y - 1.2)
+        return min(zt, max(gl(x, y) + 0.03, zt - 0.32 * math.hypot(dx, dy)))
+    xs = [-hx + 2 * hx * i / K for i in range(K + 1)]
+    ys = [-lnd - 0.2 + (1.2 + L + lnd + 0.2) * j / 6 for j in range(7)]
+    W_ = lambda lx, ly, lz: tuple(mb.xf @ Vector((lx, ly, lz)))
+    for i in range(K):
+        for j in range(6):
+            (xa, xb), (ya, yb) = (xs[i], xs[i + 1]), (ys[j], ys[j + 1])
+            if abs((xa + xb) / 2) < hw + ct and (ya + yb) / 2 < 1.2:
+                continue                                       # (the landing itself)
+            q = [(xa, ya, apron_z(xa, ya)), (xb, ya, apron_z(xb, ya)), (xb, yb, apron_z(xb, yb)), (xa, yb, apron_z(xa, yb))]
+            if all(z - gl(x, y) < 0.06 for x, y, z in q):
+                continue                                       # (already on the ground: the terrain does)
+            mb.face(q, 'pavers')
+            WALK_FACES.append([W_(*p) for p in q])
+    if ct:
+        hc = 0.55 if not f.get('rails') else 0.18          # (a kerb under handrails, a low wall otherwise)
+        for sg in (-1, 1):
+            x0, x1 = sorted((sg * hw, sg * (hw + ct)))
+            sloped_wall(mb, x0, x1, [(1.2, zt + hc), (-lnd, zt + hc), (y_foot + 0.05, zf + rise + hc - 0.05),
+                                     (y_foot - 0.25, zf + hc - 0.05)], gnd, wall)
+            if not f.get('rails'):
+                pedestal(mb, sg * (hw + ct / 2), 1.0, zt + hc + 0.3, gnd, wall, w=ct + 0.2)
+                pedestal(mb, sg * (hw + ct / 2), y_foot - 0.1, zf + hc + 0.25, gnd, wall, w=ct + 0.2)
+    if f.get('rails'):
+        xr = hw + (ct / 2 if ct else -0.12)
+        ya, yb = 1.0, y_foot - 0.15
+
+        def zr(y):                                         # the nosing line (and the kerb on top of the walls)
+            if y >= -lnd:
+                return zt + (0.18 if ct else 0.0)
+            return zt - (-lnd - y) / (n * tr) * (zt - zf) + (0.18 if ct else 0.0)
+        for sg in (-1, 1):
+            x = sg * xr
+            npost = max(2, int(round((ya - yb) / 1.6)) + 1)
+            ys = [ya + (yb - ya) * k / (npost - 1) for k in range(npost)]
+            for y in ys:
+                rod(mb, (x, y, zr(y) - 0.05), (x, y, zr(y) + 0.95), 0.025, 'metal_dark', seg=6)
+            knots = [ya, -lnd, yb]
+            for y0, y1 in zip(knots, knots[1:]):
+                rod(mb, (x, y0, zr(y0) + 0.95), (x, y1, zr(y1) + 0.95), 0.03, 'metal_dark', seg=6)
+                rod(mb, (x, y0, zr(y0) + 0.45), (x, y1, zr(y1) + 0.45), 0.015, 'metal_dark', seg=6)
+    return mb
+
+
+def yeonhui_garden(yh):
+    """연희관 앞 정원 (tools/build_campus.py YEONHUI): the walled flights into the garden -- the broad one down the
+    bank from the road before 연희관, the one up to 한경길 behind 언더우드관, those from the drives along 교육관 and
+    성암관 -- and the low concrete drum of the round planter in the middle, its clipped yew planted in it (shrubs)."""
+    out = [garden_flight(f) for f in yh.get('flights', [])]
+    pl = yh.get('planter')
+    if pl:
+        mb = MeshBuilder('lm_yeonhui_planter')
+        (cx, cy), r, h = pl['c'], pl['r'], pl['h']
+        zs = [ground_top(cx + r * math.cos(a), cy + r * math.sin(a)) for a in [k * math.pi / 8 for k in range(16)]]
+        z0, z1 = min(zs) - 0.3, max(zs) + h
+        mb.cylinder((cx, cy), r, z0, z1, 'concrete', seg=40, cap_top=False)
+        ring = [(cx + r * math.cos(2 * math.pi * k / 40), cy + r * math.sin(2 * math.pi * k / 40)) for k in range(41)]
+        rin = [(cx + (r - 0.22) * math.cos(2 * math.pi * k / 40), cy + (r - 0.22) * math.sin(2 * math.pi * k / 40)) for k in range(41)]
+        for k in range(40):                                                    # its flat top and the rim's inner face
+            mb.quad((*ring[k], z1), (*ring[k + 1], z1), (*rin[k + 1], z1), (*rin[k], z1), 'stone_trim')
+            mb.quad((*rin[k], z1), (*rin[k + 1], z1), (*rin[k + 1], z1 - 0.12), (*rin[k], z1 - 0.12), 'concrete')
+        mb.face([(x, y, z1 - 0.12) for x, y in rin[:-1]], 'soil')
+        out.append(mb)
+    return out
 
 
 def daewoo_annex():
