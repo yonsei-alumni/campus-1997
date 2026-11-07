@@ -23,6 +23,17 @@
   ],
   "rough": 0.9
  },
+ "stone_rubble_warm": {
+  "weather": 0.3,
+  "tex": "old_stone_wall",
+  "tile": 3.2,
+  "tint": [
+   1.264,
+   1.226,
+   1.007
+  ],
+  "rough": 0.9
+ },
  "stone_trim": {
   "weather": 0.6,
   "tex": "concrete_wall_008",
