@@ -625,7 +625,7 @@ async function main() {
     },
   };
   window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows, fountainWater,
-    startWalk, enterBird, leaveBird, record, ball };
+    startWalk, enterBird, leaveBird, record, ball, post };
 }
 
 // 광혜원's OSM outline takes in its whole stone platform (기단) and more; the walker collides with the hall's walls
