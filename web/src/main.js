@@ -22,6 +22,8 @@ import { Bubbles } from './talk.js';
 import { FountainWater } from './water/fountain.js';
 import { Basketball } from './hoops.js';
 import { startPlaces } from './places.js';
+import { SunMap, bakeSunMap } from './bakedshadow.js';
+import { Blobs } from './blobs.js';
 import { $, MOBILE, versioned, safeGet, safeSet, mulberry, countBy, polylineLength, closestOnSegment, placeMatrix } from './util.js';
 
 const canvas = $('#view');
@@ -110,7 +112,11 @@ async function main() {
   const T = campus.terrain;
   const hfNear = new Heightfield(nearData, T.near.half, T.near.step, T.near.n);
   const hfFar = new Heightfield(farData, T.far.half, T.far.step, T.far.n);
+  // the campus's static sun shadow baked into one texture (src/bakedshadow.js): the phones' only sun shadow, the
+  // desktop's beyond the shadow map; on the terrain here, on every other lit material once the scene is built
+  const sunMap = new SunMap(hfNear).load();
   const terrain = makeNearTerrain(hfNear, campus, lib);
+  sunMap.patch(terrain.material, 0);
   scene.add(terrain);
   scene.add(makeFarTerrain(hfFar, T.near.half));
   scene.add(makeCity(hfFar, T.near.half));
@@ -335,6 +341,18 @@ async function main() {
     pickEl.appendChild(b);
   }
   pickHero(heroId);
+  // ---------------------------------------------------------------- baked sun shadows, blob shadows
+  const FAR_SCENERY = /^(sky|terrain_far|far_city|far_forest|ansan_tower)$/;
+  const farScenery = (o) => { for (let p = o; p; p = p.parent) if (FAR_SCENERY.test(p.name)) return true; return false; };
+  sunMap.patchScene(scene, farScenery);
+  // phones: a soft dark patch under each person, moving car and the ball (src/blobs.js); the shadow map has them here
+  const blobs = renderer.shadowMap.enabled ? null : new Blobs(scene, hfNear, sunMap);
+  if (blobs) {
+    for (const p of crowd.people) blobs.addPerson(p.a);
+    for (const c of traffic.cars) blobs.addCar(c);
+    blobs.hero = () => player.actor;
+    blobs.ball = ball;
+  }
   // where to start walking (title card): 정문, the memory spots, then every named building at its front door
   const places = startPlaces(campus, entrances.entrances || [], (x, y, r) => colliders.resolve(x, y, r));
   const placeEl = $('#place-pick');
@@ -595,6 +613,7 @@ async function main() {
     fountainWater?.update(dt, camera);
     lib.uniforms.uWindT.value = tAcc;     // the wind in the leaves, branches and banners (materials.js sway)
     ball?.update(dt, tAcc, started && !bird.active);
+    blobs?.update(camera.position);
     // the shadow frustum follows the view in texel-snapped steps; people and cars are redrawn into it every frame
     shadows.update(focus, bird.active ? focus.y : camera.position.y - 10, span);
     updatePcss(sun, post.hq);    // contact-hardening shadows on the desktop HQ path only
@@ -642,7 +661,9 @@ async function main() {
     },
   };
   window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows, fountainWater,
-    startWalk, enterBird, leaveBird, record, ball, post };
+    startWalk, enterBird, leaveBird, record, ball, post, sunMap, blobs,
+    // tools/bake_sun_shadows.mjs (desktop path: it draws with the shadow map; the page needs reloading afterwards)
+    bakeSunMap: () => bakeSunMap({ renderer, scene, sun, sunDir, shadows, forest, hf: hfNear, hide: [banners, ball?.mesh], skip: farScenery }) };
   window.__y97.atmos = ATMOS;
 }
 
