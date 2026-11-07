@@ -1,23 +1,36 @@
-// Fallen leaves and petals (issue #18): October's ginkgo carpet and April's cherry petals under the trees.
+// Fallen leaves and petals (issues #18, #35): October's ginkgo carpet and April's cherry petals under the trees.
 // tools/build_campus.py bakes where they lie (ground_leaves.png over the splat's rectangle at 1 m: R ginkgo, G cherry,
-// B the other broadleaves), tools/make_textures.py paints the ginkgo leaf tile (litter_ginkgo.png, alpha = each leaf's
-// rank) and the petals are a dot pattern here. The near terrain's splat shader (terrain.js) and 백양로's own road mesh
+// B the other broadleaves), tools/make_textures.py paints the tiles of leaves and of petals (litter_ginkgo.png,
+// litter_petals.png, alpha = each leaf's rank). The near terrain's splat shader (terrain.js) and 백양로's own road mesh
 // (its asphalt and pavers, materials.js) both lay the month's layer with litter().
 import * as THREE from 'three';
 
 // how much of each layer the month shows: x ginkgo leaves, y cherry petals, z the other broadleaves' leaves
 export const FALL = { spring: [0, 1, 0], summer: [0, 0, 0], autumn: [1, 0, 0.75] };
+// the month's tile in uLitter: the leaves and the petals never lie in the same month, so one sampler serves both
+// (the terrain's shader has few to spare on a phone)
+const TILE = { spring: 'assets/textures/litter_petals.png', summer: 'assets/textures/litter_ginkgo.png',
+  autumn: 'assets/textures/litter_ginkgo.png' };
 // library materials that get the layer too (백양로's carriageway and sidewalks)
 export const LITTER_MATS = new Set(['asphalt', 'pavers']);
 
+let tiles = null;
+
 // shared by every material that lays the layer (MaterialLibrary.uniforms); the rectangle is the splat's (terrain.js)
 export function litterUniforms(loadTex) {
+  tiles = Object.fromEntries(Object.entries(TILE).map(([s, url]) => [s, loadTex(url)]));
   return {
     uLeaf: { value: loadTex('assets/textures/ground_leaves.png', { srgb: false, repeat: false }) },
-    uLitter: { value: loadTex('assets/textures/litter_ginkgo.png') },
+    uLitter: { value: tiles.summer },
     uLeafRect: { value: new THREE.Vector4(0, 0, 1, 1) },
     uFall: { value: new THREE.Vector3() },
   };
+}
+
+// the month's layers and tile (MaterialLibrary.setSeason)
+export function litterSeason(uniforms, season) {
+  uniforms.uFall.value.fromArray(FALL[season]);
+  uniforms.uLitter.value = tiles[season];
 }
 
 export const LITTER_GLSL = `
@@ -30,21 +43,10 @@ export const LITTER_GLSL = `
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(litHash(i), litHash(i + vec2(1.0, 0.0)), f.x), mix(litHash(i + vec2(0.0, 1.0)), litHash(i + vec2(1.0, 1.0)), f.x), f.y);
   }
-  // one layer of petals: a petal in some cells of a grid of 1/s m, as many as the density d asks for
-  float litPetals(vec2 q, float d, inout float tone) {
-    vec2 c = floor(q), f = fract(q) - 0.5;
-    float h = litHash(c);
-    if (h >= d) return 0.0;
-    vec2 o = vec2(litHash(c + 7.31), litHash(c + 3.97)) - 0.5;
-    float a = h * 41.0, ca = cos(a), sa = sin(a);
-    vec2 p = f - o * 0.36;
-    p = vec2(ca * p.x - sa * p.y, sa * p.x + ca * p.y);
-    tone = litHash(c + 11.3);
-    return 1.0 - smoothstep(0.27, 0.34, length(p * vec2(1.0, 1.5)));
-  }
   // the month's fallen leaves / petals at campus point wp (x east, y north): their coverage (0..1), and their colour
-  // in col. (Call it in uniform control flow: the screen-space derivatives are taken before any branch.)
-  float litter(vec2 wp, out vec3 col) {
+  // in col; grass: how much of the ground there is lawn (the petals show whiter on it). (Call it in uniform control
+  // flow: the screen-space derivatives are taken before any branch.)
+  float litter(vec2 wp, float grass, out vec3 col) {
     col = vec3(0.0);
     vec2 dwx = dFdx(wp), dwy = dFdy(wp);
     float px = sqrt(length(dwx) * length(dwy));                // metres per pixel on the ground
@@ -74,13 +76,22 @@ export const LITTER_GLSL = `
       col = (lg.rgb * 0.82 * cg + oc * co * (1.0 - cg)) / max(cov, 1e-4);
     }
     if (m.y > 0.004) {
-      // petals 1-2 cm long: a pattern while they are a few pixels across, their share of the ground beyond
-      // (drifted into little heaps and swept thin between them)
-      float dp = clamp(m.y * (0.4 + 1.0 * nz) * (0.5 + 0.8 * litNoise(wp * 2.9 + 1.7)), 0.0, 1.0);
-      float tone = 0.0, t2 = 0.0;
-      float cp = max(litPetals(wp * 38.0, dp, tone), litPetals(wp * 47.0 + 0.5, dp, t2));
-      cp = mix(dp * 0.45, cp, 1.0 - smoothstep(0.004, 0.011, px));                 // (two layers: ~0.45 d)
-      vec3 pc = mix(vec3(0.88, 0.52, 0.62), vec3(0.95, 0.76, 0.82), max(tone, t2));
+      // cherry petals 1.1-1.5 cm long (this month's uLitter is their tile, 0.4 m): a carpet right under the crown,
+      // drifted into little heaps and swept thin between them, a few strewn beyond. Two lookups turned against each
+      // other, each laying half the share, hide the tile's repeat; once the petals shrink to a pixel or two their
+      // share takes over, as with the leaves.
+      float dp = clamp(m.y * (0.2 + smoothstep(0.2, 0.8, nz)) * (0.6 + 0.6 * litNoise(wp * 2.9 + 1.7))
+                       + 0.12 * smoothstep(0.55, 0.95, m.y), 0.0, 1.0);
+      float near = 1.0 - smoothstep(0.0025, 0.008, px);
+      float tp = 1.0 + log(max(sqrt(1.0 - 0.97 * dp), 0.001)) / 4.6;   // (each layer 1 - sqrt(1 - d): together d)
+      mat2 tr = mat2(0.6, -0.8, 0.8, 0.6) * 2.9;
+      vec4 la = textureGrad(uLitter, wp * 2.5, dwx * 2.5, dwy * 2.5);
+      vec4 lb = textureGrad(uLitter, tr * wp + 0.61, tr * dwx, tr * dwy);
+      float ca = smoothstep(tp - 0.03, tp + 0.01, la.a), cb = smoothstep(tp - 0.03, tp + 0.01, lb.a);
+      float cp = mix(dp * 0.97, 1.0 - (1.0 - ca) * (1.0 - cb), near) * smoothstep(0.0, 0.04, dp);
+      vec3 pc = mix(la.rgb, lb.rgb, mix(0.5, cb, near));
+      // on the lawn a little brighter and whiter, or the green swallows the pink
+      pc = mix(pc * 1.1, min(pc * 1.2 + 0.04, vec3(1.0)), grass);
       col = mix(col, pc, cp);
       cov = 1.0 - (1.0 - cov) * (1.0 - cp);
     }
@@ -109,7 +120,7 @@ export function litterEdit(uniforms) {
         {
           vec3 litCol;
           float up = smoothstep(0.55, 0.85, dot(viewMatrix[1].xyz, normalize(vNormal)));
-          litCov = litter(vec2(vLitW.x, -vLitW.z), litCol) * up;
+          litCov = litter(vec2(vLitW.x, -vLitW.z), 0.0, litCol) * up;
           diffuseColor.rgb = mix(diffuseColor.rgb, litCol, litCov);
         }`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>

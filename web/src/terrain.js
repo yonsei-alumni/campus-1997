@@ -146,7 +146,7 @@ export function makeNearTerrain(hf, campus, lib) {
         vec3 albedo = grass * wg + asph * wa + pav * wpv + dirt * wd;
         // fallen leaves / petals of the month on top, flat: the ground's relief pressed down under them
         vec3 litCol;
-        float litCov = litter(wp, litCol);
+        float litCov = litter(wp, wg, litCol);
         albedo = mix(albedo, litCol, litCov);
         diffuseColor.rgb *= albedo;
         gTN = nrm(gN, ug) * wg + nrm(aN, ua) * wa * 0.45 + nrm(pN, up) * wpv + nrm(dN, ud) * wd;

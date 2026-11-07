@@ -1,7 +1,7 @@
 // Shared PBR material library, built from data/materials.json (same file Blender uses).
 import * as THREE from 'three';
 import { MOBILE, versioned, mulberry } from './util.js';
-import { FALL, LITTER_MATS, litterUniforms, litterEdit } from './litter.js';
+import { LITTER_MATS, litterUniforms, litterEdit, litterSeason } from './litter.js';
 
 const texLoader = new THREE.TextureLoader();
 const cache = new Map();
@@ -535,7 +535,7 @@ export class MaterialLibrary {
   setSeason(season) {
     this.season = season;
     this.uniforms.uGrass.value.setRGB(...SEASONS[season].grass);
-    this.uniforms.uFall.value.fromArray(FALL[season]);
+    litterSeason(this.uniforms, season);                      // the month's fallen leaves or petals
     for (const m of this.leafMats) {
       const t = loadTex(leafUrl(m.userData.species, season, m.userData.young), { repeat: m.userData.opaque });
       m.map = t;

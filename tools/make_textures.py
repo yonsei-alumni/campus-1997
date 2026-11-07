@@ -3,6 +3,7 @@
 Outputs (web/public/assets/textures):
   leaf_<species>[_<season>].png   2x2 atlas of leaf-cluster cards, RGBA (alpha-tested)
   litter_ginkgo.png               fallen ginkgo leaves, seamless tile, alpha = each leaf's rank
+  litter_petals.png               fallen cherry petals, the same
   sign_shops.png                  4x4 atlas of 1997 Sinchon storefront signboards
   sign_gate.png                   延世大學校 gate plaque
 Run: .venv/bin/python tools/make_textures.py
@@ -270,10 +271,44 @@ atlas('azalea_summer', 'azalea', [(55, 90, 35), (65, 100, 40)])
 atlas('azalea_red', 'azalea', [(50, 85, 32), (60, 95, 38)], flowers=((200, 32, 48), 300, (0.04, 0.055)))
 
 
-# Fallen ginkgo leaves (issue #18): a seamless tile of the autumn atlas's leaves lying flat on the ground (0.8 m of
-# ground per tile in web/src/litter.js).  Its alpha is each leaf's rank, not its coverage: the shader shows the leaves
-# whose rank clears the carpet's thinness there, so a few strewn leaves and a full carpet come from the one tile.
-# Higher ranks lie on top, so a thin strew is whole leaves.
+def shape_petal(rnd):
+    """A fallen cherry petal (unit length, base at the origin, tip toward -y): narrow at the base, widest two thirds
+    of the way out, the rounded tip notched in the middle.  Some lie curled and look narrower."""
+    w = 0.42 * rnd.uniform(0.62, 1.0)
+    notch = rnd.uniform(0.07, 0.13)
+    skew = rnd.uniform(-0.08, 0.08)
+    right = []
+    for i in range(37):
+        t = i / 36
+        x = w * (t / 0.66) ** 0.65 if t < 0.66 else w * math.sqrt(max(0.0, 1 - ((t - 0.66) / 0.34) ** 2))
+        right.append((x, -t))
+    right = [(x, y + notch * max(0.0, 1 - x / (0.35 * w)) if t > 0.8 else y)
+             for (x, y), t in zip(right, [i / 36 for i in range(37)])]
+    pts = right + [(-x, y) for x, y in reversed(right[1:])]
+    return [(x + skew * y * x / w, y) for x, y in pts], 0.0
+
+
+def draw_petal(d, pts, cx, cy, ang, size, col, rnd):
+    """pale, pinker toward the base, one half a shade darker where it curls, and a thin darker rim to tell
+    overlapping petals apart"""
+    base = jitter(col, rnd, 0.03)
+    dark = lambda c, k: tuple(int(v * k) for v in c) + (255,)
+    P = rot(pts, ang, cx, cy, size)
+    d.polygon(P, fill=base + (255,))
+    side = 1 if rnd.random() < 0.5 else -1
+    d.polygon(rot([(0, 0)] + [(x, y) for x, y in pts if x * side > 0] + [(0, min(y for _, y in pts))], ang, cx, cy, size),
+              fill=dark(base, 0.95))
+    for k, mixw in ((0.5, 0.22), (0.28, 0.42)):          # the claw: pinker, in two steps (soft once downsampled)
+        c = tuple(int(v * (1 - mixw) + p * mixw) for v, p in zip(base, (232, 150, 176)))
+        d.polygon(rot([(x * k * 1.3, y * k) for x, y in pts], ang, cx, cy, size), fill=c + (255,))
+    d.line(P + [P[0]], fill=dark(base, 0.86), width=1)
+
+
+# Fallen leaves and petals (issues #18, #35): a seamless tile of leaves or petals lying flat on the ground (ginkgo
+# leaves 0.8 m and cherry petals 0.4 m of ground per tile in web/src/litter.js).  Its alpha is each leaf's rank, not
+# its coverage: the shader shows the leaves whose rank clears the carpet's thinness there, so a few strewn leaves and
+# a full carpet come from the one tile.  Higher ranks lie on top, so a thin strew is whole leaves.  n is about
+# 4.6 (1 - 0.14) / (one leaf's share of the tile): the coverage above rank t is then 1 - exp(-4.6 (1 - t)).
 def litter(name, kind, palette, n, size, seed=0):
     if ONLY and name not in ONLY:
         return
@@ -282,7 +317,7 @@ def litter(name, kind, palette, n, size, seed=0):
     img = Image.new('RGBA', (S, S), (0, 0, 0, 0))
     rank = Image.new('L', (S, S), 0)
     d, dk = ImageDraw.Draw(img), ImageDraw.Draw(rank)
-    shape_fn = {'ginkgo': shape_ginkgo}[kind]
+    shape_fn = {'ginkgo': shape_ginkgo, 'petal': shape_petal}[kind]
     leaves = sorted((rnd.uniform(0.14, 1.0), rnd.uniform(0, S), rnd.uniform(0, S), rnd.uniform(0, 2 * math.pi),
                      rnd.uniform(*size) * S, rnd.choice(palette), rnd.random()) for _ in range(n))
     for r, x, y, a, sz, col, sd in leaves:
@@ -293,6 +328,10 @@ def litter(name, kind, palette, n, size, seed=0):
                 cx, cy = x + ox, y + oy
                 if not (-2 * sz < cx < S + 2 * sz and -2 * sz < cy < S + 2 * sz):
                     continue
+                if kind == 'petal':
+                    draw_petal(d, pts, cx, cy, a, sz, col, random.Random(sd))
+                    dk.polygon(rot(pts, a, cx, cy, sz), fill=int(r * 255))
+                    continue
                 draw_leaf(d, shape, cx, cy, a, sz, col, random.Random(sd))     # (same colour on every copy)
                 dk.polygon(rot(pts, a, cx, cy, sz), fill=int(r * 255))
                 dk.line([rot([(0, 0)], a, cx, cy, sz)[0], rot([(0, stem)], a, cx, cy, sz)[0]], fill=int(r * 255),
@@ -300,11 +339,16 @@ def litter(name, kind, palette, n, size, seed=0):
     img.putalpha(rank)
     out = finish(img)
     out.save(os.path.join(OUT, f'{name}.png'), optimize=True)
-    print('litter', name, 'cover %.2f' % (np.array(out)[..., 3] > 30).mean())
+    al = np.array(out)[..., 3] / 255
+    print('litter', name, 'cover above rank 0.14 / 0.5 / 0.8: %.2f %.2f %.2f (1 - exp(-4.6 (1 - t)): 0.98 0.90 0.60)'
+          % ((al > 0.14).mean(), (al > 0.5).mean(), (al > 0.8).mean()))
 
 
 litter('litter_ginkgo', 'ginkgo', [(240, 200, 40), (230, 185, 30), (250, 215, 70), (215, 170, 30), (200, 180, 50),
                                    (236, 196, 52), (190, 150, 40), (175, 130, 45)], 1500, (0.036, 0.052), seed=18)
+# Somei-yoshino petals 1.1-1.5 cm long, near white with a blush of pink, a few going brown
+litter('litter_petals', 'petal', [(246, 206, 218), (248, 216, 226), (250, 226, 233), (244, 198, 212), (252, 236, 240),
+                                  (240, 190, 205), (247, 222, 228), (236, 214, 208)], 8200, (0.0275, 0.0375), seed=35)
 
 if ONLY:
     raise SystemExit(0)

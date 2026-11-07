@@ -153,7 +153,7 @@ python3 -m venv .venv && .venv/bin/pip install numpy scipy shapely pillow
 python3 tools/fetch_polyhaven.py textures 1k <이름…>   # CC0 텍스처/모델/HDRI 내려받기 (assets_src/)
 python3 tools/fetch_terrain.py near && python3 tools/fetch_terrain.py far
 .venv/bin/python tools/build_campus.py            # OSM + 지형 -> data/campus.json, 지형 bin, 스플랫맵
-.venv/bin/python tools/make_textures.py           # 잎 아틀라스, 간판, 정문 현판
+.venv/bin/python tools/make_textures.py           # 잎 아틀라스, 은행잎 · 벚꽃잎 타일, 간판, 정문 현판
 .venv/bin/python tools/prepare_web_textures.py    # PBR 텍스처 -> web/public
 blender -b --factory-startup --python blender/build.py            # 모든 GLB 빌드
 blender -b --factory-startup --python blender/build.py -- blend   # + 편집용 assets_src/yonsei1997_campus.blend
