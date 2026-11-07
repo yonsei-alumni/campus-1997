@@ -93,7 +93,11 @@ async function main() {
   scene.add(sun, sun.target);
   // static casters cached, only people and cars redrawn each frame (src/shadows.js)
   const shadows = new SunShadows(renderer, scene, sun, sunDir);
-  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x5a6a48, 0.35));
+  // sky above, and below the light the sunlit paving and lawns throw back up: walls facing away from the sun (the
+  // fronts of 학생회관, 대강당 and 백주년기념관 on 백양로 face west, the sun is in the south-east) stay a light grey as in
+  // the photos instead of a dark blue-grey. (Floors take the sky's colour from it, but the sun outshines that: the
+  // sunlit ground, the trees and the sky look as before.)
+  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0xc4b090, 1.25));
 
   const sky = makeSky(skyMeta, fogColor.clone().convertSRGBToLinear());
   sky.material.uniforms.uExposure.value = 1.25;

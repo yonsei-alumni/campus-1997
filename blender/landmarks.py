@@ -280,40 +280,63 @@ def union():
                    rotz=math.atan2(t.y, t.x), skip=('top', 'bottom'))
         # soffit of the overhang
         mb.quad(P(0, g, 0), P(0, g, -2.0), P(Le, g, -2.0), P(Le, g, 0), 'stone_panel')
-        # upper floors: glass wall behind a precast concrete lattice
-        flat_wall(mb, P, 0, Le, g, H, 'glass', d=-0.9)
+        # upper floors: a precast screen of white concrete with a tall lancet window in every bay between the fins
+        # (reference/학생회관_외벽상세.jpg, 학생회관_정면_2009.jpg). The bay is about a quarter of the storey wide; the
+        # window, about two thirds of the bay wide and of the storey tall, sits on the sill ledge, its frame and the
+        # pale green glass set well back. A hood rib springs from the fins round the window's head, and in the band
+        # under the next sill a second pointed arch has its feet on the fins at the height of the window's apex.
+        # The concrete is more than half of the wall: it reads white, not as dark glass behind thin ribs.
+        npan = max(2, int(round(Le / 1.2)))
+        pw = Le / npan
+        DS, DG, DR = -0.3, -0.72, -0.2       # the screen's face, the glass, the ribs' face (fins and ledges at 0)
         for f in range(nf):
             zf = g + f * fh
-            # slab edge band
-            flat_wall(mb, P, 0, Le, zf, zf + 0.45, 'stone_panel')
-            mb.quad(P(0, zf + 0.45, 0), P(Le, zf + 0.45, 0), P(Le, zf + 0.45, -0.9), P(0, zf + 0.45, -0.9), 'stone_panel')
-            mb.quad(P(0, zf, -0.9), P(Le, zf, -0.9), P(Le, zf, 0), P(0, zf, 0), 'stone_panel')
-            npan = max(2, int(round(Le / 1.7)))
-            pw = Le / npan
-            za, zb = zf + 0.45, zf + fh
-            zm = (za + zb) / 2
+            za, zb = zf + 0.3, zf + fh       # the sill ledge on the slab edge; the next floor
+            flat_wall(mb, P, 0, Le, zf, za, 'stone_white')
+            mb.quad(P(0, za, 0), P(Le, za, 0), P(Le, za, DS), P(0, za, DS), 'stone_white')
+            mb.quad(P(0, zf, DS), P(Le, zf, DS), P(Le, zf, 0), P(0, zf, 0), 'stone_panel')
             for k in range(npan):
                 s0, s1 = k * pw, (k + 1) * pw
                 sm = (s0 + s1) / 2
+                a0, a1 = s0 + 0.07, s1 - 0.07
                 # vertical fin
                 mb.quad(P(s0 - 0.07, za, 0), P(s0 + 0.07, za, 0), P(s0 + 0.07, zb, 0), P(s0 - 0.07, zb, 0), 'stone_white')
-                mb.quad(P(s0 + 0.07, za, 0), P(s0 + 0.07, za, -0.5), P(s0 + 0.07, zb, -0.5), P(s0 + 0.07, zb, 0), 'stone_panel')
-                mb.quad(P(s0 - 0.07, za, -0.5), P(s0 - 0.07, za, 0), P(s0 - 0.07, zb, 0), P(s0 - 0.07, zb, -0.5), 'stone_panel')
-                # the 학생회관 lattice (reference/1997_학생회관.jpg): from each fin two curved ribs spring up into a
-                # pointed arch over the window, and two short ribs curve down into an inverted arch at the sill
-                th = 0.1
-                for (z_spring, z_apex, nseg) in ((za + (zb - za) * 0.5, zb - 0.02, 5), (za + (zb - za) * 0.24, za + 0.02, 3)):
-                    for (sa, sgn) in ((s0 + 0.07, 1), (s1 - 0.07, -1)):
-                        half = sm - sa
-                        pts = []
-                        for q in range(nseg + 1):
-                            f_ = q / nseg
-                            # gothic rib: a circular arc cut at 60 deg, vertical at the fin, meeting its twin in a point
-                            th_ = f_ * math.pi / 3
-                            pts.append((sa + half * (1 - math.cos(th_)) / 0.5, z_spring + (z_apex - z_spring) * math.sin(th_) / math.sin(math.pi / 3)))
-                        for (p0, p1) in zip(pts, pts[1:]):
-                            mb.quad(P(p0[0], p0[1] - th, 0), P(p1[0], p1[1] - th, 0), P(p1[0], p1[1] + th, 0), P(p0[0], p0[1] + th, 0), 'stone_white')
-                            mb.quad(P(p1[0], p1[1] - th, 0), P(p0[0], p0[1] - th, 0), P(p0[0], p0[1] - th, -0.45), P(p1[0], p1[1] - th, -0.45), 'stone_panel')
+                mb.quad(P(s0 + 0.07, za, 0), P(s0 + 0.07, za, DS), P(s0 + 0.07, zb, DS), P(s0 + 0.07, zb, 0), 'stone_panel')
+                mb.quad(P(s0 - 0.07, za, DS), P(s0 - 0.07, za, 0), P(s0 - 0.07, zb, 0), P(s0 - 0.07, zb, DS), 'stone_panel')
+                # the screen round a lancet opening
+                o0, o1 = sm - 0.34 * pw, sm + 0.34 * pw
+                zap = za + 2.45                                   # the window's apex
+                zs = zap - (o1 - o0) * math.sqrt(3) / 2           # its springing (equilateral arch)
+                arc = arch_points(o0, o1, zs, 'pointed', 8)
+                flat_wall(mb, P, a0, o0, za, zb, 'stone_white', d=DS)
+                flat_wall(mb, P, o1, a1, za, zb, 'stone_white', d=DS)
+                for p, q in zip(arc, arc[1:]):
+                    mb.quad(P(p[0], p[1], DS), P(q[0], q[1], DS), P(q[0], zb, DS), P(p[0], zb, DS), 'stone_white')
+                # the reveal (jambs and soffit), the sill, the glass and its dark frame
+                rim = [(o0, za)] + arc + [(o1, za)]
+                for p, q in zip(rim, rim[1:]):
+                    mb.quad(P(q[0], q[1], DS), P(p[0], p[1], DS), P(p[0], p[1], DG), P(q[0], q[1], DG), 'stone_panel')
+                mb.quad(P(o0, za, DS), P(o1, za, DS), P(o1, za, DG), P(o0, za, DG), 'stone_white')
+                mb.face([P(o0, za, DG), P(o1, za, DG)] + [P(x, z, DG) for x, z in arc[::-1]], 'glass_green')
+                dF, fw = DG + 0.03, 0.035
+                for zz in (za + 0.55, za + 1.05, zs):                     # the two low sashes, the transom
+                    mb.quad(P(o0, zz - fw, dF), P(o1, zz - fw, dF), P(o1, zz + fw, dF), P(o0, zz + fw, dF), 'frame_dark')
+                mb.quad(P(sm - fw, za, dF), P(sm + fw, za, dF), P(sm + fw, za + 1.05, dF), P(sm - fw, za + 1.05, dF), 'frame_dark')
+                # hood rib from the fins round the window's head; the band's arch above it, under the next sill
+                rise = (a1 - a0) * math.sqrt(3) / 2
+                for z_spring in (zap + 0.17 - rise, zb - 0.06 - rise):
+                    pts = arch_points(a0, a1, z_spring, 'pointed', 6)
+                    for p, q in zip(pts, pts[1:]):
+                        ds_, dz_ = q[0] - p[0], q[1] - p[1]
+                        ln = math.hypot(ds_, dz_)
+                        ns_, nz_ = -dz_ / ln * 0.05, ds_ / ln * 0.05      # half the rib's width, across it
+                        lo = ((p[0] - ns_, p[1] - nz_), (q[0] - ns_, q[1] - nz_))
+                        hi = ((p[0] + ns_, p[1] + nz_), (q[0] + ns_, q[1] + nz_))
+                        mb.quad(P(*lo[0], DR), P(*lo[1], DR), P(*hi[1], DR), P(*hi[0], DR), 'stone_white')
+                        mb.quad(P(*lo[1], DR), P(*lo[0], DR), P(*lo[0], DS), P(*lo[1], DS), 'stone_panel')   # underside
+        # a solid pier up the corner (the screens of the two faces stop short of it)
+        mb.box(P(Le - 0.2, (g + H) / 2, -0.2), (0.5, 0.5, H - g), 'stone_white', rotz=math.atan2(t.y, t.x), skip=('top', 'bottom'))
+        mb.quad(P(0, H, DS), P(Le, H, DS), P(Le, H, 0), P(0, H, 0), 'stone_panel')       # under the parapet
         flat_wall(mb, P, 0, Le, H, H + 1.0, 'stone_panel')
         mb.quad(P(0, H + 1.0, 0), P(Le, H + 1.0, 0), P(Le, H + 1.0, -0.9), P(0, H + 1.0, -0.9), 'stone_panel')
     mb.face([(p[0], p[1], H + 0.2) for p in offset_poly(rect(L, W), -0.9)], 'roof_flat')
