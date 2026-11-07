@@ -407,6 +407,25 @@ CENT_BLOCK['poly'] = [[round(float(v), 2) for v in q] for q in
 # (its forecourt: level at the hall's floor like the 백양로 side, so the entrance is not half buried)
 FORECOURTS.append((324328422, None, 14.0, dict(face=(tuple(_c0), tuple(_c0 + _ts * 33.0)), max_half=16.5, blend=8.0,
                                                 level='corner', inside=1.0)))
+# 백주년기념관's museum entrance (blender/landmarks.py museum_entrance): the 1996 album photos of 화학공학 · 전기 · 전자 ·
+# 건축공학 · 기계설계 · 컴퓨터과학과 stand on a level paved forecourt at the foot of a broad granite flight, a storey and a
+# half of glass leaning out between a white cylinder and a white wall behind them.  It is the north-east face, towards
+# 광혜원 and 수경원 (연세 역사의 뜰, laid out in 1987 with the hall, "spatially one with the museum inside the hall"):
+# the right of the photos runs on into the drum's curved foot, the 백양로 side is the concert hall's dark porch, and
+# the south and east faces stand a few metres from the hospital.  The ground there stood 3 m over the hall's floor
+# (the hall's lowest corner, by 백양로); the forecourt is levelled at 광혜원's height, nine risers below the doors.
+CENT_NE = ((41.28, -200.97), (16.84, -168.65))       # the face, its outside to the right
+CENT_PLAZA_H = 42.7
+FORECOURTS.append((324328422, None, 18.0, dict(face=CENT_NE, max_half=20.3, blend=10.0, level=CENT_PLAZA_H, inside=1.0)))
+# 과학관's courtyard flight (blender/generic.py porch, ENTRY_AT): in the 1996 photos of 생물학과, 생화학과 and 지질학과
+# fifteen-odd granite risers climb the whole width of the picture to the cream wall, between sloped granite side walls
+# with clipped junipers on banks either side, a five-globe lamp at the top.  The 5 m grid ran the courtyard's slope
+# up to the doors (five risers); the car park below is levelled 2.8 m under them and banks back up beside the flight.
+SCI_DOOR, SCI_N = np.array([-242.6, 13.81]), np.array([-0.2629, -0.9648])
+SCI_T = np.array([-SCI_N[1], SCI_N[0]])
+_sf = SCI_DOOR + SCI_N * 1.6                         # the head of the flight (the plaza runs in under it)
+FORECOURTS.append((222843398, None, 20.0, dict(face=(tuple(_sf - SCI_T * 8.8), tuple(_sf + SCI_T * 8.8)), max_half=8.8,
+                                                blend=8.0, side_blend=3.0, level=58.9, inside=0.0)))
 
 
 def level_forecourt(wid, front, depth, blend=18.0, side_blend=7.0, max_half=20.0, level=None, face=None, inside=2.0):
@@ -549,7 +568,7 @@ print('daewoo', DAEWOO)
 # slope rising 9 m from west to east across all this: the yard becomes one plane falling gently westwards (as a car
 # park drains), the ground round it one smooth surface.  (u, v) as above: u along the hall from the west end of its
 # front, v from the front wall to the back (the back wall at v = 14.8, the wings' back ends at v = 24.4).
-DAEWOO_BACK = dict(h0=round(DAEWOO['floor'] - 0.1, 2), su=0.03, sv=0.03, u0=22.0, v0=26.0,
+DAEWOO_BACK = dict(h0=round(DAEWOO['floor'] - 0.1, 2), su=0.01, sv=0.03, u0=45.0, v0=26.0,
                    yard=[(-4.0, 14.9), (46.5, 14.9), (46.5, 24.4), (66.0, 24.4), (64.5, 79.0), (24.5, 79.0), (24.5, 27.0),
                          (-12.5, 27.0), (-12.5, 24.4), (-4.0, 24.4)],
                    lot=[(25.0, 25.0), (66.0, 25.0), (64.0, 78.0), (25.0, 78.0)],
@@ -560,11 +579,31 @@ DAEWOO_BACK = dict(h0=round(DAEWOO['floor'] - 0.1, 2), su=0.03, sv=0.03, u0=22.0
                    gap=(50.4, 56.6), fence=[(74.5, 25.0), (71.5, 38.0), (67.8, 68.0), (67.2, 79.0)])
 _db = DAEWOO_BACK
 _yard = shapely.contains_xy(Polygon(_db['yard']), DW_U, DW_V)
-Hn[_yard] = _db['h0'] + _db['su'] * (DW_U[_yard] - _db['u0']) + _db['sv'] * (DW_V[_yard] - _db['v0'])
+# (at the floor's height all along the back wall, as Street View shows the hall's back doors level with the yard; it
+# rose 3 % eastwards too, which stood it up to 0.9 m against the east wing's back: now 1 % falling west, and the 3 %
+# rise only northwards past the wings)
+Hn[_yard] = _db['h0'] + _db['su'] * (DW_U[_yard] - _db['u0']) + _db['sv'] * np.maximum(0.0, DW_V[_yard] - _db['v0'])
 FIXED[_yard] = True
 _free = (DW_U > -40) & (DW_U < 90) & (DW_V > 10) & (DW_V < 115) & ~_yard & ~FIXED & ~near_buildings(1.0)
 harmonic_fill(_free)
 print('daewoo back yard', _db['h0'])
+# 대우관's sides and back ends.  The grid nodes within a metre of a hall are left out of the smooth fills above, so
+# the old surface (the elevation data still holding a little of the hall's own bulk) stayed against its walls: a
+# mound up to 1 m over the ground floor along the east wing's back and side, half burying the lowest windows, and on
+# the west the bare slope 2-3 m under the floor, baring the dark granite foundation all along the wing.  The 2012
+# photo (reference/대우관_측면_2012.jpg) and Street View show the hall standing on its ground floor all round, the
+# lawns falling away from a walk along its walls: a 3 m apron at the floor's height round the wings' sides and the
+# back, blending into the ground over the next 7 m (not across the front court, the yard or the other aprons).
+_dwp = footprint(ways[242897922])
+_bb = (DW_U > -40) & (DW_U < 95) & (DW_V > -14) & (DW_V < 60) & ~FIXED & ~_court & ~_strip
+_jj, _ii = np.nonzero(_bb)
+_dd = shapely.distance(_dwp, shapely.points(X[_jj, _ii], Y[_jj, _ii]))
+_uu, _vv = DW_U[_jj, _ii], DW_V[_jj, _ii]
+_w = np.clip(1 - (_dd - 3.0) / 7.0, 0, 1) * (((_uu < 0.5) | (_uu > 46.5)) * np.clip((_vv + 12.0) / 4.0, 0, 1) + (_vv > 14.0))     # (beside and under the wings)
+_w = np.clip(_w, 0, 1)                         # (the nodes under the wings too, or the walls' foot dips between nodes)
+DW_APRON = round(DAEWOO['floor'] - 0.15, 2)
+Hn[_jj, _ii] = Hn[_jj, _ii] * (1 - _w) + DW_APRON * _w
+print('daewoo sides apron', DW_APRON, 'nodes', int((_w > 0).sum()))
 
 buildings = []
 campus_polys = []
@@ -607,6 +646,53 @@ for pid, style, lv, uv in YONGJAE['parts']:
                           base=round(min(hs), 2), top_ground=round(max(hs), 2),
                           footprint=[[round(x, 2), round(y, 2)] for x, y in list(poly.exterior.coords)[:-1]],
                           frame=dict(o=YONGJAE['o'], ang=round(YONGJAE['ang'], 5), uv=uv)))
+
+# Halls on the 1990 · 1994 · 1995 campus maps that OSM no longer has (reference/1990_캠퍼스_지도.png,
+# 1994_캠퍼스_지도.jpg, 1995_캠퍼스_지도.jpg; reference/재상봉_기념집_고증.md).  Behind (west of) 중앙도서관, where
+# 삼성학술정보관 stands now: 23 어학당, a long three-storey hall curved like a bow, its convex side to the west and
+# south-west, and 24 장기원 기념관, a four-storey block across the library's axis with a rounded west end and a low
+# round hall at its south-west foot (the 1994 map draws both; 서울신문 1996.9.3: classes moved to the temporary rooms
+# of the 기념관 "도서관 뒤쪽" that September).  The 한국어학당 left the bow-shaped hall for its own building in April
+# 1991 (yonsei.ac.kr/sc/349), so a student of 1997 knew it as the old one.  12 청경관, a student cafeteria, low at the
+# foot of a crescent of planting south-west of 유억겸 기념관 and west of 언더우드관: the triangle between the three
+# drives there.  (16 요업관, the other cafeteria, stood behind 연희관 where 대우관's 상뜰 was laid out in 1996.)
+def arc_poly(c, r0, r1, a0, a1, n=12):
+    out = [(c[0] + r1 * math.cos(math.radians(a0 + (a1 - a0) * k / n)), c[1] + r1 * math.sin(math.radians(a0 + (a1 - a0) * k / n)))
+           for k in range(n + 1)]
+    inn = [(c[0] + r0 * math.cos(math.radians(a1 - (a1 - a0) * k / n)), c[1] + r0 * math.sin(math.radians(a1 - (a1 - a0) * k / n)))
+           for k in range(n + 1)]
+    return Polygon(out + inn)
+
+
+def block_poly(c, u, hl, hw, round_end=0.0, n=8):
+    """a rectangle along u (centre c, half length hl, half width hw), its -u end rounded (a half circle) if round_end"""
+    u = np.array(u) / np.linalg.norm(u)
+    v = np.array([-u[1], u[0]])
+    c = np.array(c)
+    pts = [c + u * hl - v * hw, c + u * hl + v * hw, c - u * hl + v * hw]
+    if round_end:
+        for k in range(1, n):
+            a = math.pi / 2 + math.pi * k / n
+            pts.append(c - u * hl + (u * math.cos(a) + v * math.sin(a)) * hw)
+    pts.append(c - u * hl - v * hw)
+    return Polygon([tuple(p) for p in pts])
+
+
+_lib_u = np.array([0.2544, 0.9671])                   # 중앙도서관's long axis
+_jk = np.array([-150.0, -25.0])
+OLD_HALLS = [
+    (990010, '옛 어학당', 'white', 3, arc_poly((-147.0, 18.0), 30.0, 40.0, 165.0, 230.0)),
+    (990011, '장기원 기념관', 'white', 4, block_poly(_jk, (_lib_u[1], -_lib_u[0]), 10.0, 7.0, round_end=True)),
+    (990012, '', 'white', 2, Point(*(_jk + np.array([_lib_u[1], -_lib_u[0]]) * -14.0 - _lib_u * 12.0)).buffer(7.0, 3)),
+    (990013, '청경관', 'white', 2, block_poly((20.0, 266.0), (0.557, 0.830), 8.0, 4.5)),
+]
+for pid, nm, style, lv, poly in OLD_HALLS:
+    poly = shapely.geometry.polygon.orient(poly.simplify(0.05), 1.0)
+    campus_polys.append(poly)
+    hs = [ground_h(x, y) for x, y in poly.exterior.coords]
+    buildings.append(dict(id=pid, name=nm, style=style, levels=lv, height=round(lv * FLOOR_H[style], 2),
+                          base=round(min(hs), 2), top_ground=round(max(hs), 2),
+                          footprint=[[round(x, 2), round(y, 2)] for x, y in list(poly.exterior.coords)[:-1]]))
 
 campus_zone = unary_union([p.buffer(60) for p in campus_polys]).buffer(-20)
 
@@ -799,6 +885,13 @@ plazas = [
     Point(GATE[0], GATE[1] + 10).buffer(22),                                  # 정문
     Polygon([(40, 150), (100, 140), (110, 185), (55, 195)]).buffer(2),          # 노천극장 진입
 ]
+# 백주년기념관's museum forecourt and the foot of 과학관's flight (the 1996 album photos: paved)
+_pa, _pb = np.array(CENT_NE[0]), np.array(CENT_NE[1])
+_pn = np.array([(_pb - _pa)[1], -(_pb - _pa)[0]]) / np.linalg.norm(_pb - _pa)
+plazas.append(Polygon([tuple(_pa + (_pb - _pa) * 0.25), tuple(_pa + (_pb - _pa) * 0.95), tuple(_pa + (_pb - _pa) * 0.95 + _pn * 17.0),
+                       tuple(_pa + (_pb - _pa) * 0.25 + _pn * 17.0)]))
+plazas.append(Polygon([tuple(SCI_DOOR - SCI_T * 9.0), tuple(SCI_DOOR + SCI_T * 9.0), tuple(SCI_DOOR + SCI_T * 11.0 + SCI_N * 17.0),
+                       tuple(SCI_DOOR - SCI_T * 11.0 + SCI_N * 17.0)]))
 for pz in plazas:
     draw_poly('pavers', pz)
 
@@ -837,14 +930,25 @@ yeonhui_garden = fpoly(WY, [(-2, -2), (42, -2), (44, -34), (-4, -34)])
 draw_line('pavers', [WY(20, 0), WY(20, -34)], 4.0)
 draw_poly('pavers', Point(*WY(20, -13)).buffer(4.6))
 draw_line('dirt', [WY(-2, -24), WY(42, -24)], 2.6)
-# 대우관 상뜰: the round garden south of the hall, on the OSM footway ring (9 m across) with its radial walks:
-# a round bed in the middle, benches on the ring, pines on the lawns between the walks
+# 대우관 상뜰 (reference/대우관_정면_전경.jpg, 대우관_블로그_본관_정면_상뜰.jpg, 학교연혁_대우관.jpg, from above the
+# 연희관 side; 대우관_2024_정면과_상뜰.jpg on the ground): a round lawn about 6.5 m across inside a low curb with one
+# small tree in it, ringed by a broad paved circle (the OSM footway ring, 9 m across, is its centre line); a broad walk
+# from it north to the podium's arch and south to the steps down towards 연희관; from the walk's two ends paths run
+# out to the drives west and east, so the walks make a diamond (OSM) with two lawn triangles inside it, low shrubs
+# along their upper edges and benches along their lower ones, a pair facing each path from either side; the lawns
+# outside the diamond, under the terrace, carry the big spreading pines.  (SG: e east along the hall, n north.)
 WD = frame_from(242897922)
 SANG = (106.8, 427.1)
-daewoo_garden = Point(*SANG).buffer(17)
-draw_poly('pavers', Point(*SANG).buffer(6.4))
-draw_poly('pavers', Point(*SANG).buffer(3.9), 0)
-draw_line('pavers', [WD(23.5, 0), SANG], 4.0)
+SG_E = np.array([0.964, -0.263])
+SG_N = np.array([0.263, 0.964])
+SG = lambda e, n: tuple(np.array(SANG) + SG_E * e + SG_N * n)
+SANG_DIAMOND = [SG(-0.8, 14.2), SG(-26.5, 0.0), SG(0.0, -15.3), SG(26.6, 0.4)]       # N, W, S, E nodes of the walks
+SANG_LAWN = 3.25
+daewoo_garden = Point(*SANG).buffer(17).union(Polygon(SANG_DIAMOND).buffer(3.0))
+draw_poly('pavers', Point(*SANG).buffer(7.2))
+draw_poly('pavers', Point(*SANG).buffer(SANG_LAWN), 0)
+draw_line('pavers', [WD(23.5, 0), SANG], 6.0)
+draw_line('pavers', [SG(0.0, -6.5), SANG_DIAMOND[2], (101.2, 405.4)], 6.0)        # the broad walk to the south steps
 # 대우관 뒤: the car park and the drive asphalt, paving round the planter in the recess (DAEWOO_BACK above)
 for _k in ('lot',):
     draw_poly('asphalt', fpoly(WD, DAEWOO_BACK[_k]))
@@ -1209,17 +1313,23 @@ for k in range(8):                                                        # roun
 plant('bush', WY, 20, -13, 1.2)
 for (u, v) in ((-1.5, -31), (41.5, -31), (-9, -16), (49, -16), (12, -33), (28, -33)):
     plant('zelkova', WY, u, v, 1.2, rng.uniform(0, 6.28))
-# 대우관 상뜰
+# 대우관 상뜰 (see SANG above): the small round-crowned pine in the round lawn, a broadleaf tree in the west lawn
+# triangle by the ring and one by the north-east path, low shrubs along the triangles' upper edges, and the big pines
+# on the lawns outside the walks towards the terrace
 ang_d = axis_angle(WD)
-trees.append(['pine', SANG[0], SANG[1], 0.7, 0.4])
-for k in range(9):
-    a_ = 2 * math.pi * k / 9
-    x_, y_ = SANG[0] + 2.9 * math.cos(a_), SANG[1] + 2.9 * math.sin(a_)
-    shrubs.append(['topiary_round', round(x_, 2), round(y_, 2), 0.8, 0])
-for k in range(8):
-    a_ = 2 * math.pi * k / 8 + math.pi / 8
-    x_, y_ = SANG[0] + 11.5 * math.cos(a_), SANG[1] + 11.5 * math.sin(a_)
-    trees.append(['pine', round(x_, 2), round(y_, 2), round(rng.uniform(0.75, 0.95), 2), round(rng.uniform(0, 6.28), 2)])
+rng6 = random.Random(1997 + 61)
+trees.append(['pine', SANG[0], SANG[1], 0.55, 0.4])
+for (e_, n_, kind_, sc_) in ((-8.5, 4.5, 'zelkova', 0.75), (10.0, 8.6, 'zelkova', 0.8), (13.0, -2.5, 'pine', 0.45)):
+    x_, y_ = SG(e_, n_)
+    trees.append([kind_, round(x_, 2), round(y_, 2), sc_, round(rng6.uniform(0, 6.28), 2)])
+for sg in (-1, 1):
+    for (e_, n_, sc_) in ((-19.5, 7.0, 0.95), (-12.0, 10.2, 0.85), (-25.5, 5.5, 0.8)):
+        x_, y_ = SG(sg * e_, n_)
+        trees.append(['pine', round(x_, 2), round(y_, 2), sc_, round(rng6.uniform(0, 6.28), 2)])
+    for t_ in (0.3, 0.5, 0.72):                              # shrubs along the inside of the upper (NW / NE) walk
+        e_, n_ = -0.8 + (-26.5 + 0.8) * t_, 14.2 * (1 - t_)
+        x_, y_ = SG(-sg * (e_ + 0.9), n_ - 1.9)
+        shrubs.append(['bush', round(x_, 2), round(y_, 2), round(rng6.uniform(0.8, 1.05), 2), round(rng6.uniform(0, 6.28), 2)])
 # 대우관 뒤 (Street View 2009): pointed conifers 4-5 m tall in a row along the two planters (none before the tower);
 # on the lawn mound west of the car park young clipped pines and round shrubs; a few trees between the rows of cars
 rng4 = random.Random(1997 + 23)
@@ -1273,7 +1383,11 @@ ENTRY_STYLES = ('modern', 'white', 'stone', 'brick', 'tile', 'stone_pale', 'gym'
 # (1995 aerial photo: a broad flight up from the car park there; OSM's two short flights below it), three bays of
 # glass under a long canopy at the top of a wide granite flight with side walls (the 1996 album photos of 생물학과,
 # 생화학과 and 지질학과 on it); its walls cream, as in the aerial photo.  (point near the door, door options)
-ENTRY_AT = {222843398: ((-242.7, 13.8), dict(span=3, canopy=3.0))}
+# Its flight is as wide as the photos (16 m: fifteen risers down to the levelled car park, FORECOURTS), with the
+# five-globe lamp at its head.  음악관 (기악과's photo): a deep canopy on two round white columns over four bays of
+# aluminium-framed glass, white tile walls and tiled planters either side of three granite steps, blue window frames.
+ENTRY_AT = {222843398: ((-242.7, 13.8), dict(span=3, canopy=3.0, stair_w=16.0, lamp5=True, floor=2)),
+            429077789: ((144.08, -11.73), dict(span=2, music=True))}
 _walks = [LineString(p_['pts']) for p_ in paths_out if len(p_['pts']) > 1] + [bline]
 _walk_u = unary_union(_walks)
 _bp_all = [Polygon(b_['footprint']) for b_ in buildings]
@@ -1334,12 +1448,29 @@ for b, bp in zip(buildings, _bp_all):
                                 (px_ + tx * hw_ + nx * 8.0, py_ + ty * hw_ + ny * 8.0),
                                 (px_ - tx * hw_ + nx * 8.0, py_ - ty * hw_ + ny * 8.0)]))
     n_entry += 1
+# 백주년기념관's museum flight and forecourt, 과학관's broad flight (wider than the door's own zone)
+_ca, _cb = np.array(CENT_NE[0]), np.array(CENT_NE[1])
+_cn = np.array([(_cb - _ca)[1], -(_cb - _ca)[0]]) / np.linalg.norm(_cb - _ca)
+CENT_PLAZA = Polygon([tuple(_ca + (_cb - _ca) * 0.3), tuple(_ca + (_cb - _ca) * 0.9), tuple(_ca + (_cb - _ca) * 0.9 + _cn * 16.0),
+                      tuple(_ca + (_cb - _ca) * 0.3 + _cn * 16.0)])
+SCI_STAIR = Polygon([tuple(SCI_DOOR - SCI_T * 10.5), tuple(SCI_DOOR + SCI_T * 10.5), tuple(SCI_DOOR + SCI_T * 10.5 + SCI_N * 18.0),
+                     tuple(SCI_DOOR - SCI_T * 10.5 + SCI_N * 18.0)])
+ENTRY_ZONES += [CENT_PLAZA, SCI_STAIR]
 _ez = unary_union(ENTRY_ZONES + [tennis_poly(pd_, 2.5) for pd_ in TENNIS['pads']])     # (and off the tennis courts)
 _nt = len(trees)
 trees[N_ROWS:] = [t_ for t_ in trees[N_ROWS:] if not _ez.contains(Point(t_[1], t_[2]))]
 _ns = len(shrubs)
 shrubs = [s_ for s_ in shrubs if not _ez.contains(Point(s_[1], s_[2]))]
 print('hall doors', n_entry, '- trees moved off them', _nt - len(trees), 'shrubs', _ns - len(shrubs))
+# the clipped junipers on the banks either side of 과학관's flight (the 1996 photos: big dark rounded bushes, one or two
+# trained up into cones, close against the side walls)
+rng5 = random.Random(1997 + 53)
+for sg in (-1, 1):
+    for k, (u_, v_) in enumerate(((8.9, 1.2), (9.6, 3.4), (8.8, 5.6), (11.6, 2.0), (11.2, 4.8), (13.6, 3.0))):
+        x_, y_ = SCI_DOOR + SCI_T * (sg * u_) + SCI_N * v_
+        kind_ = 'topiary_cone' if k == 3 else 'topiary_round'
+        shrubs.append([kind_, round(float(x_), 2), round(float(y_), 2), round(rng5.uniform(1.5, 1.9) if kind_ == 'topiary_round' else 1.4, 2),
+                       round(rng5.uniform(0, 6.28), 2)])
 
 # shrubs around building aprons
 for b, bp in zip(buildings, bpolys):
@@ -1511,10 +1642,18 @@ for v in (-17.0, -6.0, 10.0, 20.0):                 # 언더우드관: along the
 for v in (-20.0, -26.5):                            # 연희관: along the axis walk
     bench_along(WY, 17.6, v, 1)
     bench_along(WY, 22.4, v, -1)
-for k in range(6):                                  # 대우관 상뜰: round the court, facing the middle
-    a_ = 2 * math.pi * k / 6 + math.pi / 6
-    x_, y_ = SANG[0] + 5.6 * math.cos(a_), SANG[1] + 5.6 * math.sin(a_)
-    P('bench', x_, y_, a_ + math.pi / 2 + BENCH_FACE)
+# 대우관 상뜰: along the two lower (SW / SE) walks of the diamond, two benches on the lawn triangle inside facing the
+# walk and two on the far side facing back (the photos; a bench model faces its rot angle, see bench_along)
+for sg in (-1, 1):
+    _w0, _w1 = np.array([sg * 26.5, 0.0]), np.array([0.0, -15.3])
+    _d = (_w1 - _w0) / np.linalg.norm(_w1 - _w0)
+    _in = np.array([-_d[1], _d[0]]) * (1 if sg < 0 else -1)          # into the triangle (towards the ring)
+    for t_, side in ((0.5, 1), (0.78, 1), (0.25, -1), (0.65, -1)):
+        e_, n_ = _w0 + (_w1 - _w0) * t_ + _in * 2.3 * side
+        x_, y_ = SG(e_, n_)
+        f_ = -_in * side                                                 # facing the walk
+        fw_ = SG_E * f_[0] + SG_N * f_[1]
+        P('bench', x_, y_, math.atan2(fw_[1], fw_[0]))
 for (x, y) in [(-48, -40), (-4, -64), (45, 200), (-94, -404), (-44, -175)]:
     P('trashcan', x, y, 0)
 # double-globe lamps around the library forecourt (1997 library photo: in the clipped shrubs some way out from the
@@ -1599,6 +1738,11 @@ LANDMARKS = [
     dict(id='centennial', name='백주년기념관', pos=[-30, -215], r=26, photo=['photos/centennial_1997.jpg'],
          title='백주년기념관', year='1997',
          text='원통형 매스가 인상적인 백주년기념관. 공연과 강연, 졸업 행사가 열리던 곳으로, 1997년 백양로 오른편 풍경의 중심이었다.'),
+    # the museum's own door on the hall's north-east face (blender/landmarks.py museum_entrance), towards 광혜원
+    dict(id='museum', name='연세대학교 박물관', pos=[37.0, -175.4], r=14, photo=['photos/museum_1996.jpg', 'photos/museum_1996_side.jpg'],
+         title='백주년기념관 박물관 입구', year='1996',
+         credit='사진: 1997년 졸업 앨범의 학과 단체사진(1996년 5 ~ 6월, 2022 재상봉 25주년 기념문집 「25년 전 우리는」), 사람이 없는 윗부분',
+         text='백주년기념관의 광혜원 쪽 면, 흰 원통과 흰 벽 사이로 비스듬히 기운 유리벽과 흰 관 기둥이 서 있고 「YONSEI UNIVERSITY MUSEUM」 긴 현수막이 걸려 있었다. 짙은 차양 아래 유리문으로 들어가면 박물관. 1996년 봄엔 「세계한민족 화학학술대회」와 박물관 강좌 「민요의 현장을 찾아서」 현수막이 걸렸고, 공대 여러 학과가 이 계단에서 졸업 사진을 찍었다.'),
     dict(id='eagle', name='독수리상', pos=[-52, -82], r=16, photo=['photos/eagle_2024.jpg'],
          title='독수리상', year='1997',
          text='연세의 상징 독수리. 높은 기둥 위에서 날개를 편 독수리는 지금도 같은 자리에서 백양로를 내려다본다.'),
@@ -1727,7 +1871,7 @@ out = dict(
     amphitheater={k: (round(v, 3) if isinstance(v, float) else v) for k, v in AMPH.items()},
     buildings=buildings, trees=trees, shrubs=shrubs, props=props, cars=cars, banners=banners,
     paths=paths_out, landmarks=LANDMARKS, statues=STATUES, spawn=SPAWN, markers=markers, daewoo_front=DAEWOO, daewoo_back=DAEWOO_BACK,
-    centennial_block=CENT_BLOCK, colliders=[CENT_BLOCK['poly']] +
+    centennial_block=CENT_BLOCK, sang=dict(c=list(SANG), r=SANG_LAWN), colliders=[CENT_BLOCK['poly']] +
     [[[round(x_, 2), round(y_, 2)] for x_, y_ in list(tennis_poly(pd_, 0.1).exterior.coords)[:-1]] for pd_ in TENNIS['pads']],
 )
 out['baekyangro']['booth'] = BOOTH

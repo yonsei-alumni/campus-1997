@@ -885,6 +885,36 @@
   "rough": 0.5,
   "metal": 0.55
  },
+ "tile_white": {
+  "tex": "white_square_tiles",
+  "tile": 1.2,
+  "tint": [
+   1.0,
+   1.0,
+   0.99
+  ],
+  "rough": 0.45
+ },
+ "stone_panel_white": {
+  "tex": "white_stone_panels",
+  "tile": 2.6,
+  "tint": [
+   1.0,
+   1.0,
+   0.98
+  ],
+  "rough": 0.65,
+  "nor": 0.5
+ },
+ "frame_blue": {
+  "color": [
+   0.1,
+   0.27,
+   0.6
+  ],
+  "rough": 0.45,
+  "metal": 0.3
+ },
  "court_clay": {
   "color": [
    0.5,

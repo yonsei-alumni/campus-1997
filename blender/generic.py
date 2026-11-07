@@ -55,6 +55,7 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
         # on a slope the door is on the storey the ground in front of it reaches (과학관's courtyard front)
         pm = a + t * ((kd + span / 2) * bw) + n * 1.5
         fd = max(0, min(nfloors - 1, int((ground(pm.x, pm.y) + 0.3 - z0) / fh)))
+        fd = door[2].get('floor', fd)
     for f in range(nfloors):
         zf = z0 + f * fh
         shop = ground_floor_shop and f == 0
@@ -130,6 +131,60 @@ ENTRY = {
     'stone_pale': dict(kind='arch', w=2.3, spring=2.5, rec=0.7, step='stone_step', side='stone_rubble', hood=True),
     'house':      dict(kind='house', w=1.0, h=2.1, canopy=1.0, rec=0.15, step='concrete', side='concrete'),
 }
+MUSIC_CANOPY = 3.6    # 음악관's canopy: how far it reaches out over the landing
+
+
+def music_canopy(mb, P, sc, w, zc, ang, zd):
+    """음악관's porch (기악과's 1996 album photo): a deep flat canopy, its soffit lined with slim white slats running out
+    from the wall, a thick white fascia, carried at its outer corners on two round white columns."""
+    import landmarks as LM
+    cd, cw = MUSIC_CANOPY, w + 2.4
+    mb.box(P(sc, zc + 0.3, cd / 2), (cw, cd, 0.6), 'plaster_white', rotz=ang)
+    for k in range(int(cw / 0.32) + 1):                                     # the slatted soffit
+        s = sc - cw / 2 + 0.16 + k * 0.32
+        if s > sc + cw / 2 - 0.1:
+            break
+        LM.bar(mb, P, s - 0.045, zc - 0.07, s + 0.045, zc - 0.07, 0.07, 0.05, cd - 0.08, 'frame_silver', ends=True)
+    mb.box(P(sc, zc + 0.62, cd - 0.02), (cw + 0.1, 0.12, 0.08), 'concrete_dark', rotz=ang)   # drip edge
+    for sg in (-1, 1):
+        x, y, _ = P(sc + sg * (w / 2 + 0.55), 0, cd - 0.55)
+        mb.cylinder((x, y), 0.42, zd - 0.3, zc, 'plaster_white', seg=20)
+        mb.cylinder((x, y), 0.5, zd - 0.3, zd + 0.08, 'stone_granite', seg=20)
+
+
+def music_planters(mb, fw, y_foot, gfn):
+    """the white-tiled planters either side of 음악관's steps, waist high on the landing, with shrubs in them and a
+    steel rail along the right one (local frame of the flight)"""
+    for sg in (-1, 1):
+        x0, x1 = fw / 2 + 0.1, fw / 2 + 1.5
+        xc = sg * (x0 + x1) / 2
+        y0, y1 = 0.3, y_foot - 0.4
+        zb = min(gfn(xc, y0), gfn(xc, y1), gfn(xc, (y0 + y1) / 2)) - 0.4
+        zt = 0.95
+        mb.box((xc, (y0 + y1) / 2, (zt + zb) / 2), (x1 - x0, y0 - y1, zt - zb), 'tile_white', mats={'top': 'tile_white'})
+        mb.box((xc, (y0 + y1) / 2, zt - 0.05), (x1 - x0 - 0.3, y0 - y1 - 0.3, 0.12), 'soil')
+        for k in range(3):
+            yy = y0 - 0.9 - k * (y0 - y1 - 1.6) / 2
+            mb.sphere((xc, yy, zt + 0.35), 0.55, 'hedge_boxwood', seg=10, rings=7, sz=0.75)
+        if sg > 0:
+            for yy in (y0 - 0.2, y1 + 0.2):
+                mb.box((xc - 0.3, yy, zt + 0.45), (0.05, 0.05, 0.9), 'chrome')
+            mb.box((xc - 0.3, (y0 + y1) / 2, zt + 0.9), (0.06, y0 - y1 - 0.4, 0.06), 'chrome')
+
+
+def lamp5(mb, x, y, z):
+    """the five-globe lamp at the head of 과학관's flight (the 1996 photos): a dark post, a cross of arms, a white globe
+    on each arm and one on top"""
+    mb.cylinder((x, y), 0.2, z, z + 0.6, 'metal_dark', seg=10, r1=0.13)
+    mb.cylinder((x, y), 0.1, z + 0.6, z + 3.9, 'metal_dark', seg=10, r1=0.07)
+    for dx, dy in ((0.55, 0), (-0.55, 0), (0, 0.55), (0, -0.55)):
+        mb.box((x + dx / 2, y + dy / 2, z + 3.85), (abs(dx) + 0.05, abs(dy) + 0.05, 0.05), 'metal_dark')
+        mb.cylinder((x + dx, y + dy), 0.05, z + 3.85, z + 3.97, 'metal_dark', seg=8)
+        mb.sphere((x + dx, y + dy, z + 4.17), 0.22, 'globe', seg=12, rings=8)
+    mb.cylinder((x, y), 0.05, z + 3.9, z + 4.25, 'metal_dark', seg=8)
+    mb.sphere((x, y, z + 4.47), 0.24, 'globe', seg=12, rings=8)
+
+
 DOORS = []            # world-space zones of the generic halls' flights (merged into web/public/data/entrances.json)
 
 
@@ -198,29 +253,39 @@ def porch(mb, a, b, s0, s1, zf, fh, st, style, opts=None):
             mb.quad(P(o0, zd, -rec), P(o1, zd, -rec), P(o1, zo, -rec), P(o0, zo, -rec), 'wood_dark')
             LM.bar(mb, P, o1 - 0.12, zd + 0.95, o1 - 0.12, zd + 1.05, 0.05, -rec, -rec + 0.06, 'frame_silver', ends=True)
         else:
-            LM.shopfront(mb, P, o0, o1, zd, zo, -rec, bays=4 * span, door_h=min(E['h'], zo - zd - top) - 0.15)
+            LM.shopfront(mb, P, o0, o1, zd, zo, -rec, bays=4 if opts.get("music") else 4 * span, door_h=min(E['h'], zo - zd - top) - 0.15)
             LM.vestibule(mb, P, o0, o1, zd, zo, -rec - 0.03, 2.8, lights=1)
         # a flat canopy over the door: a cantilevered slab with a thin fascia
         cd = E['canopy']
         ang = math.atan2(t.y, t.x)
         zc = zo + 0.12
-        c = P(sc, zc + 0.11, cd / 2)
-        mb.box(c, (w + (1.6 if style != 'house' else 0.5), cd, 0.22), 'concrete', rotz=ang)
-        if style != 'house':
-            c2 = P(sc, zc + 0.27, cd - 0.05)
-            mb.box(c2, (w + 1.6, 0.1, 0.12), 'concrete_dark', rotz=ang)
+        if opts.get('music'):
+            music_canopy(mb, P, sc, w, zc, ang, zd)
+        else:
+            c = P(sc, zc + 0.11, cd / 2)
+            mb.box(c, (w + (1.6 if style != 'house' else 0.5), cd, 0.22), 'concrete', rotz=ang)
+            if style != 'house':
+                c2 = P(sc, zc + 0.27, cd - 0.05)
+                mb.box(c2, (w + 1.6, 0.1, 0.12), 'concrete_dark', rotz=ang)
     # the flight down to the ground: in a frame at the door (local -y outwards, x along the wall, z from the sill)
     ang = math.atan2(t.y, t.x)
     o = P(sc, zd, 0)
     mb.xf = Matrix.Translation(Vector(o)) @ Matrix.Rotation(ang, 4, 'Z')
     gfn = LM.local_ground(mb)
     drop = -min(gfn(u, -k) for u in (-w / 2, 0, w / 2) for k in (2.0, 3.5))
-    fw = w + (0.9 if style != 'house' else 0.5)
+    fw = opts.get('stair_w', w + (0.9 if style != 'house' else 0.5))
     big = drop > 0.95
     n0 = len(LM.ENTRANCES)
-    LM.stair_flight(mb, 0.0, 0.0, fw, 0.0, landing=1.6 if style != 'house' else 1.0, tread=0.34, flare=0.25 if big else 0.1,
-                    cheek=0.32 if big and style != 'house' else 0.0, cheek_mat=E['side'], newel=big and E['kind'] == 'arch',
-                    rail=drop > 1.3 and E['kind'] == 'glass', gfn=gfn, mat=E['step'], maxrise=0.17)
+    music = opts.get('music')
+    landing = MUSIC_CANOPY if music else (1.6 if style != 'house' else 1.0)
+    y_foot = LM.stair_flight(mb, 0.0, 0.0, fw, 0.0, landing=landing, tread=0.34, flare=0.25 if big else 0.1,
+                             cheek=(0.45 if 'stair_w' in opts else 0.32) if big and style != 'house' and not music else 0.0,
+                             cheek_mat=E['side'], newel=big and E['kind'] == 'arch',
+                             rail=drop > 1.3 and E['kind'] == 'glass', gfn=gfn, mat=E['step'], maxrise=0.17)
+    if music:
+        music_planters(mb, fw, y_foot, gfn)
+    if opts.get('lamp5'):
+        lamp5(mb, fw / 2 - 1.3, -0.9, 0.0)
     DOORS.extend(LM.ENTRANCES[n0:])
     del LM.ENTRANCES[n0:]
     mb.xf = Matrix.Identity(4)
@@ -361,7 +426,10 @@ def observatory(mb, b, zt, st):
 
 
 ROOF_EXTRAS = {222843398: observatory}
-WALL = {222843398: 'plaster_cream'}          # 과학관: cream in the 1995 aerial photo (reference/1995_캠퍼스_항공사진_남쪽에서.jpg)
+WALL = {222843398: 'plaster_cream',          # 과학관: cream in the 1995 aerial photo (reference/1995_캠퍼스_항공사진_남쪽에서.jpg)
+        # 음악관: white square tiles with grey joints (기악과's 1996 album photo; reference/학교연혁_음악관.jpg still shows them)
+        429077789: 'tile_white', 429077790: 'tile_white'}
+FRAME = {429077789: 'frame_blue', 429077790: 'frame_blue'}      # (and blue window frames in the 1996 photo)
 
 
 def build_generic(b, rnd):
@@ -381,6 +449,8 @@ def build_generic(b, rnd):
         st['wall'] = 'plaster_cream'
     if b['id'] in WALL:
         st['wall'] = WALL[b['id']]
+    if b['id'] in FRAME:
+        st['frame'] = FRAME[b['id']]
     pitched = style in ('stone', 'house', 'stone_pale')
     if pitched or style == 'gym':
         cx, cy, L, W, ang = min_area_rect(poly)
