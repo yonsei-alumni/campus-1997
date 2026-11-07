@@ -301,10 +301,48 @@ def auto_uv(pts):
 # spreads it over the fraction.  v from HALL up: a hall (lobby, stair hall) behind tall glazing instead of a room.
 ROOM_GLASS = ('glass', 'glass_green')
 HALL = 32
+# u from SASH: a sash window (an ordinary window of a generic hall, blender/windows.py; the shader takes u - SASH mod 24
+# to pick its room, so the rooms stay those of the plain offset).  One in OPEN_P of them has a sash slid open: the
+# shader takes the glass off one half of the pane under the transom (fraction of v < TRANSOM) and windows.py sets that
+# part back into the room.  Both pick the window and the half by pane_open: the same hash of the pane's whole-number
+# uv as the shader's paneHash.  v < 0: a dark opening with no glass and no room (an air conditioner's fan).
+SASH = 64
+OPEN_P = 0.07
+TRANSOM = 0.715
+
+
+def pane_hash(px, py, k):
+    """web/src/materials.js paneHash: 0..1 from a pane's whole-number uv and a key"""
+    M = 0xffffffff
+    n = ((px + 4096) * 1973 + (py + 4096) * 9277 + k * 26699) & M
+    n ^= n >> 16
+    n = n * 0x7feb352d & M
+    n ^= n >> 15
+    n = n * 0x846ca68b & M
+    n ^= n >> 16
+    return (n >> 8) / 16777216.0
+
+
+def pane_open(px, py):
+    """None, or the half of the sash window at pane (px, py) whose sash is slid open: 0 left, 1 right (seen from out)"""
+    if px < SASH or py >= HALL or pane_hash(px, py, 7) >= OPEN_P:
+        return None
+    return 0 if pane_hash(px, py, 8) < 0.5 else 1
+
+
+def pane_cell(pts, panes=None):
+    """the whole-number uv (ox, oy) pane_uv gives the first pane of this face"""
+    return _pane_frame(pts, panes)[-2:]
 
 
 def pane_uv(pts, panes=None):
-    """panes: (cols, rows[, hall]) or None -> panes about a window bay wide and a storey tall"""
+    """panes: (cols, rows[, hall[, sash]]) or None -> panes about a window bay wide and a storey tall"""
+    sz, s0, z0, W, H, cols, rows, ox, oy = _pane_frame(pts, panes)
+    e = 0.02                                   # keep off the whole numbers (Draco quantises the UVs)
+    return [(ox + e + (s - s0) / W * (cols - 2 * e), oy + e + (z - z0) / H * (rows - 2 * e)) for s, z in sz]
+
+
+def _pane_frame(pts, panes):
     a, b, c = Vector(pts[0]), Vector(pts[1]), Vector(pts[2])
     n = (b - a).cross(c - a)
     if n.length < 1e-9 and len(pts) > 3:
@@ -330,8 +368,9 @@ def pane_uv(pts, panes=None):
     h = (int(round(m.x * 50)) * 73856093) ^ (int(round(m.y * 50)) * 19349663) ^ (int(round(m.z * 50)) * 83492791)
     h = (h ^ (h >> 13)) * 1274126177 & 0xffffffff
     ox, oy = h % 24, (h >> 8) % 16 + (HALL if hall else 0)
-    e = 0.02                                   # keep off the whole numbers (Draco quantises the UVs)
-    return [(ox + e + (s - s0) / W * (cols - 2 * e), oy + e + (z - z0) / H * (rows - 2 * e)) for s, z in sz]
+    if panes and len(panes) > 3 and panes[3] and not hall:
+        ox += SASH + 24 * ((h >> 20) % 4)      # (four times the panes for pane_open to choose from)
+    return sz, s0, z0, W, H, cols, rows, ox, oy
 
 
 # ----------------------------------------------------------------------------- 2D geometry

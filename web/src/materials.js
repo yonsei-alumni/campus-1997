@@ -195,6 +195,11 @@ function foliage(m, glow = 0.09, flutter = 0.03) {
 // light where the lights are on. The glass reflects the environment by Fresnel (ior 1.5, both faces of a pane: F0 ~
 // 0.08), every pane tilted a hair so that neighbours mirror a different patch of sky. three ignores envMapIntensity
 // with scene.environment, so the glass scales its own IBL radiance.
+// A sash window (u from 64: the generic halls' ordinary windows; its room is picked from u - 64 mod 24) has, in one of
+// OPEN_P, a sash slid open: on the half the pane's hash names, under the transom (v fraction < TRANSOM), there is no
+// glass -- no reflection, the room dim and untinted behind the opening, which blender/windows.py sets back into the
+// room. Blender picks the same windows with the same hash (blender/common.py SASH, OPEN_P, TRANSOM, pane_open).
+// v < 0: a dark opening with neither glass nor room (an air conditioner's fan behind its grille).
 // a room pane's cell: dark rooms, blinds and pale green curtains (학생회관) more often; 8, 13, 15 have the lights on
 const ROOM_CELLS = '0, 0, 1, 1, 2, 3, 4, 5, 6, 6, 7, 8, 9, 10, 11, 11';
 function windowGlass(d) {
@@ -212,6 +217,7 @@ function windowGlass(d) {
     uRoomTint: { value: t },                       // what the (dusty) glass lets through
     uRoomLit: { value: d.lit ?? 0.45 },            // a room with the lights on
     uGlassEnv: { value: d.env ?? 2.0 },            // the reflection, x scene.environmentIntensity
+    uRoomOpen: { value: 0.3 },                     // the room through an open sash (no glass, in the shade inside)
   };
   m.userData.rooms = u;                            // (to tune from the console)
   patchShader(m, 'rooms', (sh) => {
@@ -219,8 +225,9 @@ function windowGlass(d) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         uniform vec3 uRoomTint;
-        uniform float uRoomLit, uGlassEnv;
+        uniform float uRoomLit, uGlassEnv, uRoomOpen;
         const int ROOM_CELLS[16] = int[16](${ROOM_CELLS});
+        const float SASH_U = 64.0, OPEN_P = 0.07, TRANSOM = 0.715;
         uint paneMix(uint n) { n ^= n >> 16; n *= 0x7feb352du; n ^= n >> 15; n *= 0x846ca68bu; n ^= n >> 16; return n; }
         float paneHash(vec2 p, uint k) {
           uvec2 q = uvec2(ivec2(p) + 4096);
@@ -229,21 +236,29 @@ function windowGlass(d) {
       .replace('#include <map_fragment>', `
         vec2 paneUv = vec2(vMapUv.x, 1.0 - vMapUv.y);              // (glTF flips v)
         vec2 pane = floor(paneUv), fp = fract(paneUv);
-        int cell = pane.y > 31.5 ? 12 + int(paneHash(pane, 1u) * 4.0) : ROOM_CELLS[int(paneHash(pane, 1u) * 16.0)];
-        if (paneHash(pane, 2u) < 0.5) fp.x = 1.0 - fp.x;            // mirrored rooms: twice the variety
+        bool paneDark = paneUv.y < 0.0;
+        float paneOpen = paneDark || (pane.x > SASH_U - 0.5 && pane.y < 31.5 && paneHash(pane, 7u) < OPEN_P
+          && (paneHash(pane, 8u) < 0.5 ? fp.x < 0.5 : fp.x > 0.5) && fp.y < TRANSOM) ? 1.0 : 0.0;
+        vec2 roomPane = pane.x > SASH_U - 0.5 ? vec2(mod(pane.x - SASH_U, 24.0), pane.y) : pane;
+        int cell = pane.y > 31.5 ? 12 + int(paneHash(roomPane, 1u) * 4.0) : ROOM_CELLS[int(paneHash(roomPane, 1u) * 16.0)];
+        if (paneHash(roomPane, 2u) < 0.5) fp.x = 1.0 - fp.x;            // mirrored rooms: twice the variety
         vec2 cuv = (vec2(float(cell % 4), float(cell / 4)) + 0.02 + vec2(fp.x, 1.0 - fp.y) * 0.96) * 0.25;
         // gradients of the continuous uv: no mip seam where the fraction wraps between two panes of one face
         vec3 room = textureGrad(map, cuv, dFdx(paneUv) * 0.24, dFdy(paneUv) * 0.24).rgb;
-        room *= uRoomTint * (0.75 + 0.5 * paneHash(pane, 3u));
-        float glassF = 0.08 + 0.92 * pow(1.0 - saturate(abs(dot(normalize(vNormal), normalize(vViewPosition)))), 5.0);
-        float roomOn = (cell == 8 || cell == 13 || cell == 15) ? 1.0 : 0.0;
+        room *= mix(uRoomTint, vec3(uRoomOpen), paneOpen) * (0.75 + 0.5 * paneHash(roomPane, 3u));
+        if (paneDark) room = vec3(0.012);
+        float glassF = (1.0 - paneOpen) * (0.08 + 0.92 * pow(1.0 - saturate(abs(dot(normalize(vNormal), normalize(vViewPosition)))), 5.0));
+        float roomOn = !paneDark && (cell == 8 || cell == 13 || cell == 15) ? 1.0 : 0.0;
         diffuseColor.rgb = room * (1.0 - roomOn) * (1.0 - glassF);
         vec3 roomGlow = room * roomOn * uRoomLit * (1.0 - glassF);
-        vec3 paneTilt = (vec3(paneHash(pane, 4u), paneHash(pane, 5u), paneHash(pane, 6u)) - 0.5) * 0.05;`)
+        vec3 paneTilt = (vec3(paneHash(roomPane, 4u), paneHash(roomPane, 5u), paneHash(roomPane, 6u)) - 0.5) * 0.05;`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         normal = normalize(normal + mat3(viewMatrix) * paneTilt);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += roomGlow;`)
+      .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+        material.specularColor *= 1.0 - paneOpen;                  // (no glass: neither the sun's nor the sky's gleam)
+        material.specularF90 *= 1.0 - paneOpen;`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
         // the HDRI's horizon is open haze; the campus's is trees and buildings: dim what the glass mirrors low
         vec3 glassR = (vec4(reflect(-geometryViewDir, geometryNormal), 0.0) * viewMatrix).xyz;

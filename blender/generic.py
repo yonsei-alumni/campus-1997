@@ -3,6 +3,7 @@ with real recessed windows, sills, floor bands, parapets, roofs and rooftop clut
 import math, random
 from mathutils import Vector, Matrix
 from common import MeshBuilder, ground, offset_poly, min_area_rect, poly_area
+import windows
 
 STYLE = {
     #          wall            window frame     bay   win_w  sill  head  band      found
@@ -92,9 +93,9 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
             mb.quad(P(w1, zh, 0), P(w1, zh, -d), P(w0, zh, -d), P(w0, zh, 0), rv)
             mb.quad(P(w0, zh, 0), P(w0, zh, -d), P(w0, zs, -d), P(w0, zs, 0), rv)
             mb.quad(P(w1, zs, 0), P(w1, zs, -d), P(w1, zh, -d), P(w1, zh, 0), rv)
-            # glass + frame: one room behind the window (a shop or the gym's hall instead: common.py pane_uv)
-            mb.quad(P(w0, zs, -d), P(w1, zs, -d), P(w1, zh, -d), P(w0, zh, -d), glass,
-                    panes=(1, 1, shop or st is STYLE['gym']))
+            # glass + frame: one room behind the window (a shop or the gym's hall instead: common.py pane_uv), now and
+            # then a sash slid open (blender/windows.py)
+            cell = windows.glass(mb, P, w0, w1, zs, zh, d, st, shop)
             fw = 0.06
             nm = st['mull'] if not shop else 3
             dd = -d + 0.05
@@ -108,6 +109,7 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
                 tm = st.get('trim', 'stone_trim' if st['wall'] != 'concrete' else 'concrete')
                 mb.quad(P(w0 - 0.08, zs - 0.08, 0.1), P(w1 + 0.08, zs - 0.08, 0.1), P(w1 + 0.08, zs, 0.1), P(w0 - 0.08, zs, 0.1), tm)
                 mb.quad(P(w0 - 0.08, zs, 0.1), P(w1 + 0.08, zs, 0.1), P(w1 + 0.08, zs, 0), P(w0 - 0.08, zs, 0), tm)
+            windows.aircon(mb, P, w0, w1, zs, zh, d, st, cell, f)
         # floor band (projecting slab edge) for modern blocks
         if st['band'] and f > 0:
             zb = zf - 0.18
@@ -519,6 +521,7 @@ FRAME = {429077789: 'frame_blue', 429077790: 'frame_blue'}      # (and blue wind
 def build_generic(b, rnd):
     style = b['style']
     st = dict(STYLE[style])
+    st['name'] = style                 # (blender/windows.py)
     poly = [tuple(p) for p in b['footprint']]
     if poly_area(poly) < 0:
         poly.reverse()
