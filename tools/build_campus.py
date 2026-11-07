@@ -65,7 +65,7 @@ B = {
     246156112: ('modern', 6, '인문관'), 246156114: ('modern', 5, '인문관'),
     246156119: ('white', 4, '제2인문관 (공사중)'), 245623759: ('lm:yeonhui', 4, '연희관'),
     246156121: ('stone', 2, '연합신학대학원'), 246156123: ('modern', 6, '종합관'),
-    246156117: ('stone', 3, '성암관'), 246156111: ('stone', 3, '교육관'),
+    246156117: ('lm:seongam', 2, '성암관'), 246156111: ('lm:gyoyuk', 3, '교육관'),   # (blender/landmarks.py seongam, gyoyuk)
     245623193: ('stone_pale', 4, '생활과학관'), 413217834: ('house', 1, '논지당'),
     242897922: ('lm:daewoo', 6, '대우관'), 242897923: ('lm:daewoo_annex', 5, '대우관 별관'),
     429077789: ('white', 4, '음악대학'), 429077790: ('white', 4, '음악대학'),
@@ -469,6 +469,16 @@ FORECOURTS.append((222843398, None, 20.0, dict(face=(tuple(_sf - SCI_T * 8.8), t
 BILL_FRONT = ((14.11, 417.87), (57.73, 406.29))      # the south front, west -> east (the outside to the right)
 FORECOURTS.append((245623193, None, 12.0, dict(face=BILL_FRONT, max_half=23.0, blend=10.0, side_blend=9.0,
                                                 level=round(68.85 - drop_at(36.0, 412.0), 2), inside=2.0)))  # (68.85 before)
+# 교육관 (blender/landmarks.py gyoyuk): its west side stands three full storeys over the drive below 제2인문관
+# (reference/2003_가을_교육관_서쪽면.jpg, taken from there) and its north end's outside flight starts from a yard of
+# parked cars at the ground floor (2003_가을_연희관앞정원과_교육관_북쪽계단.jpg).  The 5 m grid ran the hill from 종합관
+# and 제2인문관 down over both: the ground stood 3-4 m over the floor at the north-west corner.  Level the drive and
+# the yard at the floor, banking back up to the hill beyond.
+GYOYUK_FLOOR = 53.0                                  # (blender/landmarks.py GYOYUK_FLOOR)
+FORECOURTS.append((246156111, None, 6.0, dict(face=((26.82, 349.67), (17.82, 314.97)), max_half=18.0, blend=7.0,
+                                               side_blend=6.0, level=GYOYUK_FLOOR, inside=1.0)))      # the west drive
+FORECOURTS.append((246156111, None, 11.0, dict(face=((44.15, 345.23), (26.82, 349.67)), max_half=9.0, blend=6.0,
+                                                side_blend=5.0, level=GYOYUK_FLOOR, inside=1.0)))     # the north yard
 
 
 def level_forecourt(wid, front, depth, blend=18.0, side_blend=7.0, max_half=20.0, level=None, face=None, inside=2.0):
@@ -1489,8 +1499,12 @@ for su in (-1, 1):
                 plant('topiary_round', WU, uc + du, vc + dv, 1.25)
         for (cu, cv) in ((u0 + 1.4, v0 + 1.4), (u1 - 1.4, v0 + 1.4), (u0 + 1.4, v1 - 1.4), (u1 - 1.4, v1 - 1.4)):
             plant('topiary_cone', WU, cu, cv, 1.1)
-# tall trees standing round the parterre's edge
+# tall trees standing round the parterre's edge; at its north-west corner, by the road before 언더우드관, a clipped pine
+# instead (reference/2003_봄_언더우드관_앞길_벚나무.jpg: clipped pines and benches all along that side of the road)
 for (u, v) in ((-27, -20), (-28, 8), (-27, 26), (27, -22), (28, 6), (27, 27)):
+    if (u, v) == (-27, 26):
+        plant('pine', WU, u, v, 0.45, rng.uniform(0, 6.28))
+        continue
     plant('zelkova', WU, u, v, 1.15, rng.uniform(0, 6.28))
 # 연희관 앞 정원 (YEONHUI): each of the four beds edged with clipped boxwood, a clipped pine in its middle and round
 # boxwood towards its corners; the two by the south walk behind tall clipped hedges that end square at the forecourt
@@ -1553,7 +1567,7 @@ for (e_, n_, kind_, sc_) in ((-30, -12, 'zelkova', 1.0), (-19, -21, 'pine', 0.6)
                              (24, -16, 'zelkova', 1.05), (14, -22, 'pine', 0.55), (33, -8, 'zelkova', 0.9)):
     x_, y_ = YH_G(e_, n_)
     trees.append([kind_, round(x_, 2), round(y_, 2), sc_, round(rng7.uniform(0, 6.28), 2)])
-for (u, v, kind_, sc_) in ((-6.0, -11.5, 'ginkgo', 0.9), (46.5, -10.5, 'ginkgo', 0.9), (6.0, -5.5, 'pine', 0.34),
+for (u, v, kind_, sc_) in ((-6.0, -11.5, 'ginkgo', 1.25), (46.5, -10.5, 'ginkgo', 1.25), (6.0, -5.5, 'pine', 0.34),
                            (12.5, -5.5, 'pine', 0.3), (27.5, -5.5, 'pine', 0.3), (34.0, -5.5, 'pine', 0.34)):
     plant(kind_, WY, u, v, sc_, rng7.uniform(0, 6.28))
 # 대우관 상뜰 (see SANG above): the small round-crowned pine in the round lawn, a broadleaf tree in the west lawn
@@ -1621,6 +1635,50 @@ for k in range(9):
     rr_ = FOUNTAIN['r'] + 9.5 + (k % 3) * 0.8
     shrubs.append(['azalea_red', round(_fx + rr_ * math.cos(a_), 2), round(_fy + rr_ * math.sin(a_), 2),
                    round(rng2.uniform(0.9, 1.1), 2), round(rng2.uniform(0, 6.28), 2)])
+# --- the trees of the 2003 spring and autumn photos (reference/2003_*.jpg, taken by the user; reference/고증.md
+# 3.18).  Where they show the old cherries in flower and the October ginkgos, plant them one by one (the trees
+# scattered on those spots step aside):
+#  - 2003_봄_백양로끝_핀슨관길_벚나무.jpg: a row of big old cherries along the south-west side of the drive bending up
+#    from the head of 백양로 towards 핀슨관, benches under them facing the drive, 백양관 lower down behind them
+#  - 2003_봄_언더우드관_앞길_벚나무.jpg: from the road before 언더우드관 looking east, a row of them behind a low
+#    hedge where the road ends, on the slope up towards 논지당
+#  - 2003_봄_언더우드관정원_남쪽계단_벚나무.jpg: big cherries on the lawn along the garden's south edge, either side
+#    of the axis at the head of the steps from the end of 백양로
+#  - 2003_봄_교육관에서_본_연희관앞정원과_성암관.jpg: a big one on the verge across the drive from 교육관's front,
+#    another on the far side of the garden before 성암관
+#  - 2003_가을_*: the ginkgos at the corners of 연희관's wings reach its third floor (above: 1.25), a young yellow one
+#    before its porch, a ginkgo and a reddening maple before 성암관's north wing
+rng8 = random.Random(1997 + 2003)
+PHOTO03 = []                                                      # (species, x, y, scale)
+PHOTO03_PROPS = []                                                # (name, x, y, rot), added with the props below
+_br = LineString([(40, 122), (34, 123), (28, 124), (24, 125), (20, 127), (14, 131), (9, 137), (4, 144), (2, 150), (-2, 160)])
+_brs, _brb = _br.offset_curve(4.8), _br.offset_curve(3.4)         # (its left: the south-west side)
+_rows = [(t_[1], t_[2]) for t_ in trees[:N_ROWS]]
+for k in range(8):
+    q_ = _brs.interpolate(12.0 + 6.8 * k)
+    if min(math.hypot(q_.x - a_, q_.y - b_) for a_, b_ in _rows) < 4.0:
+        continue                                                  # (not into 백양로's ginkgo rows)
+    PHOTO03.append(('cherry', q_.x, q_.y, rng8.uniform(1.2, 1.4)))
+    if k < 7:                                                     # a bench between this one and the next
+        b_ = _brb.interpolate(15.4 + 6.8 * k)
+        r_ = _br.interpolate(_br.project(b_))
+        PHOTO03_PROPS.append(('trashcan' if k == 3 else 'bench', b_.x, b_.y, math.atan2(r_.y - b_.y, r_.x - b_.x)))
+for (x_, y_) in ((99.5, 246.5), (101.5, 239.5), (103.0, 232.5), (104.0, 225.5), (104.5, 218.5)):
+    PHOTO03.append(('cherry', x_, y_, rng8.uniform(1.1, 1.3)))
+hedge_line([(95.0, 214.0), (93.6, 249.0)], closed=False)
+for (u_, v_) in ((-22.0, -27.0), (-15.0, -28.5), (-8.0, -29.5), (8.0, -29.5), (15.0, -28.5), (22.0, -27.0)):
+    x_, y_ = WU(u_, v_)
+    PHOTO03.append(('cherry', x_, y_, rng8.uniform(1.15, 1.3)))
+PHOTO03 += [('cherry', 49.5, 317.5, 1.3), ('cherry', 106.0, 321.0, 1.05),
+            ('ginkgo', 119.5, 317.5, 1.0), ('maple', 120.5, 328.5, 0.9)]
+x_, y_ = WY(16.5, -3.8)
+PHOTO03.append(('ginkgo', x_, y_, 0.42))
+_n0 = len(trees)
+trees[N_PHOTO_TREES:] = [t_ for t_ in trees[N_PHOTO_TREES:]
+                         if min(math.hypot(t_[1] - p_[1], t_[2] - p_[2]) for p_ in PHOTO03) > 4.2]
+for sp_, x_, y_, sc_ in PHOTO03:
+    trees.append([sp_, round(float(x_), 2), round(float(y_), 2), round(sc_, 2), round(rng8.uniform(0, 6.28), 2)])
+print('2003 photo trees:', len(PHOTO03), '- scattered trees moved off them', _n0 - len(trees) + len(PHOTO03))
 # --- front doors of the procedural halls (blender/generic.py builds them).  Every hall had one, and the outlines alone
 # gave the generic halls none: walls of windows all round.  The 1996 graduation-album photos (2022 재상봉 기념문집,
 # 「25년 전 우리는」; reference/고증.md) show what they were like: 과학관's and 백주년기념관's broad granite
@@ -1713,6 +1771,20 @@ CENT_PLAZA = Polygon([tuple(_ca + (_cb - _ca) * 0.3), tuple(_ca + (_cb - _ca) * 
 SCI_STAIR = Polygon([tuple(SCI_DOOR - SCI_T * 10.5), tuple(SCI_DOOR + SCI_T * 10.5), tuple(SCI_DOOR + SCI_T * 10.5 + SCI_N * 18.0),
                      tuple(SCI_DOOR - SCI_T * 10.5 + SCI_N * 18.0)])
 ENTRY_ZONES += [CENT_PLAZA, SCI_STAIR]
+
+
+def flight_zone(p, n, hw, depth, inside=0.5):
+    """the ground before a door at p (on the wall, n out of it) that a flight takes, hw either side, depth out"""
+    p, n = np.array(p, float), np.array(n, float) / np.linalg.norm(n)
+    t = np.array([-n[1], n[0]])
+    return Polygon([tuple(p - t * hw - n * inside), tuple(p + t * hw - n * inside), tuple(p + t * hw + n * depth),
+                    tuple(p - t * hw + n * depth)])
+
+
+# 교육관's and 성암관's flights (blender/landmarks.py builds them, not generic.porch): the front doors, east and west,
+# and 교육관's outside flight along its north end
+ENTRY_ZONES += [flight_zone((39.65, 327.89), (0.97, -0.25), 2.8, 9.0), flight_zone((117.18, 307.08), (-0.97, 0.24), 3.0, 9.0),
+                flight_zone((33.7, 347.9), (0.25, 0.97), 7.0, 5.5)]
 _ez = unary_union(ENTRY_ZONES + [tennis_poly(pd_, 2.5) for pd_ in TENNIS['pads']])     # (and off the tennis courts)
 _nt = len(trees)
 trees[N_ROWS:] = [t_ for t_ in trees[N_ROWS:] if not _ez.contains(Point(t_[1], t_[2]))]
@@ -1918,6 +1990,12 @@ for sg in (-1, 1):
         P('bench', x_, y_, math.atan2(fw_[1], fw_[0]))
 for (x, y) in [(-48, -40), (-4, -64), (45, 200), (-94, -404), (-44, -175)]:
     P('trashcan', x, y, 0)
+# under the cherries by the drive up to 핀슨관 (2003 spring photo): benches facing the drive, a green bin among them;
+# double-globe lamps at the north-west corner of 연희관 앞 정원 and by 교육관's north yard (the 2003 photos)
+for (name_, x, y, r) in PHOTO03_PROPS:
+    P(name_, x, y, r)
+for (x, y) in [(52.6, 340.5), (46.0, 358.0)]:
+    P('lamp_double', x, y, -0.25)
 # double-globe lamps around the library forecourt (1997 library photo: in the clipped shrubs some way out from the
 # piers, not on the steps) and at the tip of the 화단섬
 for (x, y) in [(-64, -58), (-58, -22), (-68.5, -41.5), (-106.7, -315.3)]:
@@ -1968,6 +2046,15 @@ for (u_, face) in DAEWOO_BACK['rows']:
             cars.append([rng5.choice(['sedan', 'sedan', 'sedan', 'hatch']), round(x_, 2), round(y_, 2),
                          round(_hu + (0.0 if face > 0 else math.pi) + rng5.uniform(-.04, .04), 3), rng5.randrange(8)])
         v_ += DAEWOO_BACK['stall']
+# 교육관's north yard, full of cars in the 2003 autumn photo (2003_가을_연희관앞정원과_교육관_북쪽계단.jpg): a row nose in
+# towards the hall, clear of the outside flight along its wall
+_gt, _gn = np.array([-0.969, 0.248]), np.array([0.248, 0.969])     # along its north end (from the east corner), out of it
+rng9 = random.Random(1997 + 2004)
+for s_ in (1.8, 4.4, 7.0, 9.6, 12.2, 14.8):
+    if rng9.random() < 0.9:
+        q_ = np.array([44.15, 345.23]) + _gt * s_ + _gn * 8.2
+        cars.append([rng9.choice(['sedan', 'sedan', 'sedan', 'hatch']), round(float(q_[0]), 2), round(float(q_[1]), 2),
+                     round(math.atan2(-_gn[1], -_gn[0]) + rng9.uniform(-.04, .04), 3), rng9.randrange(8)])
 # motorbikes in front of the south end of 제1공학관 (the 1997 photo: by its south-east corner, next to the island)
 for k in range(16):
     t_ = k / 15
