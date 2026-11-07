@@ -27,7 +27,7 @@ export function mergeStatic(root, { chunk = 160, castShadow = true, receiveShado
   const box = new THREE.Box3(), c = new THREE.Vector3();
   root.traverse((o) => {
     if (!o.isMesh) return;
-    let g = o.geometry.clone();
+    const g = o.geometry.clone();
     g.applyMatrix4(o.matrixWorld);
     for (const k of Object.keys(g.attributes)) {
       if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
@@ -41,7 +41,9 @@ export function mergeStatic(root, { chunk = 160, castShadow = true, receiveShado
         g.setAttribute('color', new THREE.Float32BufferAttribute(c3, 3));
       }
     } else if (g.attributes.color) g.deleteAttribute('color');
-    if (g.index) g = g.toNonIndexed();
+    // keep the index (mergeGeometries needs all or none indexed): the Blender meshes share ~1/3 of their corners,
+    // so de-indexing would cost 1.5x the vertices on the GPU and in every pass
+    if (!g.index) g.setIndex(Array.from({ length: g.attributes.position.count }, (_, i) => i));
     box.setFromBufferAttribute(g.attributes.position);
     box.getCenter(c);
     const key = o.material.name + '|' + Math.floor(c.x / chunk) + '|' + Math.floor(c.z / chunk);
@@ -52,7 +54,7 @@ export function mergeStatic(root, { chunk = 160, castShadow = true, receiveShado
   group.name = name;
   for (const [key, { mat, geos }] of buckets) {
     const merged = mergeGeometries(geos, false);
-    if (!merged) continue;
+    if (!merged) { console.warn('mergeStatic: could not merge', key); continue; }
     merged.computeBoundingSphere();
     const m = new THREE.Mesh(merged, mat);
     m.castShadow = castShadow && !mat.name.startsWith('glass');
@@ -82,7 +84,7 @@ export class InstancedKit {
       if (!o.isMesh) return;
       const g = o.geometry.clone();
       g.applyMatrix4(o.matrixWorld);
-      this.parts.push(instanced(g, o.material, capacity, shadows));
+      this.parts.push(instanced(g, lib.instanced(o.material), capacity, shadows));
     });
     this.capacity = capacity;
     this.count = 0;

@@ -37,47 +37,15 @@
   <a class="play" href="./">게임 하러 가기</a>
 </header>
 <main id="list"><p>불러오는 중…</p></main>
-<script>
-function renderItems(items) {
-  const ul = document.createElement('ul');
-  for (const it of items) {
-    const li = document.createElement('li');
-    if (typeof it === 'string') li.textContent = it;
-    else { li.append(it.text || ''); if (it.items?.length) li.appendChild(renderItems(it.items)); }
-    ul.appendChild(li);
-  }
-  return ul;
-}
+<script type="module">
+import { noteSection } from './src/notes.js';
 (async () => {
   const list = document.getElementById('list');
   let notes;
   try { notes = await fetch('data/releases.json', { cache: 'no-cache' }).then((r) => r.json()); }
   catch { list.textContent = '소식을 불러오지 못했습니다.'; return; }
   list.textContent = '';
-  for (const n of notes) {
-    const sec = document.createElement('section');
-    sec.id = n.date;
-    const h = document.createElement('h2');
-    const [y, m, d] = n.date.split('-').map(Number);
-    const a = document.createElement('a');
-    a.href = '#' + n.date;
-    const date = document.createElement('span');
-    date.textContent = `${y}년 ${m}월 ${d}일`;
-    a.append(date, n.title || '');
-    h.appendChild(a);
-    const ul = renderItems(n.items);
-    sec.append(h, ul);
-    for (const im of n.images || []) {
-      const fig = document.createElement('figure');
-      const img = document.createElement('img');
-      img.src = im.src; img.alt = im.alt || ''; img.loading = 'lazy';
-      const cap = document.createElement('figcaption');
-      cap.textContent = im.alt || '';
-      fig.append(img, cap);
-      sec.appendChild(fig);
-    }
-    list.appendChild(sec);
-  }
+  for (const n of notes) list.appendChild(noteSection(n, { heading: 'h2', link: true }));
   if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
 })();
 </script>

@@ -12,6 +12,11 @@ function buildId() {
 export default defineConfig(({ command }) => ({
   base: './',
   server: { port: 5197 },
-  build: { chunkSizeWarningLimit: 2000, assetsInlineLimit: 0 },
+  build: {
+    chunkSizeWarningLimit: 2000,
+    assetsInlineLimit: 0,
+    // the game, and the 새 소식 page (it shares src/notes.js with the game's news panel)
+    rollupOptions: { input: { main: 'index.html', news: 'news.html' } },
+  },
   define: { __BUILD__: JSON.stringify(command === 'serve' ? 'dev' : buildId()) },
 }));

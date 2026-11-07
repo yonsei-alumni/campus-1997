@@ -252,9 +252,12 @@ export function makeBanners(banners, lib) {
 
 // ---------------------------------------------------------------- students (Quaternius people, sim-office style)
 // Walkers follow paths at their own pace and stop when you are in the way; groups stand and chat, nodding now and
-// then. Far away people are hidden and their animation is not updated.
+// then. Far away people (and the drivers of far cars) leave the scene and their animation is not updated.
+const FAR2 = 190 * 190;
+
 export class Crowd {
   constructor(scene, cast, ids, paths, groups, count, rndSeed = 3) {
+    this.scene = scene;
     this.people = [];
     const rnd = mulberry(rndSeed);
     const pick = () => ids[Math.floor(rnd() * ids.length)];
@@ -330,8 +333,9 @@ export class Crowd {
         p.heading += wrapAngle(want - p.heading) * (1 - Math.exp(-dt * 7));
         a.holder.rotation.y = p.heading;
       }
-      if (far > 190 * 190) { a.holder.visible = false; continue; }
-      a.holder.visible = true;
+      // far away: out of the scene graph altogether (hiding it would still update its ~60 bones every frame)
+      if (far > FAR2) { if (a.holder.parent) this.scene.remove(a.holder); continue; }
+      if (!a.holder.parent) this.scene.add(a.holder);
       if (!p.walking && t > p.gestureAt) {
         p.gestureAt = t + 12 + Math.random() * 20;
         playGesture(a, Math.random() < 0.7 ? 'emote-yes' : 'interact-right');
@@ -435,7 +439,8 @@ export class Traffic {
         v: 8, len, wheels, brake, radius, driver, kind });
     }
   }
-  update(dt, player) {
+  // camPos: the view's centre (three coords); drivers of cars farther than the crowd's reach leave the car
+  update(dt, player, camPos = null) {
     const p = this.p ||= new THREE.Vector2(), d = this.d ||= new THREE.Vector2();
     for (const c of this.cars) {
       c.lane.at(c.s, p);
@@ -463,18 +468,27 @@ export class Traffic {
       // car model: +X forward
       c.root.rotation.y = Math.atan2(d.y, d.x);
       for (const w of c.wheels) w.rotation.z -= (c.v * dt) / c.radius;
-      if (c.driver) c.driver.mixer.update(dt);
+      if (c.driver) {
+        const near = !camPos || (p.x - camPos.x) ** 2 + (p.y + camPos.z) ** 2 < FAR2;
+        const h = c.driver.holder;
+        if (near && !h.parent) c.root.add(h);
+        else if (!near && h.parent) c.root.remove(h);
+        if (near) c.driver.mixer.update(dt);
+      }
     }
   }
+  // circles along each car near the player, appended to out (reused circles per car: this runs every frame)
   movers(px, py, out) {
     for (const c of this.cars) {
       const x = c.root.position.x, y = -c.root.position.z;
       if (Math.abs(x - px) > 12 || Math.abs(y - py) > 12) continue;
       const fx = Math.cos(c.root.rotation.y), fy = Math.sin(c.root.rotation.y);
       const n = Math.max(1, Math.round(c.len / 1.6));
+      const circles = (c.circles ||= Array.from({ length: n }, () => ({ x: 0, y: 0, r: 0.9 })));
       for (let k = 0; k < n; k++) {
         const t = (k / Math.max(1, n - 1) - 0.5) * (c.len - 1.6);
-        out.push({ x: x + fx * t, y: y + fy * t, r: 0.9 });
+        circles[k].x = x + fx * t; circles[k].y = y + fy * t;
+        out.push(circles[k]);
       }
     }
     return out;

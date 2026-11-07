@@ -22,7 +22,7 @@ export class SunShadows {
     this.dirty = true;
     this.span = 0;
     this.center = new THREE.Vector3(1e9, 0, 0);
-    this.dyn = [];                        // {root, meshes, skinned, r}
+    this.dyn = [];                        // {root, meshes, r}
     this.toPx = new THREE.Matrix4();
     this.prev = null;                     // pixel rect where moving casters were drawn last frame
     this.rect = [0, 0, 0, 0];
@@ -46,14 +46,13 @@ export class SunShadows {
 
   // a moving object (a person's holder, a car with its driver); r: the radius its shadow caster fits in, metres
   addDynamic(root, r = 1.6) {
-    const meshes = [], skinned = [];
+    const meshes = [];
     root.traverse((o) => {
       if (!o.isMesh) return;
       o.layers.enable(DYNAMIC_LAYER);
       meshes.push(o);
-      if (o.isSkinnedMesh) skinned.push(o);
     });
-    this.dyn.push({ root, meshes, skinned, r });
+    this.dyn.push({ root, meshes, r });
   }
 
   invalidate() { this.dirty = true; }
@@ -130,8 +129,7 @@ export class SunShadows {
       const on = !!d.root.parent && d.root.visible && (p.x - focus.x) ** 2 + (p.z - focus.z) ** 2 < r2;
       for (const m of d.meshes) m.castShadow = on;
       if (!on) continue;
-      // on-screen skeletons were updated by this render; the ones behind the camera still cast shadows
-      for (const m of d.skinned) m.skeleton.update();
+      // (skeletons: three's shadow pass updates every caster it draws, the ones behind the camera too)
       _v.set(p.x, p.y + 1, p.z).applyMatrix4(this.toPx);
       const cx = (_v.x * 0.5 + 0.5) * w, cy = (_v.y * 0.5 + 0.5) * h, rr = d.r * pxPerM + 2;
       x0 = Math.min(x0, cx - rr); x1 = Math.max(x1, cx + rr);

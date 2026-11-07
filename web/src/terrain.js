@@ -154,15 +154,19 @@ export function makeNearTerrain(hf, campus, lib) {
   return mesh;
 }
 
+// low-frequency 0..1 noise over the far ring: where the woods start on the hills (terrain colour and canopy clumps)
+const hillNoise = (x, y) => Math.sin(x * 0.013) * Math.cos(y * 0.011) * 0.5 + 0.5;
+
 export function makeFarTerrain(hf, nearHalf) {
+  const wc = new THREE.Color();
   const col = (x, y, h) => {
     // forest on the hills (안산, 인왕산, 북한산 ...), dense grey city in the valleys
     const r = Math.hypot(x, y);
-    const n = Math.sin(x * 0.013) * Math.cos(y * 0.011) * 0.5 + 0.5;
+    const n = hillNoise(x, y);
     const forest = THREE.MathUtils.smoothstep(h, 55 + n * 25, 95 + n * 30);
     const city = [0.47 + n * 0.06, 0.47 + n * 0.05, 0.47 + n * 0.04];
     // sRGB forest greens converted to linear (vertex colours are linear): dark, as in the 1997 photos
-    const wc = new THREE.Color().setRGB(0.2 + n * 0.06, 0.3 + n * 0.06, 0.15, THREE.SRGBColorSpace);
+    wc.setRGB(0.2 + n * 0.06, 0.3 + n * 0.06, 0.15, THREE.SRGBColorSpace);
     const wood = [wc.r, wc.g, wc.b];
     const river = h < 12 && r > 3000 ? 1 : 0;
     const c = city.map((v, k) => v * (1 - forest) + wood[k] * forest);
@@ -189,8 +193,7 @@ export function makeFarForest(hf, nearHalf, maxR = 3800) {
       const r = Math.hypot(x, y);
       if (r > maxR) continue;
       const h = data[j * n + i];
-      const nn = Math.sin(x * 0.013) * Math.cos(y * 0.011) * 0.5 + 0.5;
-      if (h < 70 + nn * 30) continue;
+      if (h < 70 + hillNoise(x, y) * 30) continue;
       const k = r < 2400 ? 14 : 6;
       for (let m = 0; m < k; m++) pts.push([x + (rnd() - 0.5) * step, y + (rnd() - 0.5) * step]);
     }
@@ -306,7 +309,9 @@ export function makeSky(skyMeta, fogColor) {
   // the texture is sRGB; the shader works in the texture's decoded linear space
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), mat);
   mesh.scale.setScalar(8000);
-  mesh.renderOrder = -10;
+  // after every other opaque object: it sits on the far plane, so the depth test drops the sky pixels behind
+  // buildings, trees and terrain instead of shading the whole screen first and painting over it
+  mesh.renderOrder = 10;
   mesh.frustumCulled = false;
   mesh.name = 'sky';
   return mesh;

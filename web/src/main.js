@@ -141,7 +141,6 @@ async function main() {
   for (const m of walkables) m.geometry.computeBoundsTree();
 
   const amphGroup = new THREE.Group();
-  lms.scene.updateMatrixWorld(true);
   for (const m of amph) {
     const w = m.matrixWorld.clone();
     m.parent.remove(m);
@@ -258,15 +257,14 @@ async function main() {
   await cast.load(Object.keys(PEOPLE), () => progress('사람들이 모여드는 중…'));
 
   // ---------------------------------------------------------------- life
-  const heightFn = (x, y) => groundAt(x, y);
   const R = campus.baekyangro;
-  const center = new Path(R.pts, heightFn);
+  const center = new Path(R.pts, groundAt);
   const eWalk = R.median + R.lane + R.curb + (R.verge || 0);      // inner edge of the sidewalk
   const paths = [];
-  for (const off of [eWalk + R.walk * 0.4, eWalk + R.walk * 0.68, -(eWalk + R.walk * 0.4), -(eWalk + R.walk * 0.68)]) paths.push(new Path(center.offset(off), heightFn));
+  for (const off of [eWalk + R.walk * 0.4, eWalk + R.walk * 0.68, -(eWalk + R.walk * 0.4), -(eWalk + R.walk * 0.68)]) paths.push(new Path(center.offset(off), groundAt));
   for (const p of campus.paths) {
     if (p.kind !== 'footway' || p.pts.length < 2) continue;
-    if (polylineLength(p.pts) > 45 && Math.abs(p.pts[0][0]) < 260 && p.pts[0][1] > -380 && p.pts[0][1] < 420 && paths.length < 26) paths.push(new Path(p.pts, heightFn));
+    if (polylineLength(p.pts) > 45 && Math.abs(p.pts[0][0]) < 260 && p.pts[0][1] > -380 && p.pts[0][1] < 420 && paths.length < 26) paths.push(new Path(p.pts, groundAt));
   }
   const groups = [[-40, -45], [-36, -70], [3, -58], [-2, -92], [-96, -400], [58, 200], [-46, -26], [12, -30], [-20, 30], [110, 150], [-88, -186]]
     .map(([x, y]) => [x, y, groundAt(x, y)]);
@@ -284,8 +282,8 @@ async function main() {
     return u * u * (3 - 2 * u);
   };
   for (const off of [R.median + R.lane * 0.5]) {
-    lanes.push(new Path(center.offset((s) => -(off + 0.7 * roundBooth(s))), heightFn));            // northbound
-    lanes.push(new Path(center.offset((s) => off + 0.3 * roundBooth(s)).reverse(), heightFn));    // southbound
+    lanes.push(new Path(center.offset((s) => -(off + 0.7 * roundBooth(s))), groundAt));            // northbound
+    lanes.push(new Path(center.offset((s) => off + 0.3 * roundBooth(s)).reverse(), groundAt));    // southbound
   }
   const traffic = new Traffic(scene, { sedan: P.car_sedan, sedan2: P.car_sedan2, hatch: P.car_hatch, tico: P.car_tico, taxi: P.car_taxi, van: P.car_van }, lanes, 14, cast, STUDENTS.concat(['man-professor', 'man-staff', 'woman-staff']));
   for (const c of traffic.cars) shadows.addDynamic(c.root, c.len / 2 + 1.5);
@@ -396,14 +394,8 @@ async function main() {
   pickRay.firstHitOnly = true;
   const downRay = new THREE.Raycaster();
   downRay.firstHitOnly = true;
-  let roofs = null;                // walkables + building / landmark meshes, with BVHs, built on first use
+  const roofs = [...walkables, ...player.walls];     // ground and the building / landmark meshes (BVHs built above)
   const surfaceAt = (x, y) => {
-    if (!roofs) {
-      roofs = [...walkables];
-      for (const name of ['buildings', 'landmarks']) {
-        scene.getObjectByName(name)?.traverse((o) => { if (o.isMesh) { if (!o.geometry.boundsTree) o.geometry.computeBoundsTree(); roofs.push(o); } });
-      }
-    }
     downRay.set(from.set(x, 900, -y), DOWN);
     const h = downRay.intersectObjects(roofs, false)[0];
     return h ? h.point.y : -1e9;
@@ -558,7 +550,7 @@ async function main() {
     sky.position.copy(camera.position);
     forest.update(focus);
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
-    traffic.update(dt, started ? player : NOBODY);
+    traffic.update(dt, started ? player : NOBODY, focus);
     gates.update(dt, traffic);
     fountainWater?.update(dt, camera);
     banners.userData.update(tAcc);

@@ -32,23 +32,19 @@ export class BirdsEye {
     this.layer = document.getElementById('birdpins');
     this.bar = document.getElementById('birdbar');
     this.tourbar = document.getElementById('tourbar');
-    this.pins = landmarks.map((l, i) => {
+    const pin = (l, cls) => {
       const el = document.createElement('button');
-      el.className = 'pin';
+      el.className = cls;
       el.innerHTML = `<span>${l.name}</span>`;
       el.addEventListener('click', (e) => { e.stopPropagation(); this.select(l); });
       this.layer.appendChild(el);
-      return { l, el, h: null, prio: l.id === 'events' ? 99 : i };
-    });
-    // smaller name tags over the other buildings (campus.markers), placed after the landmarks so they give way
-    markers.forEach((l, i) => {
-      const el = document.createElement('button');
-      el.className = 'pin bld';
-      el.innerHTML = `<span>${l.name}</span>`;
-      el.addEventListener('click', (e) => { e.stopPropagation(); this.select(l); });
-      this.layer.appendChild(el);
-      this.pins.push({ l, el, h: l.top + 3, prio: 100 + i, bld: true });
-    });
+      return el;
+    };
+    this.pins = [
+      ...landmarks.map((l, i) => ({ l, el: pin(l, 'pin'), h: null, prio: l.id === 'events' ? 99 : i })),
+      // smaller name tags over the other buildings (campus.markers), placed after the landmarks so they give way
+      ...markers.map((l, i) => ({ l, el: pin(l, 'pin bld'), h: l.top + 3, prio: 100 + i, bld: true })),
+    ];
     this.me = document.createElement('div');
     this.me.className = 'pin me';
     this.me.innerHTML = '<span>나</span>';

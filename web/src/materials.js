@@ -81,14 +81,72 @@ export function leafUrl(species, season, young = false) {
   return `assets/textures/leaf_${species}.png`;
 }
 
+// ---------------------------------------------------------------------------- shader patches
+// A material's shader edits stack (one no longer replaces another), and the program cache key names them all: by
+// default three keys a program by onBeforeCompile's source text, which is the same for every material with one kind
+// of patch whatever values it bakes in (the bark's foliage glow 0 and the leaves' 0.09 could share one program).
+const PATCHES = new WeakMap();
+function patchShader(m, key, edit) {
+  if (!PATCHES.has(m)) PATCHES.set(m, []);
+  const list = PATCHES.get(m);
+  list.push({ key, edit });
+  m.onBeforeCompile = (sh) => { for (const p of list) p.edit(sh); };
+  m.customProgramCacheKey = () => list.map((p) => p.key).join('|');
+}
+
+// replace the diffuse map read: `body` gets the texel in sampledDiffuseColor and applies it to diffuseColor
+function patchMap(m, key, uniforms, decl, body) {
+  patchShader(m, key, (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\n${decl}`)
+      .replace('#include <map_fragment>', `vec4 sampledDiffuseColor = texture2D( map, vMapUv );${body}`);
+  });
+}
+
+// Foliage: a touch of wrap lighting / translucency so canopies don't go black, and a dithered fade
+// close to the camera so the third-person camera never looks through a wall of leaves or a trunk.
+function foliage(m, glow = 0.09) {
+  patchShader(m, `foliage${glow}`, (sh) => {
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        {
+          float camD = length(vViewPosition);
+          float keep = smoothstep(1.2, 3.4, camD);
+          vec2 q = floor(gl_FragCoord.xy);
+          float dither = fract(dot(q, vec2(0.0671, 0.00584)) * 52.98);
+          if (keep < 0.999 && dither > keep) discard;
+        }`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+       totalEmissiveRadiance += diffuseColor.rgb * ${glow.toFixed(3)};`);
+  });
+}
+
 export class MaterialLibrary {
   constructor(defs) {
     this.defs = defs;
     this.mats = new Map();
+    this.instancedMats = new Map();
     this.leafMats = [];
-    this.recolorMats = [];
     this.season = 'summer';
     this.uniforms = { uGrass: { value: new THREE.Color(...SEASONS.summer.grass) } };
+  }
+
+  // three keeps one compiled-program slot per material. One drawn both by plain meshes and by InstancedMeshes (the
+  // metal of a building's railings and of the instanced lamps, the parked and the moving cars' parts) has its program
+  // looked up again at every switch between the two, many times a frame. Instanced kits (world.js) draw with their
+  // own copy, kept in step with the original (the season's leaf textures).
+  instanced(m) {
+    if (this.mats.get(m.name) !== m) return m;          // not a library material (a prop's own)
+    let v = this.instancedMats.get(m);
+    if (!v) {
+      v = m.clone();
+      v.onBeforeCompile = m.onBeforeCompile;            // (clone() keeps neither)
+      v.customProgramCacheKey = m.customProgramCacheKey;
+      this.instancedMats.set(m, v);
+      if (this.leafMats.includes(m)) this.leafMats.push(v);
+    }
+    return v;
   }
 
   get(name) {
@@ -109,10 +167,24 @@ export class MaterialLibrary {
         side: THREE.DoubleSide,
       });
       m.normalScale.set(d.nor ?? 0.9, d.nor ?? 0.9);
-      if (d.recolor) this._recolor(m);
-      else if (d.sat !== undefined) this._desaturate(m, d.sat);
-      else if (d.contrast !== undefined) this._contrast(m, d.contrast);
-      if (name.startsWith('bark')) this._foliage(m, 0.0);
+      if (d.recolor) {
+        // grass: keep the texture's detail, but drive the hue from the seasonal colour
+        patchMap(m, 'recolor', { uGrass: this.uniforms.uGrass }, 'uniform vec3 uGrass;', `
+          float lum = dot(sampledDiffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+          diffuseColor.rgb = uGrass * (0.45 + 1.6 * lum);`);
+      } else if (d.sat !== undefined) {
+        // grey down a warm photo texture (e.g. the 1997 granite / concrete of 공학관, 중앙도서관, 백주년기념관)
+        patchMap(m, 'sat', { uSat: { value: d.sat } }, 'uniform float uSat;', `
+          float lumS = dot(sampledDiffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+          sampledDiffuseColor.rgb = mix(vec3(lumS), sampledDiffuseColor.rgb, uSat);
+          diffuseColor *= sampledDiffuseColor;`);
+      } else if (d.contrast !== undefined) {
+        // tone a texture's detail down towards its own average colour (the 1997 roads' even asphalt)
+        patchMap(m, 'contrast', { uContrast: { value: d.contrast } }, 'uniform float uContrast;', `
+          sampledDiffuseColor.rgb = mix(texture2D( map, vMapUv, 9.0 ).rgb, sampledDiffuseColor.rgb, uContrast);
+          diffuseColor *= sampledDiffuseColor;`);
+      }
+      if (name.startsWith('bark')) foliage(m, 0.0);
     } else if (d.leaf) {
       const species = d.leaf;
       m = new THREE.MeshStandardMaterial({
@@ -129,7 +201,7 @@ export class MaterialLibrary {
       m.userData.young = !!d.young;
       m.userData.tint = d.tint || [1, 1, 1];
       m.userData.tintAutumn = d.tintAutumn || m.userData.tint;
-      this._foliage(m);
+      foliage(m);
       this.leafMats.push(m);
     } else if (d.image) {
       m = new THREE.MeshStandardMaterial({ map: loadTex('assets/textures/' + d.image, { repeat: false }), roughness: d.rough ?? 0.6 });
@@ -159,66 +231,6 @@ export class MaterialLibrary {
     m.name = name;
     this.mats.set(name, m);
     return m;
-  }
-
-  // Grass: keep the texture's detail, but drive the hue from a seasonal colour.
-  // grey down a warm photo texture (e.g. the 1997 granite / concrete of 공학관, 중앙도서관, 백주년기념관)
-  _desaturate(m, sat) {
-    m.userData.uSat = { value: sat };
-    m.onBeforeCompile = (sh) => {
-      sh.uniforms.uSat = m.userData.uSat;
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uSat;')
-        .replace('#include <map_fragment>', `
-          vec4 sampledDiffuseColor = texture2D( map, vMapUv );
-          float lumS = dot(sampledDiffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-          sampledDiffuseColor.rgb = mix(vec3(lumS), sampledDiffuseColor.rgb, uSat);
-          diffuseColor *= sampledDiffuseColor;
-        `);
-    };
-  }
-
-  // tone a texture's detail down towards its own average colour (the 1997 roads' even asphalt)
-  _contrast(m, k) {
-    m.onBeforeCompile = (sh) => {
-      sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `
-          vec4 sampledDiffuseColor = texture2D( map, vMapUv );
-          sampledDiffuseColor.rgb = mix(texture2D( map, vMapUv, 9.0 ).rgb, sampledDiffuseColor.rgb, ${k.toFixed(3)});
-          diffuseColor *= sampledDiffuseColor;
-        `);
-    };
-  }
-
-  _recolor(m) {
-    m.onBeforeCompile = (sh) => {
-      sh.uniforms.uGrass = this.uniforms.uGrass;
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform vec3 uGrass;')
-        .replace('#include <map_fragment>', `
-          vec4 sampledDiffuseColor = texture2D( map, vMapUv );
-          float lum = dot(sampledDiffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-          diffuseColor.rgb = uGrass * (0.45 + 1.6 * lum);
-        `);
-    };
-    this.recolorMats.push(m);
-  }
-
-  // Foliage: a touch of wrap lighting / translucency so canopies don't go black, and a dithered fade
-  // close to the camera so the third-person camera never looks through a wall of leaves or a trunk.
-  _foliage(m, glow = 0.09) {
-    m.onBeforeCompile = (sh) => {
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-          {
-            float camD = length(vViewPosition);
-            float keep = smoothstep(1.2, 3.4, camD);
-            vec2 q = floor(gl_FragCoord.xy);
-            float dither = fract(dot(q, vec2(0.0671, 0.00584)) * 52.98);
-            if (keep < 0.999 && dither > keep) discard;
-          }`)
-        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-         totalEmissiveRadiance += diffuseColor.rgb * ${glow.toFixed(3)};`);
-    };
   }
 
   setSeason(season) {

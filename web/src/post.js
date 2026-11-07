@@ -37,7 +37,7 @@ const FilmShader = {
 export class Post {
   constructor(renderer, scene, camera) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
     this.composer = new EffectComposer(renderer, rt);
     this.ao = new N8AOPass(scene, camera, size.x, size.y);
     this.ao.configuration.aoRadius = 2.2;
@@ -46,6 +46,11 @@ export class Post {
     this.ao.configuration.halfRes = true;
     this.ao.configuration.gammaCorrection = false;
     this.ao.setQualityMode('Medium');
+    // N8AO turns on its transparency mode when the scene holds any transparent material (glass doors, car glass, the
+    // tennis fence, the fountain spray): every frame it then walks the whole scene five times and draws it twice
+    // more (a third of a phone's frame time) only to lift the AO off those few see-through pixels
+    this.ao.autoDetectTransparency = false;
+    this.ao.configuration.transparencyAware = false;
     this.render = new RenderPass(scene, camera);
     this.film = new ShaderPass(FilmShader);
     this.output = new OutputPass();
@@ -54,6 +59,13 @@ export class Post {
   }
   _build() {
     const c = this.composer;
+    // MSAA only where the scene itself is drawn into the composer's targets (RenderPass). N8AO draws the scene into
+    // its own single-sample target and then fills these with full-screen passes only: 4 samples there would just be
+    // 4x the memory (two half-float screens) and a resolve after every pass.
+    const samples = this.hq ? 0 : 4;
+    for (const rt of [c.renderTarget1, c.renderTarget2]) {
+      if (rt.samples !== samples) { rt.samples = samples; rt.dispose(); }
+    }
     c.passes.length = 0;
     c.addPass(this.hq ? this.ao : this.render);
     c.addPass(this.film);
