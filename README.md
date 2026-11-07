@@ -29,6 +29,7 @@
 | ![음악관 현관: 1996년 사진(위)과 게임(아래)](docs/screenshots/53_music_door.jpg)<br>**음악관** 현관 · 1996년 | ![빌링슬리관 현관: 1996년 사진(위)과 게임(아래)](docs/screenshots/71_cmp_billingsley.jpg)<br>**빌링슬리관** 현관 · 1996년 |
 | ![용재관: 사진(왼쪽)과 게임(오른쪽)](docs/screenshots/72_cmp_yongjae.jpg)<br>**용재관** (1957 – 2013, 지금 경영관 자리) | ![옛 노천극장: 1997년 사진(위)과 게임(아래)](docs/screenshots/73_cmp_amphitheater.jpg)<br>**옛 노천극장** · 1997년 |
 | ![활천대: 2009년 사진(왼쪽)과 같은 자리에서 본 게임(오른쪽)](docs/screenshots/34_hwalcheon_2009.jpg)<br>**활천대** · 2009년, 독수리상 옆의 옛 자리 | ![백양로 가운데 초소: 1997년 사진(왼쪽)과 같은 카메라의 게임(오른쪽)](docs/screenshots/44_guard_booth_1997.jpg)<br>**백양로 초소** · 1997년 |
+| ![교육관 북쪽 끝과 서쪽 면: 2003년 가을 사진(왼쪽)과 게임(오른쪽)](docs/screenshots/104_gyoyuk_2003.jpg)<br>**교육관** · 연희관 앞 정원 · 2003년 가을 | ![벚나무: 2003년 봄 사진(왼쪽)과 게임(오른쪽)](docs/screenshots/105_cherry_2003.jpg)<br>**벚나무** · 백양로 끝 · 언더우드관 앞길 · 2003년 봄 |
 
 ## 게임 화면
 
