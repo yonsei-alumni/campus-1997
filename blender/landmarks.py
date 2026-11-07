@@ -648,8 +648,15 @@ def ivy_patch(iv, P, s0, s1, z0, z1, density, seedoff=0, holes=(), top=None, cov
     strands that merge into an almost continuous mat; each strand reaches its own height (most of them the
     eaves), and the window openings stay clear (the leaves only lap over their edges).
     holes: (s0, s1, z0, z1) openings to keep clear; top(s): wall top for gables; cover: 0..1 how much of the
-    wall the strands cover."""
+    wall the strands cover.
+
+    Every corner of a card carries its wind (corner colour, which blender/bake.py keeps for the leaves; read by
+    web/src/materials.js wallLeaf): R the card's phase, G 1 - how far the corner hangs below the card's stalk (m),
+    times how loose the card is: the stalk sits a quarter of the card above its middle, so the lower corners
+    flutter and the upper ones stay on the vine; cards farther off the wall, at the loose tips of the strands and
+    higher up the wall move more."""
     r = random.Random(int(s0 * 13 + z0 * 7 + seedoff * 101))
+    rw = random.Random(int(s0 * 13 + z0 * 7 + seedoff * 101) + 7919)     # (the phases: r's sequence stays the same)
     H = z1 - z0
     ph = r.uniform(0, 6.283)
 
@@ -685,9 +692,14 @@ def ivy_patch(iv, P, s0, s1, z0, z1, density, seedoff=0, holes=(), top=None, cov
         cell = r.randrange(4)
         u0, v0 = (cell % 2) * 0.5, (cell // 2) * 0.5
         dz = r.uniform(-0.1, 0.1)
+        rise = [-sa - ca, sa - ca, sa + ca, -sa + ca]                 # corner heights over the card's middle
+        stalk = 0.5 * max(rise)
+        loose = (0.75 + 1.5 * (off - 0.04)) * (1.0 + 0.6 * (1.0 - edge)) * (0.6 + 0.4 * min(1.0, max(0.0, z / 10.0)))
+        phase = rw.random()
         iv.face([P(s - ca + sa, z - sa - ca, off), P(s + ca + sa, z + sa - ca, off + dz),
                  P(s + ca - sa, z + sa + ca, off), P(s - ca - sa, z - sa + ca, off - dz)], 'leaf_ivy',
-                uvs=[(u0, v0), (u0 + .5, v0), (u0 + .5, v0 + .5), (u0, v0 + .5)])
+                uvs=[(u0, v0), (u0 + .5, v0), (u0 + .5, v0 + .5), (u0, v0 + .5)],
+                col=[(phase, 1.0 - min(1.0, max(0.0, stalk - h) * loose), 1.0, 1.0) for h in rise])
 
 
 WALK_FACES = []       # world-space quads (4 points each): the smoothed surface of every flight, exported as the invisible

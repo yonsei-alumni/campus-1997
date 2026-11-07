@@ -12,7 +12,8 @@ One float colour attribute, exported as COLOR_0:
                                                                                          } the next opening
   A  1 (free)
 White (1, 1, 1, 1) reads as open and under no ledge: what the web app gives a mesh without the attribute.  (The
-height over the ground, for the soil splashed up the walls, the web app reads from its own terrain.)
+height over the ground, for the soil splashed up the walls, the web app reads from its own terrain.)  Leaf faces (the
+ivy) take none of it: their corners keep the mesh's own corner colour, the wind data of landmarks.ivy_patch.
 
 G and B are linear in position over a face, so the corners carry them exactly.  The occlusion is not: a large flat
 quad (a 60 m band of glass behind the piers of 중앙도서관, the soffit of 학생회관's pilotis) is split into a grid of
@@ -423,6 +424,27 @@ def _coarsest(g):
     return best if best is not None else (np.arange(nu + 1), np.arange(nv + 1))
 
 
+def _own_colour(me, verts):
+    """The leaves take no occlusion or weathering: their corners keep the mesh's own colour instead (the ivy's wind,
+    landmarks.ivy_patch), white where it has none.  verts: original vertex ids (a leaf card is never split)."""
+    out = np.ones((len(verts), 4))
+    ca = me.color_attributes.get('Col')
+    if ca is None:
+        return out
+    c = np.empty(len(ca.data) * 4, np.float32)
+    ca.data.foreach_get('color', c)
+    c = c.reshape(-1, 4).astype(np.float64)
+    if ca.domain == 'CORNER':
+        lv = np.empty(len(me.loops), np.int32)
+        me.loops.foreach_get('vertex_index', lv)
+        v = np.ones((len(me.vertices), 4))
+        v[lv] = c
+        c = v
+    ok = verts < len(c)
+    out[ok] = np.round(c[verts[ok]] * 64) / 64                   # (the wind needs no finer: packs smaller)
+    return out
+
+
 # ----------------------------------------------------------------------------- driver
 def bake(objs):
     """Write the 'bake' colour attribute on every mesh object in objs (in place; large quads may be split).
@@ -556,7 +578,8 @@ def bake(objs):
             col[:, c] = np.round(col[:, c] * q) / q
         leaf = np.array([_is_leaf(mats[i].name) if i < len(mats) else False for i in range(max(len(mats), 1))])
         if leaf.any():
-            col[leaf[np.minimum(out.mi[out.lf], len(leaf) - 1)]] = 1.0
+            lf = leaf[np.minimum(out.mi[out.lf], len(leaf) - 1)]
+            col[lf] = _own_colour(ob.data, out.lv[lf])
         old = ob.data
         ob.data = out.write(old.name, mats, col)
         bpy.data.meshes.remove(old)

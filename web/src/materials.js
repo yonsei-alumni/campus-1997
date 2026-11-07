@@ -131,10 +131,10 @@ export const restShadow = (vs) => vs.replace('#include <shadowmap_vertex>', `
     worldPosition.xyz += windW;
   #endif`);
 
-// Wind in the instanced plants (trees, shrubs; their impostors are rendered from the plain meshes and stay still, as do
-// the ivy and hedges merged into the buildings): the whole plant leans downwind by the square of the height above its
-// foot (h^2/(h^2+60): trunks barely move, crown tips 10-20 cm), two slow sines whose phase runs downwind with the
-// plant's position (a gust travels along the 백양로 ginkgo row, neighbours out of step), under a slow gust swell.
+// Wind in the instanced plants (trees, shrubs; their impostors are rendered from the plain meshes and stay still; the
+// ivy merged into the halls has its own, wallWind below): the whole plant leans downwind by the square of the height
+// above its foot (h^2/(h^2+60): trunks barely move, crown tips 10-20 cm), two slow sines whose phase runs downwind
+// with the plant's position (a gust travels along the 백양로 ginkgo row, neighbours out of step), under a slow gust swell.
 // Leaves (flutter: metres) also flutter on their own, shrubs hardly (smoothstep on the height).
 function sway(m, flutter) {
   patchShader(m, `sway${flutter}`, (sh) => {
@@ -166,6 +166,43 @@ function sway(m, flutter) {
           transformed += transpose(im) * windW / dot(im[0], im[0]);
         }
         #endif`));
+  });
+}
+
+// Wind in the ivy merged into the stone halls, which has no instance to take a height and a phase from: each corner
+// of a leaf card carries them (blender/landmarks.py ivy_patch, in the baked attribute): bake.r the card's phase,
+// 1 - bake.g how far the corner hangs below the card's stalk (m) times how loose the card is. The lower corners lift
+// off the wall and swing along it, 3-5 cm at the tips of the cards, under the trees' slow gust swell, a gust running
+// downwind across the wall in a wave; nothing moves where the attribute is white (a mesh without it).
+const WALL_WIND = /* glsl */`
+{
+  float ivW = 1.0 - bake.g;
+  if (ivW > 0.0) {
+    const vec2 dir = vec2(0.92, -0.38);
+    float t = uWindT, ph = bake.r * 6.2832;
+    vec3 n = normalize(objectNormal);
+    vec3 side = cross(vec3(0.0, 1.0, 0.0), n);
+    side = dot(side, side) > 1e-4 ? normalize(side) : vec3(1.0, 0.0, 0.0);
+    vec3 wp = (modelMatrix * vec4(transformed, 1.0)).xyz;
+    float along = dot(wp.xz, dir);
+    float gust = (0.7 + 0.3 * sin(t * 0.21 - along * 0.01)) * (0.75 + 0.25 * sin(t * 1.3 - along * 0.35));
+    float sp = 1.0 + 0.25 * fract(bake.r * 7.13);                 // cards out of step in speed too
+    float lift = 0.6 * sin(t * 3.9 * sp + ph) + 0.4 * sin(t * 6.3 * sp + ph * 2.0 + 1.0);
+    float swing = sin(t * 2.7 * sp + ph * 1.7);
+    vec3 ivD = (n * lift * 0.8 + side * swing * 0.5) * (ivW * 0.06 * gust);
+    transformed += ivD;
+    windW += mat3(modelMatrix) * ivD;
+  }
+}`;
+
+function wallWind(m) {
+  patchShader(m, 'wallWind', (sh) => {
+    sh.uniforms.uWindT = windTime;
+    let vs = sh.vertexShader;
+    if (!vs.includes('attribute vec4 bake;')) vs = vs.replace('#include <common>', '#include <common>\nattribute vec4 bake;');
+    if (!vs.includes('uniform float uWindT;')) vs = vs.replace('#include <common>', '#include <common>\nuniform float uWindT;');
+    if (!vs.includes('vec3 windW')) vs = restShadow(vs.replace('#include <begin_vertex>', '#include <begin_vertex>\nvec3 windW = vec3(0.0);'));
+    sh.vertexShader = vs.replace('#include <project_vertex>', `${WALL_WIND}\n#include <project_vertex>`);
   });
 }
 
@@ -356,6 +393,21 @@ const BAKE_AO = /* glsl */`
   #endif
 }`;
 
+// a copy of a library material for meshes with the baked attribute (white where one has none), with the original's
+// shader edits looked up at compile time first: also those made later (the season's, the baked sun shadow's)
+function bakedCopy(m) {
+  const v = m.clone();
+  v.userData = { ...m.userData, baked: true };
+  v.defaultAttributeValues = { bake: [1, 1, 1, 1] };
+  // (one the copy was given itself as well, by whichever came first - the baked sun shadow's, from main.js - is not
+  // replayed from the original)
+  const mine = () => PATCHES.get(v).slice(1).map((p) => p.key);
+  PATCHES.set(v, [{ get key() { return (PATCHES.get(m) || []).map((p) => p.key).join('|'); },
+    edit: (sh) => { const own = mine(); for (const p of PATCHES.get(m) || []) if (!own.includes(p.key)) p.edit(sh); } }]);
+  if (!PATCHES.has(m)) PATCHES.set(m, []);
+  return v;
+}
+
 function bakeShade(m, uniforms, weather) {
   patchShader(m, weather ? 'bakeW' : 'bake', (sh) => {
     Object.assign(sh.uniforms, uniforms);
@@ -397,27 +449,33 @@ export class MaterialLibrary {
 
   // The halls' and landmarks' copy of a library material, reading their baked attribute (see BAKE_VERT above);
   // age scales the material's weathering (a building's GLB extras). It keeps the original's name and its shader
-  // edits, also those made later. The leaves (ivy) keep their own vertex colours, which the bake leaves white.
+  // edits, also those made later. The leaves (ivy) take no shade from it but their wind (wallLeaf).
   baked(m, age = 1) {
-    if (this.mats.get(m.name) !== m || !m.isMeshStandardMaterial || m.vertexColors) return m;
+    if (this.mats.get(m.name) !== m || !m.isMeshStandardMaterial) return m;
+    if (m.vertexColors) return this.leafMats.includes(m) ? this.wallLeaf(m) : m;
     const key = `${m.name}|${age}`;
     let v = this.bakedMats.get(key);
     if (!v) {
-      v = m.clone();
-      v.userData = { ...m.userData, baked: true };
-      v.defaultAttributeValues = { bake: [1, 1, 1, 1] };
+      v = bakedCopy(m);
       const weather = (this.defs[m.name]?.weather ?? 0) * age;
-      const own = PATCHES.get(m);
-      // the original's edits, looked up at compile time, then ours
-      // (one the copy was given itself as well, by whichever came first - the baked sun shadow's, from main.js - is
-      // not replayed from the original)
-      const mine = () => PATCHES.get(v).slice(1).map((p) => p.key);
-      PATCHES.set(v, [{ get key() { return (PATCHES.get(m) || []).map((p) => p.key).join('|'); },
-        edit: (sh) => { const own = mine(); for (const p of PATCHES.get(m) || []) if (!own.includes(p.key)) p.edit(sh); } }]);
-      if (!own) PATCHES.set(m, []);
       const { uBakeAO, uTerrain, uTerrainGrid } = this.uniforms;
       v.userData.uWeather = { value: weather };
       bakeShade(v, { uBakeAO, uTerrain, uTerrainGrid, uWeather: v.userData.uWeather }, weather > 0);
+      this.bakedMats.set(key, v);
+    }
+    return v;
+  }
+
+  // The leaves merged into the halls (the ivy): their baked attribute is the wind of each corner (WALL_WIND), not a
+  // colour, so the copy drops the vertex colours; it follows the season's leaf textures like the original
+  wallLeaf(m) {
+    const key = `${m.name}|wall`;
+    let v = this.bakedMats.get(key);
+    if (!v) {
+      v = bakedCopy(m);
+      v.vertexColors = false;
+      wallWind(v);
+      this.leafMats.push(v);
       this.bakedMats.set(key, v);
     }
     return v;
