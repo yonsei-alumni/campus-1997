@@ -5,6 +5,7 @@ import '@fontsource/do-hyeon/400.css';
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { MaterialLibrary, SEASONS, texturesReady, updatePcss } from './materials.js';
+import { ATMOS, globalPatch, setupAtmosphere, updateAtmosphere } from './materials.js';
 import { Heightfield, makeNearTerrain, makeFarTerrain, makeFarForest, makeSummitTower, makeCity, makeSky } from './terrain.js';
 import { loadGLB, bindMaterials, mergeStatic, InstancedKit, Forest } from './world.js';
 import { Player, Colliders } from './player.js';
@@ -65,6 +66,7 @@ async function main() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
+  // switches fog on (USE_FOG) for every material; what they draw is the height fog of materials.js ATMOS (globalPatch)
   const fogColor = new THREE.Color(0xc4cfd8);
   scene.fog = new THREE.FogExp2(fogColor, 0.0003);
   const camera = new THREE.PerspectiveCamera(66, innerWidth / innerHeight, 0.1, 12000);
@@ -99,7 +101,8 @@ async function main() {
   // sunlit ground, the trees and the sky look as before.)
   scene.add(new THREE.HemisphereLight(0xcfe0ff, 0xc4b090, 1.25));
 
-  const sky = makeSky(skyMeta, fogColor.clone().convertSRGBToLinear());
+  setupAtmosphere(sunDir);        // cloud shadows and the fog's sun side
+  const sky = makeSky(skyMeta);
   sky.material.uniforms.uExposure.value = 1.25;
   scene.add(sky);
 
@@ -530,6 +533,18 @@ async function main() {
     post.setSize(innerWidth, innerHeight);          // CSS pixels: EffectComposer applies the pixel ratio itself
   });
 
+  // ---------------------------------------------------------------- atmosphere (materials.js ATMOS)
+  // every material in the scene gets the drifting cloud shadows and the height fog: the library's (patched as they
+  // are made) and the rest, made here and there (terrain, far hills, city, impostors, people, banners, the fountain)
+  scene.traverse((o) => { for (const m of [].concat(o.material || [])) globalPatch(m); });
+  const cloudK = ATMOS.uCloud.value.z;
+  addEventListener('keydown', (e) => {        // C: cloud shadows off / on (no option for it in the settings card)
+    if (e.code !== 'KeyC' || e.repeat || (!started && !bird.active) || ui.memoryOpen || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const on = ATMOS.uCloud.value.z === 0;
+    ATMOS.uCloud.value.z = on ? cloudK : 0;
+    ui.toast(on ? '구름 그림자 켬' : '구름 그림자 끔');
+  });
+
   // ---------------------------------------------------------------- loop
   const clock = new THREE.Clock();
   let tAcc = 0, lastPlace = 0;
@@ -571,6 +586,7 @@ async function main() {
       camera.lookAt(p.x + d.x * 40, center.h(s + 40) + 6, -(p.y + d.y * 40));
     }
     sky.position.copy(camera.position);
+    updateAtmosphere(dt);
     forest.update(focus);
     crowd.update(dt, tAcc, started ? player : NOBODY, focus);
     crowd.bubbles.update(tAcc, started && !bird.active);
@@ -627,6 +643,7 @@ async function main() {
   };
   window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows, fountainWater,
     startWalk, enterBird, leaveBird, record, ball, post };
+  window.__y97.atmos = ATMOS;
 }
 
 // 광혜원's OSM outline takes in its whole stone platform (기단) and more; the walker collides with the hall's walls

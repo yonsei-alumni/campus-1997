@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { loadTex, shrinkImage, pcss } from './materials.js';
 import { MOBILE, mulberry, placeMatrix, versioned } from './util.js';
+import { ATMOS, ATMOS_GLSL } from './materials.js';
 
 export class Heightfield {
   constructor(data, half, step, n) {
@@ -165,7 +166,8 @@ export function makeFarTerrain(hf, nearHalf) {
     const r = Math.hypot(x, y);
     const n = hillNoise(x, y);
     const forest = THREE.MathUtils.smoothstep(h, 55 + n * 25, 95 + n * 30);
-    const city = [0.47 + n * 0.06, 0.47 + n * 0.05, 0.47 + n * 0.04];
+    // (linear albedo of roofs and streets seen from afar: brighter came out a white plain under the haze)
+    const city = [0.25 + n * 0.05, 0.245 + n * 0.045, 0.24 + n * 0.04];
     // sRGB forest greens converted to linear (vertex colours are linear): dark, as in the 1997 photos
     wc.setRGB(0.2 + n * 0.06, 0.3 + n * 0.06, 0.15, THREE.SRGBColorSpace);
     const wood = [wc.r, wc.g, wc.b];
@@ -282,7 +284,8 @@ export function makeCity(hf, nearHalf, count = 1600) {
   return im;
 }
 
-export function makeSky(skyMeta, fogColor) {
+// the horizon fades into the scene's fog colour for that direction (materials.js ATMOS): seamless with far terrain
+export function makeSky(skyMeta) {
   const tex = new THREE.TextureLoader().load(versioned('assets/hdri/sky_8k.jpg'), (t) => {
     if (MOBILE) { t.image = shrinkImage(t.image, 4096); t.needsUpdate = true; }   // 8K sky: 90 MB on the GPU
   });
@@ -290,10 +293,11 @@ export function makeSky(skyMeta, fogColor) {
   tex.wrapS = THREE.RepeatWrapping;
   tex.anisotropy = 4;
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uSky: { value: tex }, uV0: { value: skyMeta.sky_v0 }, uFog: { value: fogColor }, uExposure: { value: 1.0 } },
+    uniforms: { uSky: { value: tex }, uV0: { value: skyMeta.sky_v0 }, uExposure: { value: 1.0 }, ...ATMOS },
     vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position.z = gl_Position.w; }`,
     fragmentShader: `
-      uniform sampler2D uSky; uniform float uV0; uniform vec3 uFog; uniform float uExposure; varying vec3 vDir;
+      uniform sampler2D uSky; uniform float uV0; uniform float uExposure; varying vec3 vDir;
+      ${ATMOS_GLSL}
       void main(){
         vec3 d = normalize(vDir);
         float u = atan(d.z, d.x) * 0.15915494 + 0.5;
@@ -301,7 +305,7 @@ export function makeSky(skyMeta, fogColor) {
         float v = (el * 0.31830989 + 0.5 - uV0) / (1.0 - uV0);
         vec3 c = texture2D(uSky, vec2(u, clamp(v, 0.002, 0.998))).rgb * uExposure;
         float hz = smoothstep(-0.02, 0.10, d.y);
-        c = mix(uFog, c, hz * 0.85 + 0.15 * smoothstep(0.1, 0.4, d.y));
+        c = mix(y97FogColor(d), c, hz * 0.85 + 0.15 * smoothstep(0.1, 0.4, d.y));
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
       }`,

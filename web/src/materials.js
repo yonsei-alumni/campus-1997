@@ -1,6 +1,6 @@
 // Shared PBR material library, built from data/materials.json (same file Blender uses).
 import * as THREE from 'three';
-import { MOBILE, versioned } from './util.js';
+import { MOBILE, versioned, mulberry } from './util.js';
 
 const texLoader = new THREE.TextureLoader();
 const cache = new Map();
@@ -351,6 +351,7 @@ export class MaterialLibrary {
     }
     pcss(m);
     m.name = name;
+    globalPatch(m);
     this.mats.set(name, m);
     return m;
   }
@@ -464,4 +465,185 @@ export function updatePcss(light, on) {
   if (!on) { u.x = 0; return; }
   const w = cam.right - cam.left, depth = cam.far - cam.near, k = Math.tan(PCSS.sunDeg * Math.PI / 360) / w;
   u.set(k * depth, k * PCSS.reach, PCSS.minTexels / sh.mapSize.x, 4 * w / depth);
+}
+
+// ---------------------------------------------------------------------------- atmosphere: cloud shadows, height fog
+// One set of uniforms shared by every material in the scene (globalPatch), updated once a frame from main.js:
+//  - cloud shadows (#16): only the sunlight is dimmed under clouds drifting over the campus. A tileable
+//    two-channel fBm texture is read twice where the sun ray through the pixel meets the cloud layer (so walls and
+//    hillsides get the shadow of the cloud above them): a rotated 1.7 km tile that gathers the clouds into clusters
+//    and clear gaps and bends the second read, a 480 m tile of cloud shapes; no 480 m repeat shows from the air.
+//    A light factor, not a caster: independent of the (cached) shadow maps, and on phones too.
+//  - height fog (#17): replaces three's uniform FogExp2. The haze thins with height (its extinction integrated along
+//    the view ray from the camera's height to the pixel's), so the city in the valleys is hazy and the summits clearer,
+//    and a high view looks down through thinner air. Its colour is the sky photo's horizon (makeSky blends to the same
+//    y97FogColor): bright and warm towards the sun, a darker blue-grey away from it.
+const CLOUD_TILE = 480, CLOUD_TILE_B = 1730;             // metres
+const CLOUD_WIND = new THREE.Vector2(4.4, -2.6);         // m/s in three's XZ (z = -north): from the west-south-west
+const CLOUD_WIND_B = new THREE.Vector2(3.1, -2.2);       // the large tile lags behind: the cloud shapes slowly change
+export const ATMOS = {
+  uCloudTex: { value: null },
+  // 1/tiles, strength (share of the sunlight a cloud takes: thin fair-weather clouds), threshold (~1/3 of sky cloudy)
+  uCloud: { value: new THREE.Vector4(1 / CLOUD_TILE, 1 / CLOUD_TILE_B, 0.4, 0.62) },
+  uCloudOff: { value: new THREE.Vector4() },             // drift of the two tiles, in texture units
+  uSunW: { value: new THREE.Vector3(0, 1, 0) },          // towards the sun, world
+  // extinction at height 0 (1/m: from the campus ~28 % haze over 안산 1.7 km off, ~65 % on the hills 7 km off, as
+  // in the May 1997 photo of 백양로; ~7 % over the campus seen from 200 m up), its falloff with height (1/m)
+  uFogH: { value: new THREE.Vector2(2.5e-4, 1 / 550) },
+  uFogAway: { value: new THREE.Color().setRGB(0.27, 0.3, 0.39) },   // linear: the horizon away from the sun
+  uFogSun: { value: new THREE.Color().setRGB(0.69, 0.68, 0.66) },   // and round the sun's azimuth (warmer)
+  uFogGlow: { value: new THREE.Color().setRGB(0.22, 0.17, 0.1) },   // forward scattering close to the sun
+};
+
+// GLSL shared by the patched materials and the sky dome
+export const ATMOS_GLSL = /* glsl */`
+#define Y97_ATMOS
+#define Y97_CLOUD_H 1500.0
+uniform sampler2D uCloudTex;
+uniform vec4 uCloud, uCloudOff;
+uniform vec3 uSunW;
+uniform vec2 uFogH;
+uniform vec3 uFogAway, uFogSun, uFogGlow;
+// factor on the sun's direct light at world point p
+float y97Cloud(vec3 p) {
+  vec2 q = p.xz + uSunW.xz * ((Y97_CLOUD_H - p.y) / uSunW.y);
+  vec2 b = texture2D(uCloudTex, mat2(0.8, 0.6, -0.6, 0.8) * q * uCloud.y + uCloudOff.zw).rg - 0.5;
+  float a = texture2D(uCloudTex, q * uCloud.x + uCloudOff.xy + b * 0.15).r;
+  return 1.0 - uCloud.z * smoothstep(uCloud.w - 0.1, uCloud.w + 0.1, a + b.y);
+}
+// in-scattered colour seen along unit direction dir (world): the horizon of the sky photo
+vec3 y97FogColor(vec3 dir) {
+  float s = dot(dir, uSunW);
+  float w = clamp((1.0 + s) * 0.6, 0.0, 1.0);
+  return mix(uFogAway, uFogSun, w * w * w) + uFogGlow * pow(max(s, 0.0), 12.0);
+}
+// share of the fog colour over rel = pixel - camera (world): extinction uFogH.x * exp(-uFogH.y * height), integrated
+float y97FogAmount(vec3 rel) {
+  float x = uFogH.y * rel.y;
+  float f = abs(x) > 1e-4 ? (1.0 - exp(-x)) / x : 1.0 - 0.5 * x;
+  return 1.0 - exp(-uFogH.x * exp(-uFogH.y * cameraPosition.y) * length(rel) * f);
+}
+`;
+
+const ATMOS_DONE = new WeakSet();
+const DEFAULT_OBC = THREE.Material.prototype.onBeforeCompile;
+function atmosEdit(sh) {
+  if (sh.fragmentShader.includes('Y97_ATMOS')) return;     // (once, whatever wraps whom)
+  Object.assign(sh.uniforms, ATMOS);
+  // world position from the view-space one every material has here (instancing, skinning, morphs included)
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec3 vY97World;')
+    .replace('#include <fog_vertex>', '#include <fog_vertex>\nvY97World = (mvPosition.xyz - viewMatrix[3].xyz) * mat3(viewMatrix);');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', `#include <common>\nvarying vec3 vY97World;\n${ATMOS_GLSL}`)
+    // The cloud factor rides on the sun's colour wherever three's light loop (or a patched copy of it) fetches it, and
+    // on the sky light: the HDRI holds the sun too (70 % of what it throws on the ground), which a cloud also hides.
+    // Wrappers + macros, so the chunks stay untouched. Only in the fogged main scene: the impostor and portrait
+    // renders (no fog) must not bake a cloud in.
+    .replace('#include <lights_pars_begin>', `#include <lights_pars_begin>
+#ifdef USE_FOG
+float y97CloudPx = -1.0;
+float y97CloudHere() { if (y97CloudPx < 0.0) y97CloudPx = y97Cloud(vY97World); return y97CloudPx; }
+#if NUM_DIR_LIGHTS > 0
+void y97DirectionalLightInfo( const in DirectionalLight directionalLight, out IncidentLight light ) {
+  getDirectionalLightInfo( directionalLight, light );
+  light.color *= y97CloudHere();
+}
+#define getDirectionalLightInfo y97DirectionalLightInfo
+#endif
+#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV ) && defined( STANDARD )
+float y97SkySun() { return 1.0 - 0.7 * (1.0 - y97CloudHere()); }
+vec3 y97IBLIrradiance( const in vec3 normal ) { return getIBLIrradiance( normal ) * y97SkySun(); }
+vec3 y97IBLRadiance( const in vec3 viewDir, const in vec3 normal, const in float roughness ) {
+  return getIBLRadiance( viewDir, normal, roughness ) * y97SkySun();
+}
+#define getIBLIrradiance y97IBLIrradiance
+#define getIBLRadiance y97IBLRadiance
+#endif
+#endif`)
+    .replace('#include <fog_fragment>', `#ifdef USE_FOG
+{
+  vec3 fogRel = vY97World - cameraPosition;
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, y97FogColor(normalize(fogRel)), y97FogAmount(fogRel));
+}
+#endif`);
+}
+
+// Give a material the shared atmosphere (cloud shadows + height fog). Safe to call more than once and on any material;
+// an onBeforeCompile set by hand before (terrain, people, banners) stays, as the first edit of the stack.
+export function globalPatch(m) {
+  if (!m || ATMOS_DONE.has(m) || m.fog === false || m.isRawShaderMaterial) return m;
+  if (m.isShaderMaterial ? !m.vertexShader.includes('#include <fog_vertex>') || !m.fragmentShader.includes('#include <fog_fragment>')
+    : !(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial || m.isMeshBasicMaterial || m.isMeshToonMaterial)) return m;
+  ATMOS_DONE.add(m);
+  if (/(^|\|)atmos(\||$)/.test(m.customProgramCacheKey())) return m;   // a library material's instanced copy
+  if (!PATCHES.has(m) && m.onBeforeCompile !== DEFAULT_OBC) {
+    const own = m.onBeforeCompile;
+    PATCHES.set(m, [{ key: `own${hashString(own.toString())}`, edit: own }]);
+  }
+  patchShader(m, 'atmos', atmosEdit);
+  m.needsUpdate = true;
+  return m;
+}
+
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+}
+
+// sunDir: unit vector towards the sun (world)
+export function setupAtmosphere(sunDir) {
+  ATMOS.uSunW.value.copy(sunDir);
+  ATMOS.uCloudTex.value = cloudTexture();
+}
+
+// once a frame: the clouds drift (offsets wrapped to [0, 1) texture units: no precision loss over a long session)
+export function updateAtmosphere(dt) {
+  const o = ATMOS.uCloudOff.value;
+  // the large tile is read rotated (the mat2 in y97Cloud): its drift in its own axes
+  const bx = 0.8 * CLOUD_WIND_B.x - 0.6 * CLOUD_WIND_B.y, by = 0.6 * CLOUD_WIND_B.x + 0.8 * CLOUD_WIND_B.y;
+  o.x -= CLOUD_WIND.x * dt / CLOUD_TILE; o.y -= CLOUD_WIND.y * dt / CLOUD_TILE;
+  o.z -= bx * dt / CLOUD_TILE_B; o.w -= by * dt / CLOUD_TILE_B;
+  o.set(o.x - Math.floor(o.x), o.y - Math.floor(o.y), o.z - Math.floor(o.z), o.w - Math.floor(o.w));
+}
+
+// 256² tileable fBm of periodic gradient noise (4 octaves, 3 to 24 cells across), two independent channels, each
+// scaled to mean 0.5 and spread 0.18 (so the threshold in uCloud sets the share of sky that is cloud)
+function cloudTexture(N = 256) {
+  const rnd = mulberry(1997);
+  const octaves = [3, 6, 12, 24];
+  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+  const data = new Uint8Array(N * N * 2);
+  const v = new Float32Array(N * N);
+  for (let ch = 0; ch < 2; ch++) {
+    const grads = octaves.map((p) => Float32Array.from({ length: p * p }, () => rnd() * Math.PI * 2));
+    let s1 = 0, s2 = 0;
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        let sum = 0, amp = 1;
+        octaves.forEach((p, o) => {
+          const x = (i / N) * p, y = (j / N) * p;
+          const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+          const g = (cx, cy, dx, dy) => { const a = grads[o][(cy % p) * p + (cx % p)]; return Math.cos(a) * dx + Math.sin(a) * dy; };
+          const u = fade(fx), w = fade(fy);
+          const n0 = g(x0, y0, fx, fy) * (1 - u) + g(x0 + 1, y0, fx - 1, fy) * u;
+          const n1 = g(x0, y0 + 1, fx, fy - 1) * (1 - u) + g(x0 + 1, y0 + 1, fx - 1, fy - 1) * u;
+          sum += amp * (n0 * (1 - w) + n1 * w);
+          amp *= 0.5;
+        });
+        v[j * N + i] = sum;
+        s1 += sum; s2 += sum * sum;
+      }
+    }
+    const mean = s1 / (N * N), sd = Math.sqrt(s2 / (N * N) - mean * mean);
+    for (let k = 0; k < N * N; k++) data[k * 2 + ch] = Math.round(THREE.MathUtils.clamp(0.5 + ((v[k] - mean) / sd) * 0.18, 0, 1) * 255);
+  }
+  const t = new THREE.DataTexture(data, N, N, THREE.RGFormat, THREE.UnsignedByteType);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
 }

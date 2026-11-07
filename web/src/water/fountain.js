@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { OceanSim, defaultOceanParams } from './ultra-water/OceanSim.js';
 import { WaveCaustics } from './ultra-water/Caustics.js';
+import { patchShader } from '../materials.js';
 
 const N = 64;
 const CASCADES = [4.5, 1.5, 0.5, 0.19];    // 4.5 = 3 x 1.5 = 9 x 0.5 exactly, so the caustic tile (all three summed) tiles
@@ -186,6 +187,9 @@ void main() {
     shadow = getShadow(directionalShadowMap[0], dls.shadowMapSize, dls.shadowIntensity, dls.shadowBias, dls.shadowRadius, vDirectionalShadowCoord[0]);
   #endif
   vec3 sun = uSunColor * shadow;
+  #if defined( Y97_ATMOS ) && defined( USE_FOG )
+    sun *= y97Cloud(vWorld);     // the drifting cloud shadows (materials.js globalPatch)
+  #endif
   // irradiance from the sky (pre-filtered environment, as three's getIBLIrradiance) and the hemisphere light
   vec3 ambient = PI * textureCubeUV(uEnvMap, vec3(0.0, 1.0, 0.0), 1.0).rgb * uEnvI + uSkyColor;
 
@@ -390,7 +394,7 @@ export class FountainWater {
     if (!m) return;
     this.sprayT = { value: 0 };
     const cx = this.center.x, cz = this.center.z, cy = this.center.y, t = this.sprayT;
-    m.onBeforeCompile = (sh) => {
+    patchShader(m, 'spray', (sh) => {       // stacked on the library's own patches (the atmosphere)
       sh.uniforms.uSprayT = t;
       sh.uniforms.uSprayC = { value: new THREE.Vector3(cx, cy, cz) };
       sh.vertexShader = sh.vertexShader
@@ -416,7 +420,7 @@ float sprH(float n) { return fract(sin(n * 127.1) * 43758.5453); }`)
   float gap = step(0.25, h);
   diffuseColor.a *= clamp((0.12 + 0.95 * lump) * (0.35 + 0.65 * thread) * gap + 0.04, 0.0, 1.0);
 }`);
-    };
+    });
     m.needsUpdate = true;
   }
 

@@ -32,7 +32,8 @@ const FilmShader = {
         vec3 g = mix(c.rgb, blur, 0.5);
         float l = dot(g, vec3(0.299, 0.587, 0.114));
         g = mix(vec3(l), g, 0.82);                                 // desaturate
-        g = g * vec3(1.08, 1.0, 0.86) + vec3(0.035, 0.02, 0.0);    // warm, lifted blacks
+        // warm, lifted blacks (lifted less since the height fog hazes the distance itself: no milky double haze)
+        g = g * vec3(1.08, 1.0, 0.86) + vec3(0.024, 0.014, 0.0);
         g = pow(g, vec3(0.95));
         float vig = smoothstep(0.85, 0.25, length(d * vec2(1.25, 1.0)));
         g *= mix(0.62, 1.0, vig);
