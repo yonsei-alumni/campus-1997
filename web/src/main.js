@@ -130,8 +130,9 @@ async function main() {
   lib.setTerrain(hfNear);
   const hfFar = new Heightfield(farData, T.far.half, T.far.step, T.far.n);
   // the campus's static sun shadow baked into one texture (src/bakedshadow.js): the phones' only sun shadow, the
-  // desktop's beyond the shadow map; on the terrain here, on every other lit material once the scene is built
-  const sunMap = new SunMap(hfNear).load();
+  // desktop's beyond the shadow map; on the terrain here, on every other lit material once the scene is built.
+  // Phones also take the halls' and landmarks' own baked shadow on their walls and roofs (blender/bake.py).
+  const sunMap = new SunMap(hfNear, { walls: !renderer.shadowMap.enabled }).load();
   const terrain = makeNearTerrain(hfNear, campus, lib);
   sunMap.patch(terrain.material, 0);
   scene.add(terrain);
@@ -682,7 +683,7 @@ async function main() {
   window.__y97 = { scene, camera, player, renderer, forest, ui, lib, setSeason, crowd, cast, traffic, bird, toggleBird, shadows, fountainWater,
     startWalk, enterBird, leaveBird, record, ball, post, grass, sunMap, blobs,
     // tools/bake_sun_shadows.mjs (desktop path: it draws with the shadow map; the page needs reloading afterwards)
-    bakeSunMap: () => bakeSunMap({ renderer, scene, sun, sunDir, shadows, forest, hf: hfNear, hide: [banners, ball?.mesh], skip: farScenery }) };
+    bakeSunMap: () => bakeSunMap({ renderer, scene, sun, sunDir, shadows, forest, hf: hfNear, walk: walkables, hide: [banners, ball?.mesh], skip: farScenery }) };
   window.__y97.atmos = ATMOS;
 }
 
