@@ -13,7 +13,7 @@ STYLE = {
     'gym':    dict(wall='concrete', alt='concrete', glass='glass', frame='frame_dark', bay=4.5, ww=0.8, sill=4.6, head=0.4, band=False, depth=0.2, mull=3),
     # 1997 halls from the university's building photos (yonsei.ac.kr/sc/349): red brick (알렌관 · 언어연구교육원;
     # 광복관, once here, was granite: blender/landmarks.py kwangbok), tan tile (국제학사), pale grey rubble with dressed-stone trim and a slate roof (빌링슬리관: the 1996
-    # 의류환경학과 album photo on its front, reference/재상봉_기념집_고증.md)
+    # 의류환경학과 album photo on its front, reference/고증.md)
     'brick':  dict(wall='brick_red', alt='concrete', glass='glass', frame='frame_white', bay=3.0, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.22, mull=1, trim='stone_trim'),
     'tile':   dict(wall='tile_facade', alt='concrete', glass='glass', frame='frame_silver', bay=3.2, ww=0.5, sill=0.95, head=0.6, band=False, depth=0.2, mull=1),
     'stone_pale': dict(wall='stone_rubble_gray', alt='stone_rubble_gray', glass='glass', frame='frame_dark', bay=3.0, ww=0.45, sill=0.9, head=0.7, band=False, depth=0.3, mull=1, trim='stone_trim'),
@@ -115,7 +115,7 @@ def wall_edge(mb, a, b, z0, z1, nfloors, fh, st, rnd, skip_windows=False, ground
 
 # ----------------------------------------------------------------------------- front doors
 # What the hall doors were like, from the 1996 graduation-album photos of the departments on their halls' steps
-# (2022 재상봉 기념문집 「25년 전 우리는」, reference/재상봉_기념집_고증.md): the postwar halls a pair or four leaves of
+# (2022 재상봉 기념문집 「25년 전 우리는」, reference/고증.md): the postwar halls a pair or four leaves of
 # aluminium-framed glass under a transom (백주년기념관, 음악관), a flat concrete canopy over them (음악관's deep one), a
 # granite flight down to the walk with low granite side walls and steel handrails once it is high (과학관,
 # 백주년기념관); the old stone halls a

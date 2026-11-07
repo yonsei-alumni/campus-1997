@@ -183,7 +183,7 @@ def along_raw(s, off):
 # road stayed flat for 100 m in from the gate, then climbed 20.6 m to the 삼거리, 11.6 of them in the last 110 m.
 # The designers of the 2015 rebuilding (Annual Technical Report(지하융복합)_2023, 2.1: 「정문에서 본관 앞 삼거리까지
 # 약 12m의 레벨 차가 있는 완만한 경사」, about 8 m of it over the 360 m of the building) drew the road before the works
-# in their long section (그림 2.5 (a), reference/백양로_1997_고증.md): its ground line, read off column by column, rises
+# in their long section (그림 2.5 (a), reference/고증.md): its ground line, read off column by column, rises
 # about 1.1 m in the first 50 m, runs nearly level to ~150 m and then climbs evenly (about 2.5 %) to the 삼거리.
 # So: the road gets that section, 12 m from the gate's height, and the ground around it moves with it (by the
 # difference between the section and the ground's trend across a 120 m band), fading out 50-230 m from the road;
@@ -648,7 +648,7 @@ for pid, style, lv, uv in YONGJAE['parts']:
                           frame=dict(o=YONGJAE['o'], ang=round(YONGJAE['ang'], 5), uv=uv)))
 
 # Halls on the 1990 · 1994 · 1995 campus maps that OSM no longer has (reference/1990_캠퍼스_지도.png,
-# 1994_캠퍼스_지도.jpg, 1995_캠퍼스_지도.jpg; reference/재상봉_기념집_고증.md).  Behind (west of) 중앙도서관, where
+# 1994_캠퍼스_지도.jpg, 1995_캠퍼스_지도.jpg; reference/고증.md).  Behind (west of) 중앙도서관, where
 # 삼성학술정보관 stands now: 23 어학당, a long three-storey hall curved like a bow, its convex side to the west and
 # south-west, and 24 장기원 기념관, a four-storey block across the library's axis with a rounded west end and a low
 # round hall at its south-west foot (the 1994 map draws both; 서울신문 1996.9.3: classes moved to the temporary rooms
@@ -1372,7 +1372,7 @@ for k in range(9):
                    round(rng2.uniform(0.9, 1.1), 2), round(rng2.uniform(0, 6.28), 2)])
 # --- front doors of the procedural halls (blender/generic.py builds them).  Every hall had one, and the outlines alone
 # gave the generic halls none: walls of windows all round.  The 1996 graduation-album photos (2022 재상봉 기념문집,
-# 「25년 전 우리는」; reference/재상봉_기념집_고증.md) show what they were like: 과학관's and 백주년기념관's broad granite
+# 「25년 전 우리는」; reference/고증.md) show what they were like: 과학관's and 백주년기념관's broad granite
 # flights with low side walls and steel handrails, 백주년기념관's and 음악관's aluminium-framed glass doors and screens
 # (음악관's under a deep canopy), 빌링슬리관's Tudor-arched door in its rubble wall under a stone hood.  Where: on the
 # face the walks lead to.  OSM marks no entrances here, but its footways end at the doors; so the door goes where a

@@ -493,7 +493,7 @@ def rod(mb, p0, p1, r, mat, seg=8, caps=False):
 def museum_entrance(A, B, z0, HP):
     """백주년기념관's museum entrance on its north-east face (towards 광혜원 and the 연세 역사의 뜰), from the 1996
     graduation-album photos of 화학공학 · 전기 · 전파 · 전자 · 건축공학 · 기계설계 · 컴퓨터과학과 taken on its steps
-    (2022 재상봉 기념문집; reference/백주년기념관_박물관입구_1996_*.jpg, reference/재상봉_기념집_고증.md): between a white
+    (2022 재상봉 기념문집; reference/백주년기념관_박물관입구_1996_*.jpg, reference/고증.md): between a white
     cylinder (right) and a tall white wall (left), both in large white panels on a square grid, a storey and a half of
     glass in grey mullions leaning out towards its top, white tubes slanting up in front of it, the museum's long white
     banners hanging there; under it a deep dark canopy on two round dark columns over a row of aluminium-framed glass
@@ -2546,7 +2546,7 @@ def tennis():
 # 1995_캠퍼스_지도.jpg, no. 7) draw an L of three storeys under a hipped roof, the long south front in rows of square
 # windows; the 1995 aerial photo (reference/1995_캠퍼스_항공사진_남쪽에서.jpg) shows it pale behind the library under a grey
 # hipped roof, the north arm a storey higher where it meets the south one, a chimney there.  The 1996 graduation-album
-# photos of 경영학과 and 법학과 on its front steps (2022 재상봉 기념문집 pp. 194-195; reference/재상봉_기념집_고증.md) give the
+# photos of 경영학과 and 법학과 on its front steps (2022 재상봉 기념문집 pp. 194-195; reference/고증.md) give the
 # front: speckled grey granite between flat granite pilasters, the main floor raised over a half-sunk basement with
 # barred windows, three bays of bronze-framed glass doors and screens between the pilasters, a black lantern on each,
 # barred windows beside them, and a broad granite flight of ten or eleven risers the width of the three bays with

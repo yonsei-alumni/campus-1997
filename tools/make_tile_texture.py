@@ -1,5 +1,5 @@
 """Paint two white facade textures (diff / nor / rough), seamless, from the 1996 graduation-album photos (2022 재상봉
-기념문집 「25년 전 우리는」, reference/재상봉_기념집_고증.md, reference/음악관_현관_1996.jpg,
+기념문집 「25년 전 우리는」, reference/고증.md, reference/음악관_현관_1996.jpg,
 reference/백주년기념관_박물관입구_1996_*.jpg):
 
   white_square_tiles   음악관's walls and planters: small glazed white square tiles, 8 x 8 per repeat, grey grout
